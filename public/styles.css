@@ -701,6 +701,12 @@ h1, h2, p { margin: 0; }
 }
 .composer input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
+/* 竖屏才出现：收起后的「发弹幕」和展开后的「收起」。桌面不占位 */
+.composer-reveal,
+.composer-collapse { display: none; }
+
+.split-handle { display: none; }
+
 /* ── 侧栏 ───────────────────────────────────────────────────────────── */
 
 .sidebar {
@@ -1445,8 +1451,11 @@ body.dragging::after {
   .transport-right > * { flex: none; }
 }
 
-/* 竖屏：播放器贴满两边，高度由 JS 按视频比例算，上下不留黑边，也不要圆角 */
+/* 竖屏：播放器贴满两边，高度由 JS 按视频比例算，上下不留黑边，也不要圆角。
+   画面和列表之间有一条可拖的分隔；输入区默认收成一颗「发弹幕」。 */
 @media (max-width: 860px) and (orientation: portrait) {
+  body { overflow: hidden; }
+  .workspace { min-height: 0; overflow: hidden; }
   .stage { flex: 0 0 auto; }
   .frame {
     flex: 0 0 auto;
@@ -1459,4 +1468,62 @@ body.dragging::after {
     box-shadow: none;
   }
   .stage:fullscreen .frame { flex: 1 1 auto; }
+
+  .sidebar {
+    flex: 1 1 auto;
+    max-height: none;
+    min-height: 0;
+  }
+
+  body.watching .split-handle {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-soft);
+    color: var(--text-faint);
+    cursor: row-resize;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .split-handle::before {
+    content: '';
+    width: 44px;
+    height: 4px;
+    border-radius: 999px;
+    background: #465066;
+  }
+  .split-handle.dragging { background: rgba(34, 193, 195, 0.14); }
+  .split-handle.dragging::before { background: var(--accent); }
+
+  body.composer-collapsed .composer-reveal {
+    display: flex;
+    align-self: stretch;
+    width: auto;
+    height: 38px;
+    margin: 8px 12px 10px;
+  }
+  body.composer-collapsed .author-field,
+  body.composer-collapsed #draw-toggle,
+  body.composer-collapsed #composer,
+  body.composer-collapsed #overall-form,
+  body.composer-collapsed #draw-toolbar {
+    display: none;
+  }
+
+  #composer { flex-wrap: wrap; }
+  #composer .composer-collapse {
+    display: inline-flex;
+    order: -1;
+    flex: 1 0 100%;
+    width: 100%;
+    height: 30px;
+    margin-bottom: 2px;
+  }
 }

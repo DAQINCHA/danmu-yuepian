@@ -115,7 +115,11 @@
         </div>
       </div>
 
+      <button class="btn primary composer-reveal" id="composer-reveal" type="button"
+              aria-expanded="false" aria-controls="composer">发弹幕</button>
+
       <form class="composer" id="composer" hidden>
+        <button class="btn ghost tiny composer-collapse" id="composer-collapse" type="button">收起</button>
         <span class="mono composer-time" id="composer-time">00:00.000</span>
         <input id="composer-input" type="text" maxlength="500" autocomplete="off"
                placeholder="在这一帧说点什么，回车发送…" />
@@ -129,6 +133,9 @@
         <button class="btn" type="submit">发整体意见</button>
       </form>
     </section>
+
+    <div class="split-handle" id="split-handle" role="separator" aria-orientation="horizontal"
+         aria-label="拖动调整画面和弹幕列表的高度" aria-valuemin="20" aria-valuemax="80"></div>
 
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-head">
