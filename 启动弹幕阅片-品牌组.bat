@@ -1,10 +1,14 @@
 @echo off
-rem 双击启动「弹幕阅片」（Windows）。脚本按自身所在目录定位项目，整个文件夹可以搬到任何位置。
+rem 双击启动「弹幕阅片 · 品牌组」（Windows）。每个组一个启动脚本：各用各的端口和数据目录，互不影响。
+rem 脚本按自身所在目录定位项目，整个文件夹可以搬到任何位置。
 setlocal EnableExtensions
 chcp 936 >nul 2>nul
 cd /d "%~dp0" || exit /b 1
 
 set "PORT=5280"
+rem 数据目录（相对项目根目录）和组名；组名显示在页面标题和左上角
+set "DATA_DIR=data/brand"
+set "GROUP_NAME=品牌组"
 set "HEALTH=/api/health"
 set "NODE_PROBE=process.exit(process.versions.node.split('.')[0] >= 18 ? 0 : 1)"
 set "NODE_MIN=18"
@@ -13,7 +17,7 @@ set "URL=http://127.0.0.1:%PORT%"
 if /i "%~1"=="--open" goto :open_when_ready
 
 cls
-title 弹幕阅片 · 本地服务
+title 弹幕阅片 · %GROUP_NAME% · 本地服务
 
 rem 找一个能用的 Node：PATH → 官方安装位置 → nvm-windows → Volta → WorkBuddy 自带
 set "NODE_BIN="
@@ -44,7 +48,7 @@ if not defined NODE_BIN (
 call :health 2
 if not errorlevel 1 (
   echo.
-  echo   服务已在运行，无需重复启动。
+  echo   %GROUP_NAME%的服务已在运行，无需重复启动。
   echo   本机    %URL%
   echo   已为你打开浏览器。
   echo.

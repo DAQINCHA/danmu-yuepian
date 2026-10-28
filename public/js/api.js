@@ -12,6 +12,7 @@ async function request(method, url, body) {
 }
 
 export const api = {
+  getConfig: () => request('GET', '/api/config'),
   listVideos: () => request('GET', '/api/videos'),
   getVideo: (id) => request('GET', `/api/videos/${id}`),
   patchVideo: (id, patch) => request('PATCH', `/api/videos/${id}`, patch),

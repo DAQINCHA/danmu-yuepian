@@ -78,7 +78,7 @@ h1, h2, p { margin: 0; }
 }
 
 .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
-.brand-text strong { font-size: 14px; letter-spacing: 0.02em; }
+.brand-text strong { font-size: 14px; letter-spacing: 0.02em; white-space: nowrap; }
 .brand-text small { color: var(--text-faint); font-size: 11px; }
 
 .topbar-right {

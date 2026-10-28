@@ -1,14 +1,18 @@
 #!/bin/zsh
-# 双击启动「弹幕阅片」（macOS）。脚本按自身所在目录定位项目，整个文件夹可以搬到任何位置。
+# 双击启动「弹幕阅片 · 短视频组」（macOS）。每个组一个启动脚本：各用各的端口和数据目录，互不影响。
+# 脚本按自身所在目录定位项目，整个文件夹可以搬到任何位置。
 cd -- "${0:A:h}" || exit 1
 
-port=5280
+port=5281
+# 数据目录（相对项目根目录）和组名；组名显示在页面标题和左上角
+data_dir='data/short'
+group_name='短视频组'
 health='/api/health'
 node_probe='process.exit(process.versions.node.split(".")[0] >= 18 ? 0 : 1)'
 node_min='18'
 
 clear
-print -n "\e]0;弹幕阅片 · 本地服务\a"
+print -n "\e]0;弹幕阅片 · ${group_name} · 本地服务\a"
 
 pause_exit() {
   print ''
@@ -53,10 +57,12 @@ url="http://127.0.0.1:${port}"
 
 export HOST=0.0.0.0
 export PORT="$port"
+export DATA_DIR="$data_dir"
+export GROUP_NAME="$group_name"
 
 if curl -fsS --max-time 2 "${url}${health}" >/dev/null 2>&1; then
   print ''
-  print '  服务已在运行，无需重复启动。'
+  print "  ${group_name}的服务已在运行，无需重复启动。"
   print "  本机    ${url}"
   [[ -n "$lan_ip" ]] && print "  局域网  http://${lan_ip}:${port}"
   print '  已为你打开浏览器。'

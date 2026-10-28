@@ -11,13 +11,34 @@ node server.js          # 默认 5280 端口
 PORT=5281 node server.js
 ```
 
-也可以双击 `启动弹幕阅片.command`（macOS）或 `启动弹幕阅片.bat`（Windows），与其它项目的启动脚本是同一套模板。
+也可以双击启动脚本（macOS 用 `.command`，Windows 用 `.bat`），与其它项目的启动脚本是同一套模板。
+
+### 多个组各用一套
+
+一份代码可以同时跑几个组，每个组一个启动脚本，端口和数据目录分开，片库、弹幕、报告互不相通：
+
+| 启动脚本 | 端口 | 数据目录 | 页面显示 |
+| --- | --- | --- | --- |
+| `启动弹幕阅片-品牌组.command` / `.bat` | 5280 | `data/brand/` | 弹幕阅片 · 品牌组 |
+| `启动弹幕阅片-短视频组.command` / `.bat` | 5281 | `data/short/` | 弹幕阅片 · 短视频组 |
+
+两个可以同时开着，把各自的地址发给对应的组即可。要再加一个组，复制一份脚本，改掉开头的 `port`、`data_dir`、`group_name`（`.bat` 里是 `PORT`、`DATA_DIR`、`GROUP_NAME`）就行，数据目录第一次启动时自动建好。
+
+对应的环境变量，命令行直接跑也一样：
+
+```bash
+DATA_DIR=data/short PORT=5281 GROUP_NAME=短视频组 node server.js
+```
+
+- `DATA_DIR`：数据目录，相对路径按项目根目录算；不设就是 `data/`。
+- `PORT`：端口，默认 5280。
+- `GROUP_NAME`：组名，显示在页面标题和左上角「弹幕阅片 · 组名」；不设就只显示「弹幕阅片」。
 
 双击时终端可能没有 node（Finder 给的 PATH 只有 `/usr/bin:/bin`），所以脚本会自己按顺序找：
 `PATH` → Homebrew → `/usr/local` → Volta → nvm → Codex / ChatGPT 桌面端自带的运行时 → WorkBuddy 里的 `~/.workbuddy/binaries/node/versions/*/bin/node`。
 每个候选都会真跑一次并检查 Node 主版本 ≥ 18，坏掉的软链会被跳过。脚本还会顺手做几件事：已经在跑就不再重复启动（直接把地址打开）、端口被别的程序占了会明确告诉你、起来之后自动打开浏览器、关掉窗口就停服务。
 
-启动后终端会打印本机和局域网地址，把 `http://<局域网 IP>:5280` 发给同事即可。
+启动后终端会打印本机和局域网地址，把 `http://<局域网 IP>:5280`（短视频组是 5281）发给同事即可。
 
 **先署名**：顶栏的「署名」框是必填的。没填时它会黄色高亮，发弹幕、画标注、上传视频都会被拦下来并把你带回这个框。名字存在浏览器本地，下次打开自动带出来。
 
@@ -73,21 +94,22 @@ danmu-yuepian/
 ├── lib/               # 服务端模块
 │   ├── app.js         # 装配 http server
 │   ├── api.js         # 路由与校验
-│   ├── store.js       # data/db.json 读写
+│   ├── store.js       # <DATA_DIR>/db.json 读写
 │   ├── events.js      # SSE 广播
 │   ├── static.js      # public/ 托管
 │   ├── upload.js      # 请求体落盘
 │   └── mime.js
-└── data/              # 运行时数据，已 gitignore
-    ├── db.json        # 视频元信息 + 弹幕 + 标注
-    └── uploads/       # 视频原文件
+└── data/              # 运行时数据，已 gitignore；每个组一个子目录（brand/、short/…）
+    └── brand/
+        ├── db.json    # 视频元信息 + 弹幕 + 标注
+        └── uploads/   # 视频原文件
 ```
 
 ## 实现要点
 
 - **视频流式播放**：`GET /api/videos/:id/file` 支持 `Range`，拖进度条不会整段重下。
 - **实时同步**：`GET /api/events` 是 SSE 长连接，上行用普通 `POST`。没有 WebSocket 依赖。
-- **存储**：全部状态在 `data/db.json`，写入走临时文件 + rename，重启不丢。数据量到几万条再考虑换 SQLite。
+- **存储**：全部状态在 `<DATA_DIR>/db.json`（各组各一份），写入走临时文件 + rename，重启不丢。数据量到几万条再考虑换 SQLite。
 - **画笔坐标**：统一存 0~1 的归一化坐标，所以换屏幕、换窗口大小、全屏，圈都落在同一位置。
 - **帧率自动识别**：播放时用 `requestVideoFrameCallback` 采样相邻帧的 `mediaTime` 差值，取**中位数**换算成帧率（中位数能吃掉偶发掉帧），再归到 23.976 / 24 / 25 / 29.97 / 30 / 50 / 59.94 / 60 等标准值。结果回写服务端，所有人对「一帧」的理解一致。识别不准可以手动改，改过之后打上 `fpsSource: manual`，不再被自动值覆盖。
 - **上传**：前端用 XHR 直传文件本体（自定义 header 带文件名/时长），服务端原样落盘，不解析 multipart。

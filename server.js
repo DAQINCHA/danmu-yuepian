@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // 弹幕阅片 局域网服务器：静态站点（./public）+ 审片 API（/api/*）+ SSE 实时同步
-// 零 npm 依赖，Node >= 18。  用法：node server.js   （PORT / HOST / DATA_DIR / MAX_UPLOAD_BYTES 见 README）
+// 零 npm 依赖，Node >= 18。  用法：node server.js   （PORT / HOST / DATA_DIR / GROUP_NAME / MAX_UPLOAD_BYTES 见 README）
 import { networkInterfaces } from 'node:os';
 import { relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -31,7 +31,8 @@ function startFromCommandLine() {
 
   server.listen(port, host, () => {
     const bar = '='.repeat(60);
-    const lines = [bar, '   弹幕阅片  DANMU YUEPIAN', bar, '', `  Node:    ${process.execPath}`, '', `  本机    http://127.0.0.1:${port}`];
+    const brand = config.groupName ? `   弹幕阅片 · ${config.groupName}  DANMU YUEPIAN` : '   弹幕阅片  DANMU YUEPIAN';
+    const lines = [bar, brand, bar, '', `  Node:    ${process.execPath}`, '', `  本机    http://127.0.0.1:${port}`];
     if (host !== '127.0.0.1' && host !== 'localhost' && host !== '::1') {
       for (const ip of lanAddresses().slice(0, 2)) lines.push(`  局域网  http://${ip}:${port}`);
     }
