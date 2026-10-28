@@ -46,8 +46,23 @@ export const PALETTE = [
   '#b5e48c', '#ffc6ff', '#90dbf4', '#fde68a', '#a0c4ff', '#ffb3a7', '#caffbf', '#d0a2f7',
 ];
 
+// 同一个视频内按署名先后分配颜色：同名同色，前 16 人不撞色；不同视频互不影响。
+const roster = new Map();
+
+export function setAuthorRoster(comments = [], annotations = []) {
+  const entries = [];
+  const add = (author, at) => entries.push([String(author || '匿名'), Number(at) || 0]);
+  for (const item of [...comments, ...annotations]) {
+    add(item.author, item.createdAt);
+    for (const reply of item.replies || []) add(reply.author, reply.createdAt);
+  }
+  entries.sort((a, b) => a[1] - b[1]);
+  roster.clear();
+  for (const [name] of entries) if (!roster.has(name)) roster.set(name, roster.size);
+}
+
 export function authorColor(name) {
-  let hash = 0;
-  for (const ch of String(name || '匿名')) hash = (hash * 31 + ch.codePointAt(0)) >>> 0;
-  return PALETTE[hash % PALETTE.length];
+  const key = String(name || '匿名');
+  if (!roster.has(key)) roster.set(key, roster.size);
+  return PALETTE[roster.get(key) % PALETTE.length];
 }

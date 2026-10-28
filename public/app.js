@@ -1,5 +1,5 @@
 import { api, uploadVideo, probeDuration } from './js/api.js';
-import { timecode, clockTime, fileSize, relativeTime, authorColor } from './js/format.js';
+import { timecode, clockTime, fileSize, relativeTime, authorColor, setAuthorRoster } from './js/format.js';
 import { createDanmaku } from './js/danmaku.js';
 import { createAnnotationView, createDrawPad, drawStrokes } from './js/annotations.js';
 import { createReportView } from './js/report.js';
@@ -205,6 +205,7 @@ function showEmpty() {
   state.video = null;
   state.comments = [];
   state.annotations = [];
+  setAuthorRoster();
   state.draw = null;
   dom.video.pause();
   dom.video.removeAttribute('src');
@@ -251,6 +252,7 @@ async function openVideo(id) {
   for (const annotation of state.annotations) {
     if (!Array.isArray(annotation.replies)) annotation.replies = [];
   }
+  setAuthorRoster(state.comments, state.annotations);
   applyFps(data.video.fps || 25, data.video.fpsSource || 'default');
   state.draw = null;
   state.lastTime = 0;
@@ -863,6 +865,7 @@ function updateCounts() {
 
 function renderSidebar() {
   updateCounts();
+  setAuthorRoster(state.comments, state.annotations);
 
   if (!state.video) return;
 
