@@ -38,14 +38,26 @@
         <input id="author-input" type="text" maxlength="16" placeholder="写你的名字" autocomplete="off" spellcheck="false" />
       </label>
       <button class="btn ghost" id="library-open" type="button">片库</button>
-      <button class="btn primary" id="upload-open" type="button">上传视频</button>
+      <button class="btn" id="project-new" type="button">新建项目</button>
+      <button class="btn primary" id="upload-open" type="button">上传影片</button>
     </div>
   </header>
 
   <main class="workspace">
     <section class="stage" id="stage">
       <div class="empty" id="empty-state">
-        <div class="empty-card">
+        <div class="library-page" id="library-page" hidden>
+          <header class="library-bar">
+            <div class="library-crumb" id="library-crumb"></div>
+            <div class="library-actions">
+              <button class="btn tiny" id="project-rename" type="button" hidden>改名</button>
+              <button class="btn tiny ghost" id="project-delete" type="button" hidden>删除项目</button>
+            </div>
+          </header>
+          <div class="project-grid" id="project-grid"></div>
+          <div class="version-list" id="version-list" hidden></div>
+        </div>
+        <div class="empty-card" id="empty-card">
           <h1>审片，不用来回截图</h1>
           <p class="lede">上传视频，把链接发给同事，在任意一帧发弹幕、圈重点。</p>
           <button class="btn primary lg" id="upload-open-empty" type="button">上传影片</button>
@@ -185,6 +197,12 @@
         <span>片名（留空就用文件名）</span>
         <input id="title-input" type="text" maxlength="80" autocomplete="off" />
       </label>
+
+      <div class="field" id="upload-project">
+        <span>放到哪个项目</span>
+        <select id="upload-project-select"></select>
+        <input id="upload-new-project" type="text" maxlength="40" placeholder="或输入新项目名" autocomplete="off" />
+      </div>
 
       <div class="dropzone" id="dropzone" tabindex="0">
         <p class="dz-main">把视频拖进来，或点击选择文件</p>

@@ -4,7 +4,7 @@ import { createDanmaku } from './js/danmaku.js';
 import { createAnnotationView, createDrawPad, drawStrokes } from './js/annotations.js';
 import { createReportView } from './js/report.js';
 import { detectFrameRate } from './js/fps.js';
-import { drawOverlayBoxes, drawWatermark, downloadCanvas, safeFileName } from './js/capture.js';
+import { createFrameGrabber, drawOverlayBoxes, drawWatermark, downloadCanvas, safeFileName } from './js/capture.js';
 
 const $ = (id) => document.getElementById(id);
 const DRAW_COLORS = ['#ff5a4d', '#ffd166', '#4ec9a0', '#8ab4ff'];
@@ -23,6 +23,11 @@ const state = {
   fpsSource: 'default',
   danmakuOn: localStorage.getItem(STORE.danmaku) !== 'off',
   videos: [],
+  projects: [],
+  uncategorized: null,
+  // home = 项目卡片；project = 某个项目或未分类
+  libraryPage: 'home',
+  libraryProjectId: null,
   // 片库里正在改名的视频 id 和输入草稿（SSE 刷新列表时保留）
   renameId: null,
   renameDraft: '',
@@ -170,7 +175,7 @@ function boot() {
 
 function cacheDom() {
   const ids = [
-    'author-field', 'author-input', 'author-veil', 'author-hint', 'presence', 'presence-count', 'library-open', 'upload-open', 'upload-open-empty',
+    'author-field', 'author-input', 'author-veil', 'author-hint', 'presence', 'presence-count', 'library-open', 'project-new', 'upload-open', 'upload-open-empty',
     'empty-state', 'frame', 'video-wrap', 'video', 'danmaku-layer', 'ann-layer', 'draw-layer', 'paused-badge',
     'draw-toolbar', 'range-in', 'range-out', 'range-summary', 'swatches', 'mark-in', 'mark-out',
     'preview-range', 'draw-undo', 'draw-clear', 'draw-cancel', 'draw-save',
@@ -181,7 +186,9 @@ function cacheDom() {
     'overall-form', 'overall-input',
     'video-title', 'video-meta', 'tabs', 'list', 'count-all', 'count-comment', 'count-annotation',
     'report-open',
-    'library-modal', 'library-grid', 'upload-modal', 'dropzone', 'file-input', 'title-input',
+    'library-modal', 'library-grid', 'library-page', 'library-crumb', 'project-grid', 'version-list',
+    'project-rename', 'project-delete', 'empty-card',
+    'upload-modal', 'dropzone', 'file-input', 'title-input', 'upload-project', 'upload-project-select', 'upload-new-project',
     'upload-author', 'upload-pending', 'pending-name', 'pending-size', 'upload-start',
     'upload-progress', 'bar-fill', 'upload-status', 'toast',
   ];
@@ -386,12 +393,19 @@ function focusAuthor(preferUpload = false) {
 /* ── 路由 ─────────────────────────────────────────────────────────── */
 
 function applyHash() {
-  const match = /^#\/v\/([\w-]+)/.exec(location.hash);
-  if (match) openVideo(match[1]);
-  else showEmpty();
+  const videoMatch = /^#\/v\/([\w-]+)/.exec(location.hash);
+  if (videoMatch) {
+    openVideo(videoMatch[1]);
+    return;
+  }
+  leaveVideo();
+  const projectMatch = /^#\/p\/([\w-]+)/.exec(location.hash);
+  if (projectMatch) showProjectPage(projectMatch[1]);
+  else showProjectHome();
 }
 
-function showEmpty() {
+function leaveVideo() {
+  if (!state.video && dom.frame.hidden) return;
   state.video = null;
   state.comments = [];
   state.annotations = [];
@@ -421,6 +435,27 @@ function showEmpty() {
   updateCounts();
   state.es?.close();
   state.es = null;
+}
+
+function showProjectHome() {
+  state.libraryPage = 'home';
+  state.libraryProjectId = null;
+  dom.empty.hidden = false;
+  dom.empty.classList.toggle('library-view', hasLibraryContent());
+  renderLibraryView();
+}
+
+function showProjectPage(id) {
+  state.libraryPage = 'project';
+  state.libraryProjectId = id === 'uncategorized' ? null : id;
+  if (id !== 'uncategorized' && !state.projects.some((project) => project.id === id)) {
+    toast('这个项目不存在', true);
+    location.hash = '#/';
+    return;
+  }
+  dom.empty.hidden = false;
+  dom.empty.classList.add('library-view');
+  renderLibraryView();
 }
 
 async function openVideo(id) {
@@ -2094,10 +2129,20 @@ function connectEvents(videoId) {
 function applyVideoUpdate(video) {
   if (!video?.id) return;
   const index = state.videos.findIndex((v) => v.id === video.id);
-  if (index >= 0) state.videos[index] = { ...state.videos[index], title: video.title };
+  if (index >= 0) {
+    state.videos[index] = {
+      ...state.videos[index],
+      title: video.title ?? state.videos[index].title,
+      projectId: Object.prototype.hasOwnProperty.call(video, 'projectId')
+        ? (video.projectId || null)
+        : state.videos[index].projectId,
+    };
+  }
   if (!dom.libraryModal.hidden) renderLibrary();
+  if (!state.video) renderLibraryView();
   if (state.video?.id === video.id) {
-    state.video.title = video.title;
+    if (video.title) state.video.title = video.title;
+    if (Object.prototype.hasOwnProperty.call(video, 'projectId')) state.video.projectId = video.projectId || null;
     renderHeader();
     reportView.refresh();
   }
@@ -2105,23 +2150,38 @@ function applyVideoUpdate(video) {
 
 async function refreshVideos() {
   try {
-    const data = await api.listVideos();
-    state.videos = data.videos;
+    const [videos, projects] = await Promise.all([api.listVideos(), api.listProjects()]);
+    state.videos = videos.videos || [];
+    state.projects = projects.projects || [];
+    state.uncategorized = projects.uncategorized || null;
   } catch {
     state.videos = [];
+    state.projects = [];
+    state.uncategorized = null;
   }
   if (!dom.libraryModal.hidden) renderLibrary();
+  if (!state.video) renderLibraryView();
+  fillUploadProjectSelect();
 }
 
 function initModals() {
   dom.libraryOpen.addEventListener('click', () => {
-    state.renameId = null;
-    state.renameDraft = '';
-    renderLibrary();
-    openModal(dom.libraryModal);
+    if (state.video) {
+      location.hash = state.video.projectId ? `#/p/${state.video.projectId}` : '#/p/uncategorized';
+      return;
+    }
+    location.hash = '#/';
   });
+  dom.projectNew.addEventListener('click', createProjectPrompt);
+  dom.projectRename.addEventListener('click', renameCurrentProject);
+  dom.projectDelete.addEventListener('click', deleteCurrentProject);
   dom.uploadOpen.addEventListener('click', openUpload);
   dom.uploadOpenEmpty.addEventListener('click', openUpload);
+  dom.uploadNewProject.addEventListener('input', updateUploadButton);
+  dom.uploadProjectSelect.addEventListener('change', () => {
+    if (dom.uploadProjectSelect.value) dom.uploadNewProject.value = '';
+    updateUploadButton();
+  });
 
   for (const button of document.querySelectorAll('[data-close-modal]')) {
     button.addEventListener('click', () => button.closest('.modal').hidden = true);
@@ -2165,6 +2225,9 @@ function openUpload() {
   dom.barFill.style.width = '0%';
   dom.uploadStatus.textContent = '';
   dom.uploadAuthor.value = state.author;
+  dom.uploadNewProject.value = '';
+  fillUploadProjectSelect();
+  syncUploadProjectFields();
   updateUploadButton();
   openModal(dom.uploadModal);
   if (!state.author) setTimeout(() => dom.uploadAuthor.focus(), 60);
@@ -2172,7 +2235,9 @@ function openUpload() {
 
 function updateUploadButton() {
   if (!dom.uploadStart) return;
-  const ready = Boolean(state.author && state.pendingFile);
+  const ask = uploadContext().mode === 'ask';
+  const chosen = !ask || Boolean(dom.uploadProjectSelect.value || dom.uploadNewProject.value.trim());
+  const ready = Boolean(state.author && state.pendingFile && chosen);
   dom.uploadStart.disabled = !ready;
 }
 
@@ -2192,9 +2257,9 @@ async function stageFile(file) {
   dom.uploadProgress.hidden = true;
   updateUploadButton();
 
-  if (state.author) {
+  if (state.author && uploadContext().mode === 'fixed') {
     startUpload();
-  } else {
+  } else if (!state.author) {
     // 没有署名就停在这里，等填完名字再点开始
     focusAuthor(true);
     toast('先写上你的名字，再点「开始上传」');
@@ -2217,6 +2282,7 @@ async function startUpload() {
   if (!duration) dom.uploadStatus.textContent = '浏览器读不出时长，仍然可以上传';
 
   try {
+    const target = uploadPayload();
     const data = await uploadVideo(
       file,
       {
@@ -2224,6 +2290,8 @@ async function startUpload() {
         uploader: state.author,
         duration,
         fps: state.fps,
+        projectId: target.projectId,
+        newProjectName: target.newProjectName,
       },
       (progress) => {
         const percent = Math.round(progress * 100);
@@ -2248,6 +2316,293 @@ async function startUpload() {
   } finally {
     state.uploading = false;
     updateUploadButton();
+  }
+}
+
+const coverGrabber = createFrameGrabber();
+
+function hasLibraryContent() {
+  return state.projects.length > 0 || Boolean(state.uncategorized?.videoCount);
+}
+
+/** 首页要先选项目；已经在某个项目里（或正在看这个项目的片子）就直接传进去 */
+function uploadContext() {
+  if (state.video) return { mode: 'fixed', projectId: state.video.projectId || null };
+  if (state.libraryPage === 'project') return { mode: 'fixed', projectId: state.libraryProjectId };
+  return { mode: 'ask', projectId: null };
+}
+
+function uploadPayload() {
+  const ctx = uploadContext();
+  if (ctx.mode === 'fixed') return { projectId: ctx.projectId || '', newProjectName: '' };
+  const fresh = dom.uploadNewProject.value.trim();
+  if (fresh) return { projectId: '', newProjectName: fresh };
+  const selected = dom.uploadProjectSelect.value;
+  if (!selected || selected === 'uncategorized') return { projectId: '', newProjectName: '' };
+  return { projectId: selected, newProjectName: '' };
+}
+
+function syncUploadProjectFields() {
+  const ask = uploadContext().mode === 'ask';
+  dom.uploadProject.hidden = !ask;
+}
+
+function fillUploadProjectSelect() {
+  const select = dom.uploadProjectSelect;
+  if (!select) return;
+  const current = select.value;
+  select.replaceChildren();
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = '选择已有项目';
+  select.append(placeholder);
+  const loose = document.createElement('option');
+  loose.value = 'uncategorized';
+  loose.textContent = '未分类';
+  select.append(loose);
+  for (const project of state.projects) {
+    const option = document.createElement('option');
+    option.value = project.id;
+    option.textContent = project.name;
+    select.append(option);
+  }
+  if ([...select.options].some((option) => option.value === current)) select.value = current;
+}
+
+function videosIn(projectId) {
+  return state.videos.filter((video) => (video.projectId || null) === (projectId || null));
+}
+
+function versionOf(videos) {
+  const ordered = [...videos].sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
+  const map = new Map();
+  ordered.forEach((video, index) => map.set(video.id, index + 1));
+  return map;
+}
+
+function paintCover(canvas, videoId) {
+  if (!videoId) return;
+  canvas.dataset.cover = videoId;
+  coverGrabber.grab(`/api/videos/${videoId}/file`, 0.4, { maxWidth: 640 }).then((frame) => {
+    if (canvas.dataset.cover !== videoId || !canvas.isConnected) return;
+    const ctx = canvas.getContext('2d');
+    const width = 640;
+    const height = 360;
+    canvas.width = width;
+    canvas.height = height;
+    ctx.drawImage(frame, 0, 0, width, height);
+  }).catch(() => {});
+}
+
+function renderLibraryView() {
+  if (!dom.libraryPage) return;
+  const home = state.libraryPage !== 'project';
+  const showCards = home && hasLibraryContent();
+  const showProject = !home;
+  dom.libraryPage.hidden = !showCards && !showProject;
+  dom.emptyCard.hidden = !home || hasLibraryContent();
+  dom.empty.classList.toggle('library-view', showCards || showProject);
+  dom.projectGrid.hidden = !showCards;
+  dom.versionList.hidden = !showProject;
+  dom.projectRename.hidden = home || !state.libraryProjectId;
+  dom.projectDelete.hidden = home || !state.libraryProjectId;
+  renderCrumb();
+  if (showCards) renderProjectCards();
+  if (showProject) renderVersionList();
+}
+
+function renderCrumb() {
+  dom.libraryCrumb.replaceChildren();
+  if (state.libraryPage !== 'project') {
+    const title = document.createElement('span');
+    title.textContent = '片库';
+    dom.libraryCrumb.append(title);
+    return;
+  }
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.textContent = '片库';
+  back.addEventListener('click', () => { location.hash = '#/'; });
+  const sep = document.createElement('span');
+  sep.className = 'crumb-sep';
+  sep.textContent = '›';
+  const name = document.createElement('span');
+  name.className = 'crumb-name';
+  const project = state.projects.find((item) => item.id === state.libraryProjectId);
+  name.textContent = project ? project.name : '未分类';
+  dom.libraryCrumb.append(back, sep, name);
+}
+
+function renderProjectCards() {
+  const cards = [];
+  const projects = [...state.projects].sort((a, b) => (b.latestAt || 0) - (a.latestAt || 0));
+  for (const project of projects) cards.push(projectCard(project));
+  if (state.uncategorized?.videoCount) {
+    cards.push(projectCard({
+      id: 'uncategorized',
+      name: '未分类',
+      videoCount: state.uncategorized.videoCount,
+      latestAt: state.uncategorized.latestAt,
+      coverVideoId: state.uncategorized.coverVideoId,
+    }));
+  }
+  dom.projectGrid.replaceChildren(...cards);
+}
+
+function projectCard(project) {
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.className = 'project-card';
+  const cover = document.createElement('canvas');
+  cover.className = 'project-cover';
+  cover.width = 640;
+  cover.height = 360;
+  paintCover(cover, project.coverVideoId);
+  const body = document.createElement('div');
+  body.className = 'project-body';
+  const title = document.createElement('div');
+  title.className = 'project-name';
+  title.textContent = project.name;
+  const meta = document.createElement('div');
+  meta.className = 'project-meta';
+  const when = project.latestAt ? relativeTime(project.latestAt) : '还没有更新';
+  meta.textContent = `${project.videoCount || 0} 支 · ${when}`;
+  body.append(title, meta);
+  card.append(cover, body);
+  card.addEventListener('click', () => {
+    location.hash = project.id === 'uncategorized' ? '#/p/uncategorized' : `#/p/${project.id}`;
+  });
+  return card;
+}
+
+function renderVersionList() {
+  const projectId = state.libraryProjectId;
+  const list = videosIn(projectId);
+  if (!list.length) {
+    dom.versionList.replaceChildren(emptyHint(projectId ? '这个项目还没有片子。' : '未分类里还没有片子。'));
+    return;
+  }
+  const versions = versionOf(list);
+  const rows = [...list]
+    .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id))
+    .map((video) => versionRow(video, versions.get(video.id)));
+  dom.versionList.replaceChildren(...rows);
+}
+
+function versionRow(video, version) {
+  const row = document.createElement('div');
+  row.className = 'version-row';
+  const cover = document.createElement('canvas');
+  cover.className = 'version-cover';
+  cover.width = 320;
+  cover.height = 180;
+  paintCover(cover, video.id);
+
+  const main = document.createElement('div');
+  main.className = 'version-main';
+  const title = document.createElement('div');
+  title.className = 'version-title';
+  const badge = document.createElement('span');
+  badge.className = 'ver-badge';
+  badge.textContent = `v${version}`;
+  const name = document.createElement('span');
+  name.textContent = video.title;
+  title.append(badge, name);
+  const meta = document.createElement('div');
+  meta.className = 'version-meta';
+  meta.textContent = [
+    video.duration ? clockTime(video.duration) : '时长未知',
+    fileSize(video.size),
+    video.uploader ? `上传 ${video.uploader}` : '',
+    relativeTime(video.createdAt),
+  ].filter(Boolean).join(' · ');
+  main.append(title, meta);
+  main.addEventListener('click', () => { location.hash = `#/v/${video.id}`; });
+
+  const move = document.createElement('div');
+  move.className = 'version-move';
+  const select = document.createElement('select');
+  select.setAttribute('aria-label', '移到其他项目');
+  const current = document.createElement('option');
+  current.value = '';
+  current.textContent = '移到其他项目';
+  select.append(current);
+  if (video.projectId) {
+    const loose = document.createElement('option');
+    loose.value = 'uncategorized';
+    loose.textContent = '未分类';
+    select.append(loose);
+  }
+  for (const project of state.projects) {
+    if (project.id === video.projectId) continue;
+    const option = document.createElement('option');
+    option.value = project.id;
+    option.textContent = project.name;
+    select.append(option);
+  }
+  select.addEventListener('change', async () => {
+    const target = select.value;
+    if (!target) return;
+    try {
+      await api.moveVideo(video.id, target === 'uncategorized' ? null : target);
+      await refreshVideos();
+      toast('已移走');
+    } catch (err) {
+      toast(err.message, true);
+      select.value = '';
+    }
+  });
+  move.append(select);
+  row.append(cover, main, move);
+  return row;
+}
+
+async function createProjectPrompt() {
+  const name = window.prompt('项目名称');
+  if (name == null) return;
+  const trimmed = name.trim();
+  if (!trimmed) {
+    toast('项目名称不能为空', true);
+    return;
+  }
+  try {
+    const data = await api.createProject(trimmed.slice(0, 40));
+    await refreshVideos();
+    location.hash = `#/p/${data.project.id}`;
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+async function renameCurrentProject() {
+  const project = state.projects.find((item) => item.id === state.libraryProjectId);
+  if (!project) return;
+  const name = window.prompt('项目新名称', project.name);
+  if (name == null) return;
+  const trimmed = name.trim();
+  if (!trimmed) {
+    toast('项目名称不能为空', true);
+    return;
+  }
+  try {
+    await api.renameProject(project.id, trimmed.slice(0, 40));
+    await refreshVideos();
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+async function deleteCurrentProject() {
+  const project = state.projects.find((item) => item.id === state.libraryProjectId);
+  if (!project) return;
+  const ok = window.confirm(`删除项目「${project.name}」？\n里面的视频会移回「未分类」，不会被删除。`);
+  if (!ok) return;
+  try {
+    await api.deleteProject(project.id);
+    await refreshVideos();
+    location.hash = '#/';
+  } catch (err) {
+    toast(err.message, true);
   }
 }
 

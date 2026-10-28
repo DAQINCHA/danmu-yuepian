@@ -14,8 +14,13 @@ async function request(method, url, body) {
 export const api = {
   getConfig: () => request('GET', '/api/config'),
   listVideos: () => request('GET', '/api/videos'),
+  listProjects: () => request('GET', '/api/projects'),
+  createProject: (name) => request('POST', '/api/projects', { name }),
+  renameProject: (id, name) => request('PATCH', `/api/projects/${id}`, { name }),
+  deleteProject: (id) => request('DELETE', `/api/projects/${id}`),
   getVideo: (id) => request('GET', `/api/videos/${id}`),
   patchVideo: (id, patch) => request('PATCH', `/api/videos/${id}`, patch),
+  moveVideo: (id, projectId) => request('PATCH', `/api/videos/${id}`, { projectId: projectId || null }),
   deleteVideo: (id) => request('DELETE', `/api/videos/${id}`),
   addComment: (id, comment) => request('POST', `/api/videos/${id}/comments`, comment),
   setCommentDone: (id, done) => request('PATCH', `/api/comments/${id}`, { done }),
@@ -47,6 +52,8 @@ export function uploadVideo(file, meta, onProgress) {
     xhr.setRequestHeader('X-Uploader', encodeURIComponent(meta.uploader || ''));
     xhr.setRequestHeader('X-Duration', String(meta.duration || 0));
     xhr.setRequestHeader('X-Fps', String(meta.fps || 25));
+    if (meta.newProjectName) xhr.setRequestHeader('X-New-Project-Name', encodeURIComponent(meta.newProjectName));
+    else if (meta.projectId) xhr.setRequestHeader('X-Project-Id', encodeURIComponent(meta.projectId));
 
     xhr.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) onProgress?.(event.loaded / event.total);
