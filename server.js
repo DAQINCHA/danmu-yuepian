@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // 弹幕阅片 局域网服务器：静态站点（./public）+ 审片 API（/api/*）+ SSE 实时同步
-// 零 npm 依赖，Node >= 18。  用法：node server.js   （PORT / HOST / DATA_DIR / GROUP_NAME / MAX_UPLOAD_BYTES 见 README）
+// 零 npm 依赖，Node >= 18。  用法：node server.js   （PORT / HOST / DATA_DIR / GROUP_NAME / PUBLIC_ORIGIN / MAX_UPLOAD_BYTES 见 README）
 import { networkInterfaces } from 'node:os';
 import { relative } from 'node:path';
 import { pathToFileURL } from 'node:url';

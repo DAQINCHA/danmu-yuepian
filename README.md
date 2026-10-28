@@ -33,6 +33,7 @@ DATA_DIR=data/short PORT=5281 GROUP_NAME=短视频组 node server.js
 - `DATA_DIR`：数据目录，相对路径按项目根目录算；不设就是 `data/`。
 - `PORT`：端口，默认 5280。
 - `GROUP_NAME`：组名，显示在页面标题和左上角「弹幕阅片 · 组名」；不设就只显示「弹幕阅片」。
+- `PUBLIC_ORIGIN`：分享预览图用的站点根地址。不设就按当前请求的 Host 自动拼；反代把 Host 传错时再设，见下文。
 
 双击时终端可能没有 node（Finder 给的 PATH 只有 `/usr/bin:/bin`），所以脚本会自己按顺序找：
 `PATH` → Homebrew → `/usr/local` → Volta → nvm → Codex / ChatGPT 桌面端自带的运行时 → WorkBuddy 里的 `~/.workbuddy/binaries/node/versions/*/bin/node`。
@@ -41,6 +42,22 @@ DATA_DIR=data/short PORT=5281 GROUP_NAME=短视频组 node server.js
 启动后终端会打印本机和局域网地址，把 `http://<局域网 IP>:5280`（短视频组是 5281）发给同事即可。
 
 **先署名**：顶栏的「署名」框是必填的。没填时它会黄色高亮，发弹幕、画标注、上传视频都会被拦下来并把你带回这个框。名字存在浏览器本地，下次打开自动带出来。
+
+## 分享预览（OG 图）与更换域名
+
+把首页链接发到微信、飞书时，对方看到的预览图是 `public/assets/og.png`（1200×630）。
+
+`og:image` 不写死域名。打开页面时，服务端按这一次请求拼出绝对地址再写进 HTML：有 `X-Forwarded-Host` 就用它（多个时取第一个），否则用 `Host`；协议看 `X-Forwarded-Proto`，没有就按连接本身（本机直连一般是 `http`）。视频页是 `/#/v/<id>` 这种哈希路由，井号后面的部分爬虫不会单独来取，读到的仍是首页 HTML，所以只给首页配这张图即可。
+
+换域名或端口时通常不用改代码，预览地址会跟着当前访问地址变。如果前面有反代或网关，传过来的 Host 不对（图指向了内网地址或错误端口），启动时指定根地址，写法和 `DATA_DIR`、`PORT`、`GROUP_NAME` 一样：
+
+```bash
+PUBLIC_ORIGIN=http://新域名:端口 node server.js
+```
+
+例如 `PUBLIC_ORIGIN=http://review.example.com:5280`。只接受 `http://` 或 `https://` 加主机和端口，末尾斜杠会被去掉。
+
+微信等平台会缓存预览。换了 `og.png` 或域名之后，可能要过一段时间才会看到新图。
 
 ## 怎么用
 
