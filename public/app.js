@@ -23,6 +23,9 @@ const state = {
   fpsSource: 'default',
   danmakuOn: localStorage.getItem(STORE.danmaku) !== 'off',
   videos: [],
+  // 片库里正在改名的视频 id 和输入草稿（SSE 刷新列表时保留）
+  renameId: null,
+  renameDraft: '',
   video: null,
   comments: [],
   annotations: [],
@@ -1787,6 +1790,7 @@ function connectEvents(videoId) {
     if (data.videoId === state.video?.id) removeAnnotationLocal(data.annotationId);
   });
   on('video:added', () => refreshVideos());
+  on('video:updated', (data) => applyVideoUpdate(data.video));
   on('video:removed', (data) => {
     refreshVideos();
     if (state.video?.id === data.videoId) {
@@ -1803,6 +1807,19 @@ function connectEvents(videoId) {
 
 /* ── 片库 / 上传 ──────────────────────────────────────────────────── */
 
+/** 别处改了名：更新片库列表；如果正打开这支片，同步标题栏和审片报告 */
+function applyVideoUpdate(video) {
+  if (!video?.id) return;
+  const index = state.videos.findIndex((v) => v.id === video.id);
+  if (index >= 0) state.videos[index] = { ...state.videos[index], title: video.title };
+  if (!dom.libraryModal.hidden) renderLibrary();
+  if (state.video?.id === video.id) {
+    state.video.title = video.title;
+    renderHeader();
+    reportView.refresh();
+  }
+}
+
 async function refreshVideos() {
   try {
     const data = await api.listVideos();
@@ -1815,6 +1832,8 @@ async function refreshVideos() {
 
 function initModals() {
   dom.libraryOpen.addEventListener('click', () => {
+    state.renameId = null;
+    state.renameDraft = '';
     renderLibrary();
     openModal(dom.libraryModal);
   });
@@ -1970,7 +1989,20 @@ function renderLibrary() {
       relativeTime(video.createdAt),
     ].filter(Boolean).join(' · ');
 
-    main.append(title, meta);
+    if (state.renameId === video.id) main.append(buildRenameForm(video), meta);
+    else main.append(title, meta);
+
+    const rename = document.createElement('button');
+    rename.className = 'btn tiny ghost';
+    rename.type = 'button';
+    rename.textContent = '改名';
+    rename.title = '只改显示名称，链接和文件不变';
+    rename.addEventListener('click', (event) => {
+      event.stopPropagation();
+      state.renameId = video.id;
+      state.renameDraft = video.title;
+      renderLibrary();
+    });
 
     const del = document.createElement('button');
     del.className = 'btn tiny ghost';
@@ -1989,8 +2021,15 @@ function renderLibrary() {
       }
     });
 
-    card.append(main, del);
+    const actions = document.createElement('div');
+    actions.className = 'lib-actions';
+    if (state.renameId !== video.id) actions.append(rename);
+    actions.append(del);
+
+    card.append(main, actions);
+    if (state.renameId === video.id) card.classList.add('renaming');
     card.addEventListener('click', () => {
+      if (state.renameId === video.id) return;
       dom.libraryModal.hidden = true;
       location.hash = `#/v/${video.id}`;
       applyHash();
@@ -1999,6 +2038,81 @@ function renderLibrary() {
   });
 
   dom.libraryGrid.replaceChildren(...cards);
+  const input = dom.libraryGrid.querySelector('.rename-input');
+  if (input) {
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+}
+
+function closeRename() {
+  state.renameId = null;
+  state.renameDraft = '';
+  renderLibrary();
+}
+
+function buildRenameForm(video) {
+  const form = document.createElement('form');
+  form.className = 'reply-form rename-form';
+  form.addEventListener('click', (event) => event.stopPropagation());
+
+  const input = document.createElement('input');
+  input.className = 'reply-input rename-input';
+  input.type = 'text';
+  input.maxLength = 80;
+  input.autocomplete = 'off';
+  input.placeholder = '新的显示名称，回车保存';
+  input.value = state.renameDraft;
+  input.addEventListener('input', () => {
+    state.renameDraft = input.value;
+  });
+  input.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    // 不让全局 Esc 关掉片库；输入法选词时的 Esc 只交给输入法
+    event.stopPropagation();
+    if (!event.isComposing) closeRename();
+  });
+
+  const save = document.createElement('button');
+  save.type = 'submit';
+  save.className = 'btn primary reply-send';
+  save.textContent = '保存';
+
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'btn reply-cancel';
+  cancel.textContent = '取消';
+  cancel.addEventListener('click', (event) => {
+    event.stopPropagation();
+    closeRename();
+  });
+
+  form.append(input, save, cancel);
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const next = input.value.trim();
+    if (!next) {
+      toast('名称不能为空', true);
+      input.focus();
+      return;
+    }
+    if (next === video.title) {
+      closeRename();
+      return;
+    }
+    save.disabled = true;
+    try {
+      const data = await api.patchVideo(video.id, { title: next });
+      state.renameId = null;
+      state.renameDraft = '';
+      applyVideoUpdate(data.video); // 会顺带重绘片库，表单随之收起
+      toast('已改名');
+    } catch (err) {
+      save.disabled = false;
+      toast(err.message, true);
+    }
+  });
+  return form;
 }
 
 function initDrop() {

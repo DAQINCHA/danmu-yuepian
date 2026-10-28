@@ -932,6 +932,10 @@ h1, h2, p { margin: 0; }
   white-space: nowrap;
 }
 .lib-card .lib-meta { color: var(--text-faint); font-size: 11.5px; margin-top: 2px; }
+.lib-card .lib-actions { display: flex; gap: 6px; flex: none; }
+.lib-card.renaming { cursor: default; border-color: #1f7f86; }
+.lib-card .rename-form { margin: 0 0 2px; }
+.lib-card .rename-input { font-size: 13px; }
 
 /* ── 上传：署名与待传文件 ───────────────────────────────────────────── */
 
