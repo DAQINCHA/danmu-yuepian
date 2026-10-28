@@ -155,7 +155,7 @@ function pushEntry(lines, entry, index, fps, { level = '##', shot = null, overal
 
 /**
  * shots：可选，截帧 key -> 图片地址（下载 zip 时是 images/frame-001.jpg 这样的相对路径）；
- * 复制文本时不带图。prefs.frames 打开时按画面分组输出；两种模式下「整体问题」都单列在最前。
+ * 不传时不带图。prefs.frames 打开时按画面分组输出；两种模式下「整体问题」都单列在最前。
  */
 export function buildMarkdown(data, shots = null, prefs = loadPrefs()) {
   const entries = collect(data);
@@ -277,30 +277,6 @@ function buildPdfModel(data, images, prefs) {
     sections,
     empty: '（这一版还没有任何意见）',
   };
-}
-
-async function copyToClipboard(text) {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    /* 局域网 http 不是安全上下文，会走到下面的兜底 */
-  }
-  try {
-    const area = document.createElement('textarea');
-    area.value = text;
-    area.setAttribute('readonly', '');
-    area.style.cssText = 'position:fixed;top:-1000px;opacity:0';
-    document.body.appendChild(area);
-    area.select();
-    const ok = document.execCommand('copy');
-    area.remove();
-    return ok;
-  } catch {
-    return false;
-  }
 }
 
 function dateStamp(date = new Date()) {
@@ -552,11 +528,6 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     filter = button.dataset.filter;
     for (const node of filtersEl.children) node.classList.toggle('active', node === button);
     render();
-  });
-
-  document.getElementById('report-copy').addEventListener('click', async () => {
-    const ok = await copyToClipboard(buildMarkdown(getData(), null, prefs));
-    notify(ok ? '报告已复制到剪贴板' : '复制不了，用「下载报告」吧', !ok);
   });
 
   document.getElementById('report-download').addEventListener('click', async () => {
