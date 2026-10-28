@@ -2,6 +2,7 @@ import { timecode, clockTime, authorColor } from './format.js';
 import { drawStrokes } from './annotations.js';
 import { createFrameGrabber } from './capture.js';
 import { createZip, dataUrlToBytes } from './zip.js';
+import { renderReportPdf } from './pdf.js';
 
 /**
  * 审片报告：把散在时间轴上的弹幕和画笔按时间码收成一张逐条清单，
@@ -199,6 +200,85 @@ export function buildMarkdown(data, shots = null, prefs = loadPrefs()) {
   return lines.join('\n');
 }
 
+function pdfItem(entry, index, fps, overall = false) {
+  const author = entry.data.author || '匿名';
+  const replies = Array.isArray(entry.data.replies) ? entry.data.replies : [];
+  return {
+    index,
+    time: overall ? null : timecode(entry.time),
+    kind: entry.kind,
+    author,
+    color: authorColor(author),
+    text: describe(entry, fps),
+    done: Boolean(entry.data.done),
+    replies: replies.map((reply) => ({
+      author: reply.author || '匿名',
+      color: authorColor(reply.author || '匿名'),
+      text: reply.text,
+    })),
+  };
+}
+
+/** PDF 排版用的结构，内容和顺序与 buildMarkdown 一致；images：截帧 key -> data URL */
+function buildPdfModel(data, images, prefs) {
+  const entries = collect(data);
+  const done = entries.filter((e) => e.data.done).length;
+  const sections = [];
+  const overallEntries = entries.filter((e) => e.kind === 'comment' && isOverall(e.data));
+  let index = 0;
+  if (overallEntries.length) {
+    sections.push({
+      heading: '整体问题',
+      items: overallEntries.map((entry) => pdfItem(entry, index++, data.fps, true)),
+    });
+  }
+  if (prefs?.frames) {
+    const { groups } = groupEntries(data, prefs.gap);
+    groups.forEach((group, gi) => {
+      const at = timecode(group.time);
+      const image = images.get(group.key) || null;
+      sections.push({
+        heading: `画面 ${gi + 1} · ${at} · ${group.entries.length} 条`,
+        image,
+        imageCaption: image ? `画面 ${at}` : '',
+        items: group.entries.map((entry) => pdfItem(entry, index++, data.fps)),
+      });
+    });
+  } else {
+    let flat = null;
+    for (const entry of entries) {
+      if (overallEntries.includes(entry)) continue;
+      const image = entry.kind === 'annotation' ? images.get(annotationKey(entry.data)) : null;
+      if (image || !flat) {
+        flat = { items: [] };
+        sections.push(flat);
+      }
+      const item = pdfItem(entry, index++, data.fps);
+      if (image) {
+        // 带截帧的画笔单独成段：起始帧在上、意见在下，后面的弹幕另起一段
+        flat.items.push(item);
+        flat.image = image;
+        flat.imageCaption = `起始帧 ${item.time}`;
+        flat = null;
+      } else {
+        flat.items.push(item);
+      }
+    }
+  }
+  return {
+    title: `审片报告 · ${data.video.title}`,
+    footer: `审片报告 · ${data.video.title}`,
+    meta: [
+      `上传者：${data.video.uploader || '未署名'}    时长：${clockTime(data.video.duration)} · ${data.fps} fps`,
+      `生成时间：${new Date().toLocaleString('zh-CN')}`,
+    ],
+    summary: `意见：共 ${entries.length} 条，已改 ${done} 条，待改 ${entries.length - done} 条`,
+    progress: entries.length ? done / entries.length : undefined,
+    sections,
+    empty: '（这一版还没有任何意见）',
+  };
+}
+
 async function copyToClipboard(text) {
   try {
     if (navigator.clipboard?.writeText) {
@@ -232,7 +312,7 @@ function dateStamp(date = new Date()) {
  * 打包下载：report.md + images/ 下的每张截帧，md 里按相对路径引用图片。
  * images：截帧 key -> data URL；order：key 的出现顺序（决定 frame-001、002… 的编号）
  */
-function downloadZip(data, images, order, prefs) {
+async function downloadZip(data, images, order, prefs) {
   const now = new Date();
   const paths = new Map();
   const files = [];
@@ -249,18 +329,28 @@ function downloadZip(data, images, order, prefs) {
     paths.set(key, name);
     files.push({ name, data: image.bytes });
   }
-  files.unshift({ name: 'report.md', data: buildMarkdown(data, paths, prefs) });
+  const safeTitle = data.video.title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
+  const head = [{ name: 'report.md', data: buildMarkdown(data, paths, prefs) }];
+  let pdfOk = true;
+  try {
+    const pdf = await renderReportPdf(buildPdfModel(data, images, prefs));
+    head.push({ name: `审片报告-${safeTitle}-${dateStamp(now)}.pdf`, data: pdf });
+  } catch (err) {
+    console.error('生成 PDF 失败', err);
+    pdfOk = false;
+  }
+  files.unshift(...head);
 
   const blob = createZip(files, { date: now });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  const safeTitle = data.video.title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
   link.href = url;
   link.download = `审片报告-${safeTitle}-${dateStamp(now)}.zip`;
   document.body.appendChild(link);
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+  return { pdfOk };
 }
 
 export function createReportView({ getData, onToggleDone, onJump, notify }) {
@@ -371,10 +461,12 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     const expected = shotJobs(data).length;
     if (expected) notify(prefs.frames ? '正在截取各条意见的画面…' : '正在截取画笔标注的起始帧…');
     const { images, total, order } = await collectShots(data);
-    downloadZip(data, images, order, prefs);
+    notify('正在排版 PDF…');
+    const { pdfOk } = await downloadZip(data, images, order, prefs);
     const missing = total - images.size;
-    if (missing > 0) notify(`有 ${missing} 张画面没截到，报告里那部分只有文字`, true);
-    else notify('报告已打包下载（report.md + images/）');
+    if (!pdfOk) notify('PDF 生成失败，压缩包里只有 report.md 和图片', true);
+    else if (missing > 0) notify(`有 ${missing} 张画面没截到，报告里那部分只有文字`, true);
+    else notify('报告已打包下载（PDF + report.md + images/）');
   });
 
   document.getElementById('report-print').addEventListener('click', async () => {
