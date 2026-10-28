@@ -145,12 +145,16 @@ function boot() {
   window.addEventListener('resize', fitVideoWrap);
   edgeToEdgeQuery.addEventListener?.('change', () => {
     syncComposerCollapse();
+    // 转成竖屏时署名框会被收起规则藏掉，没名字就维持聚光并回到输入框
+    if (!state.author && (state.video || videoRoutePending())) syncAuthorSpotlight({ focus: true });
     setTimeout(fitVideoWrap, 60);
   });
   mobileListQuery.addEventListener?.('change', syncMobileListFilter);
   syncMobileListFilter();
   window.addEventListener('hashchange', applyHash);
   syncComposerCollapse();
+  // 带片地址直接进来时，列表请求还没回来也先压暗，避免先亮一屏
+  if (!state.author && videoRoutePending()) syncAuthorSpotlight({ focus: true });
 
   requestAnimationFrame(tick);
   refreshVideos().finally(applyHash);
@@ -158,7 +162,7 @@ function boot() {
 
 function cacheDom() {
   const ids = [
-    'author-field', 'author-input', 'presence', 'presence-count', 'library-open', 'upload-open', 'upload-open-empty',
+    'author-field', 'author-input', 'author-veil', 'presence', 'presence-count', 'library-open', 'upload-open', 'upload-open-empty',
     'empty-state', 'frame', 'video-wrap', 'video', 'danmaku-layer', 'ann-layer', 'draw-layer', 'paused-badge',
     'draw-toolbar', 'range-in', 'range-out', 'range-summary', 'swatches', 'mark-in', 'mark-out',
     'preview-range', 'draw-undo', 'draw-clear', 'draw-cancel', 'draw-save',
@@ -199,6 +203,8 @@ function initAuthor() {
       renderSidebar();
     });
   }
+
+  initAuthorSpotlight();
 }
 
 /** 两个入口共用一份署名；空值就是「还没署名」，不自动编一个假名字 */
@@ -214,6 +220,65 @@ function setAuthor(raw, source) {
 
   dom.authorField.classList.toggle('need', !name);
   updateUploadButton();
+  syncAuthorSpotlight();
+}
+
+/** 地址栏已经指向一支片，但数据还没回来。这时也先压暗，避免先闪一屏亮的。 */
+function videoRoutePending() {
+  return !state.video && /^#\/v\/[\w-]+/.test(location.hash);
+}
+
+/**
+ * 没署名时：整页压暗，署名框留在暗层上面并聚焦。
+ * 有非空名字（沿用 setAuthor 的 trim）立刻撤掉。竖屏会先展开输入区，
+ * 否则署名框被收成「发弹幕」后 display:none，聚光灯照空。
+ */
+function syncAuthorSpotlight({ focus = false } = {}) {
+  const on = !state.author && (!!state.video || videoRoutePending());
+  const was = document.body.classList.contains('author-spotlight');
+  document.body.classList.toggle('author-spotlight', on);
+  if (dom.authorVeil) dom.authorVeil.hidden = !on;
+  if (!on) return;
+
+  // 全屏只显示画面，署名框在顶栏外面，先退出才能看见
+  if (state.video && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  if (state.video && edgeToEdgeQuery.matches && !composerExpanded && !state.draw) expandComposer();
+  if (focus || !was) {
+    requestAnimationFrame(() => {
+      if (!state.author && (state.video || videoRoutePending())) focusAuthorInput();
+    });
+  }
+}
+
+function focusAuthorInput() {
+  if (document.activeElement === dom.authorInput) return;
+  dom.authorInput.focus();
+}
+
+function initAuthorSpotlight() {
+  // 点暗处不要把焦点移走，也不要挡住署名框里的点击（框在暗层上面，事件到不了这里）
+  const keepFocus = (event) => {
+    if (!document.body.classList.contains('author-spotlight')) return;
+    if (dom.authorField.contains(event.target)) return;
+    event.preventDefault();
+    focusAuthorInput();
+  };
+  dom.authorVeil.addEventListener('pointerdown', keepFocus);
+  dom.authorField.closest('.topbar')?.addEventListener('pointerdown', keepFocus);
+
+  document.addEventListener('focusin', (event) => {
+    if (!document.body.classList.contains('author-spotlight')) return;
+    if (dom.authorField.contains(event.target)) return;
+    focusAuthorInput();
+  });
+
+  // Esc 会主动 blur。名字还空着时把焦点拉回来，暗层不撤。
+  dom.authorInput.addEventListener('blur', () => {
+    if (state.author || (!state.video && !videoRoutePending())) return;
+    requestAnimationFrame(() => {
+      if (!state.author && (state.video || videoRoutePending())) focusAuthorInput();
+    });
+  });
 }
 
 function requireName(message, preferUpload = false) {
@@ -225,6 +290,11 @@ function requireName(message, preferUpload = false) {
 
 function focusAuthor(preferUpload = false) {
   dom.authorField.classList.add('need');
+  // 正在看片就只让顶栏署名框亮着，上传弹窗里的同名输入会被暗层挡住
+  if (!state.author && (state.video || videoRoutePending())) {
+    syncAuthorSpotlight({ focus: true });
+    return;
+  }
   const target = preferUpload && !dom.uploadModal.hidden ? dom.uploadAuthor : dom.authorInput;
   if (target === dom.authorInput && state.video && edgeToEdgeQuery.matches && !composerExpanded) {
     expandComposer();
@@ -260,6 +330,7 @@ function showEmpty() {
   dom.reportOpen.hidden = true;
   composerExpanded = false;
   syncComposerCollapse();
+  syncAuthorSpotlight();
   reportView?.close();
   dom.videoTitle.textContent = '还没有打开片子';
   dom.videoMeta.textContent = '上传后从片库里选一支开始审。';
@@ -273,6 +344,8 @@ function showEmpty() {
 
 async function openVideo(id) {
   if (state.video?.id === id) return;
+  // 片子还在加载时先压暗，直接打开链接不会先闪一屏
+  if (!state.author) syncAuthorSpotlight({ focus: true });
   let data;
   try {
     data = await api.getVideo(id);
@@ -310,6 +383,7 @@ async function openVideo(id) {
   dom.overallForm.hidden = false;
   composerExpanded = false;
   syncComposerCollapse();
+  syncAuthorSpotlight({ focus: true });
   dom.reportOpen.hidden = false;
   dom.drawToolbar.hidden = true;
   dom.videoWrap.classList.remove('drawing');
@@ -400,6 +474,10 @@ function fitVideoWrap() {
 
 /** 竖屏看片时，署名、弹幕输入、整体意见和画笔入口收成一颗「发弹幕」 */
 function syncComposerCollapse() {
+  // 没署名时署名框必须露在外面，不能收成「发弹幕」
+  if (!state.author && state.video && edgeToEdgeQuery.matches && !composerExpanded && !state.draw) {
+    composerExpanded = true;
+  }
   // 正在画的时候不能收起，否则工具条被藏掉、画面却还停在画笔模式
   const collapse = edgeToEdgeQuery.matches && !!state.video && !composerExpanded && !state.draw;
   document.body.classList.toggle('composer-collapsed', collapse);
@@ -424,6 +502,10 @@ function blurComposerFields() {
 
 function collapseComposer() {
   if (!edgeToEdgeQuery.matches) return;
+  if (!state.author) {
+    dom.authorInput.focus();
+    return;
+  }
   if (state.draw && pad.strokes.length) {
     toast('先保存或取消画笔，再收起');
     return;

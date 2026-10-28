@@ -154,6 +154,58 @@ h1, h2, p { margin: 0; }
   50% { box-shadow: 0 0 0 3px rgba(255, 180, 84, 0.22); }
 }
 
+/* 看片但还没署名：整页压暗，只留署名框。顶栏单独抬高，再用 ::before
+   把牌子和按钮一起压暗，署名框 z-index 压过这层。 */
+.author-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(4, 6, 10, 0.74);
+  touch-action: none;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body.author-spotlight {
+  overflow: hidden;
+}
+
+body.author-spotlight .topbar {
+  position: relative;
+  z-index: 91;
+  border-bottom-color: transparent;
+}
+
+body.author-spotlight .topbar::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 -1px;
+  z-index: 1;
+  background: rgba(4, 6, 10, 0.74);
+  touch-action: none;
+}
+
+body.author-spotlight .author-field,
+body.author-spotlight .author-field.need {
+  position: relative;
+  z-index: 2;
+  border-color: #22c1c3;
+  background: #10131a;
+  animation: none;
+  box-shadow:
+    0 0 0 2px #22c1c3,
+    0 0 0 6px rgba(34, 193, 195, 0.35),
+    0 0 28px rgba(34, 193, 195, 0.55);
+}
+
+body.author-spotlight .author-field .author-label,
+body.author-spotlight .author-field.need .author-label { color: #22c1c3; }
+
+body.author-spotlight .author-field input,
+body.author-spotlight .author-field.need input { background: rgba(0, 0, 0, 0.28); }
+
+body.author-spotlight .toast { z-index: 100; }
+
 /* ── 按钮 ───────────────────────────────────────────────────────────── */
 
 .btn {
@@ -1335,6 +1387,7 @@ body.dragging::after {
   .topbar,
   .workspace,
   .toast,
+  .author-veil,
   .modal:not(#report-modal),
   .pdf-preview { display: none !important; }
 
@@ -1484,6 +1537,8 @@ body.dragging::after {
   body.composer-collapsed #draw-toolbar {
     display: none;
   }
+  /* 没署名时即使收起标记还在，署名框也要露出来接聚光 */
+  body.author-spotlight .author-field { display: flex; }
 
   #composer { flex-wrap: wrap; }
   #composer .composer-collapse {
