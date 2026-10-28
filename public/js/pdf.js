@@ -12,7 +12,7 @@
  *     heading?: string,            // 「整体问题」「画面 1 · 00:12.040 · 3 条」；不分组模式下可省略
  *     image?: string,              // 截帧 data URL
  *     imageCaption?: string,
- *     items: [{ index, time?, kind, author, color, text, done, replies: [{ author, color, text }] }]
+ *     items: [{ index, time?, kind, author?, color, text, done, replies: [{ author?, color, text }] }]（author 为 null 时不画署名）
  *     // time 为空：整体问题或画面分组内（时间码只在组标题上）；表头不画「弹幕」「画笔」类型
  *   }],
  *   empty?: string,
@@ -185,7 +185,8 @@ async function drawItem(pager, item) {
   const textLines = wrapText(ctx, item.text, textW);
   setFont(ctx, ITEM.reply);
   const replyBlocks = (item.replies || []).map((reply) => {
-    const label = `↳ ${reply.author || '匿名'}`;
+    // author 为 null = 报告设成不显示名字
+    const label = reply.author ? `↳ ${reply.author}` : '↳';
     setFont(ctx, ITEM.reply, 650);
     const labelW = ctx.measureText(label).width + 10;
     setFont(ctx, ITEM.reply);
@@ -258,10 +259,12 @@ async function drawItem(pager, item) {
           c.fillText(item.time, hx, base);
           hx += c.measureText(item.time).width + 14;
         }
-        setFont(c, 18, 650);
-        c.fillStyle = inkColor(item.color);
-        c.fillText(item.author || '匿名', hx, base);
-        hx += c.measureText(item.author || '匿名').width + 14;
+        if (item.author) {
+          setFont(c, 18, 650);
+          c.fillStyle = inkColor(item.color);
+          c.fillText(item.author, hx, base);
+          hx += c.measureText(item.author).width + 14;
+        }
         if (item.extra) {
           setFont(c, 16);
           c.fillStyle = COLORS.faint;

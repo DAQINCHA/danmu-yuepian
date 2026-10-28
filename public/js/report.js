@@ -14,13 +14,14 @@ const SHOT_MAX_WIDTH = 1280;
 const PREFS_KEY = 'danmu:report';
 /** 合并间隔（秒）；0 = 不合并，每条弹幕各截一帧 */
 const GAPS = [0.5, 1, 2, 0];
-const DEFAULT_PREFS = { frames: true, gap: 1 };
+const DEFAULT_PREFS = { frames: true, gap: 1, names: true };
 
 export function loadPrefs() {
   try {
     const raw = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
     return {
       frames: raw.frames !== false,
+      names: raw.names !== false,
       gap: GAPS.includes(raw.gap) ? raw.gap : DEFAULT_PREFS.gap,
     };
   } catch {
@@ -127,15 +128,15 @@ function describe(entry, fps) {
 }
 
 /**
- * 表头只有「序号. 作者」，不分组时前面加时间码；不标「弹幕」「画笔」类型。
+ * 表头只有「序号. 作者」，不分组时前面加时间码；不标「弹幕」「画笔」类型；names=false 时不写作者和回复署名。
  * overall：整体问题，不带时间码；inGroup：画面分组内，时间码只出现在组标题上。
  */
-function pushEntry(lines, entry, index, fps, { level = '##', shot = null, overall = false, inGroup = false } = {}) {
-  const at = timecode(entry.time);
-  const author = entry.data.author || '匿名';
-  lines.push(overall || inGroup
-    ? `${level} ${index + 1}. ${author}`
-    : `${level} ${index + 1}. ${at} · ${author}`);
+function pushEntry(lines, entry, index, fps, { level = '##', shot = null, overall = false, inGroup = false, names = true } = {}) {
+  const head = [`${index + 1}.`];
+  if (!overall && !inGroup) head.push(timecode(entry.time));
+  if (names) head.push(entry.data.author || '匿名');
+  // 不显示名字时只剩「序号. 时间码」
+  lines.push(`${level} ${head[0]} ${head.slice(1).join(' · ')}`.trimEnd());
   lines.push('');
   lines.push(describe(entry, fps));
   lines.push('');
@@ -149,7 +150,7 @@ function pushEntry(lines, entry, index, fps, { level = '##', shot = null, overal
     // 每条回复单独一段引用，免得在 Markdown 里糊成一行
     replies.forEach((reply, i) => {
       if (i) lines.push('>');
-      lines.push(`> ↳ **${reply.author || '匿名'}**：${reply.text}`);
+      lines.push(names ? `> ↳ **${reply.author || '匿名'}**：${reply.text}` : `> ↳ ${reply.text}`);
     });
     lines.push('');
   }
@@ -163,6 +164,7 @@ function pushEntry(lines, entry, index, fps, { level = '##', shot = null, overal
  */
 export function buildMarkdown(data, shots = null, prefs = loadPrefs()) {
   const entries = collect(data);
+  const names = prefs?.names !== false;
   const done = entries.filter((e) => e.data.done).length;
   const lines = [
     `# 审片报告 · ${data.video.title}`,
@@ -178,7 +180,7 @@ export function buildMarkdown(data, shots = null, prefs = loadPrefs()) {
   let index = 0;
   if (overallEntries.length) {
     lines.push('## 整体问题', '');
-    for (const entry of overallEntries) pushEntry(lines, entry, index++, data.fps, { level: '###', overall: true });
+    for (const entry of overallEntries) pushEntry(lines, entry, index++, data.fps, { level: '###', overall: true, names });
   }
 
   if (prefs?.frames) {
@@ -188,13 +190,13 @@ export function buildMarkdown(data, shots = null, prefs = loadPrefs()) {
       lines.push(`## 画面 ${gi + 1} · ${at} · ${group.entries.length} 条`, '');
       const shot = shots?.get(group.key);
       if (shot) lines.push(`![画面 ${gi + 1}](${shot})`, '');
-      for (const entry of group.entries) pushEntry(lines, entry, index++, data.fps, { level: '###', inGroup: true });
+      for (const entry of group.entries) pushEntry(lines, entry, index++, data.fps, { level: '###', inGroup: true, names });
     });
   } else {
     for (const entry of entries) {
       if (overallEntries.includes(entry)) continue;
       const shot = entry.kind === 'annotation' ? shots?.get(annotationKey(entry.data)) : null;
-      pushEntry(lines, entry, index++, data.fps, { shot });
+      pushEntry(lines, entry, index++, data.fps, { shot, names });
     }
   }
 
@@ -202,8 +204,9 @@ export function buildMarkdown(data, shots = null, prefs = loadPrefs()) {
   return lines.join('\n');
 }
 
-function pdfItem(entry, index, fps, { overall = false, inGroup = false } = {}) {
-  const author = entry.data.author || '匿名';
+function pdfItem(entry, index, fps, { overall = false, inGroup = false, names = true } = {}) {
+  // 不显示名字：署名留空，署名色也不用（免得靠颜色认出是谁）
+  const author = names ? entry.data.author || '匿名' : null;
   const replies = Array.isArray(entry.data.replies) ? entry.data.replies : [];
   return {
     index,
@@ -211,12 +214,12 @@ function pdfItem(entry, index, fps, { overall = false, inGroup = false } = {}) {
     time: overall || inGroup ? null : timecode(entry.time),
     kind: entry.kind,
     author,
-    color: authorColor(author),
+    color: author ? authorColor(author) : null,
     text: describe(entry, fps),
     done: Boolean(entry.data.done),
     replies: replies.map((reply) => ({
-      author: reply.author || '匿名',
-      color: authorColor(reply.author || '匿名'),
+      author: names ? reply.author || '匿名' : null,
+      color: names ? authorColor(reply.author || '匿名') : null,
       text: reply.text,
     })),
   };
@@ -225,6 +228,7 @@ function pdfItem(entry, index, fps, { overall = false, inGroup = false } = {}) {
 /** PDF 排版用的结构，内容和顺序与 buildMarkdown 一致；images：截帧 key -> data URL */
 function buildPdfModel(data, images, prefs) {
   const entries = collect(data);
+  const names = prefs?.names !== false;
   const done = entries.filter((e) => e.data.done).length;
   const sections = [];
   const overallEntries = entries.filter((e) => e.kind === 'comment' && isOverall(e.data));
@@ -232,7 +236,7 @@ function buildPdfModel(data, images, prefs) {
   if (overallEntries.length) {
     sections.push({
       heading: '整体问题',
-      items: overallEntries.map((entry) => pdfItem(entry, index++, data.fps, { overall: true })),
+      items: overallEntries.map((entry) => pdfItem(entry, index++, data.fps, { overall: true, names })),
     });
   }
   if (prefs?.frames) {
@@ -244,7 +248,7 @@ function buildPdfModel(data, images, prefs) {
         heading: `画面 ${gi + 1} · ${at} · ${group.entries.length} 条`,
         image,
         imageCaption: image && group.annotations.length ? '含画笔笔迹' : '',
-        items: group.entries.map((entry) => pdfItem(entry, index++, data.fps, { inGroup: true })),
+        items: group.entries.map((entry) => pdfItem(entry, index++, data.fps, { inGroup: true, names })),
       });
     });
   } else {
@@ -256,7 +260,7 @@ function buildPdfModel(data, images, prefs) {
         flat = { items: [] };
         sections.push(flat);
       }
-      const item = pdfItem(entry, index++, data.fps);
+      const item = pdfItem(entry, index++, data.fps, { names });
       if (image) {
         // 带截帧的画笔单独成段：起始帧在上、意见在下，后面的弹幕另起一段
         flat.items.push(item);
@@ -452,6 +456,13 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
 
   const framesInput = document.getElementById('report-frames');
   const gapSelect = document.getElementById('report-gap');
+  const namesInput = document.getElementById('report-names');
+  namesInput.checked = prefs.names;
+  namesInput.addEventListener('change', () => {
+    prefs = { ...prefs, names: namesInput.checked };
+    savePrefs(prefs);
+    render();
+  });
   framesInput.checked = prefs.frames;
   gapSelect.value = String(prefs.gap);
   gapSelect.disabled = !prefs.frames;
@@ -574,10 +585,10 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     for (const reply of replies) {
       const row = document.createElement('div');
       row.className = 'r-reply';
-      row.style.setProperty('--r-color', authorColor(reply.author));
+      if (prefs.names) row.style.setProperty('--r-color', authorColor(reply.author));
       const author = document.createElement('span');
       author.className = 'r-reply-author';
-      author.textContent = `↳ ${reply.author || '匿名'}`;
+      author.textContent = prefs.names ? `↳ ${reply.author || '匿名'}` : '↳';
       const text = document.createElement('span');
       text.className = 'r-reply-text';
       text.textContent = reply.text;
@@ -592,7 +603,7 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
 
     const node = document.createElement('div');
     node.className = 'report-item' + (data.done ? ' done' : '');
-    node.style.setProperty('--r-color', authorColor(data.author));
+    if (prefs.names) node.style.setProperty('--r-color', authorColor(data.author));
 
     const indexEl = document.createElement('span');
     indexEl.className = 'r-index mono';
@@ -616,14 +627,16 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     author.textContent = data.author || '匿名';
 
     // 不标类型；整体问题不挂在某一帧上、画面分组内时间码只在组标题上，这两种不显示时间码
-    if (overall || inGroup) head.append(author);
-    else head.append(timeButton, author);
+    if (!overall && !inGroup) head.append(timeButton);
+    if (prefs.names) head.append(author);
 
     const text = document.createElement('p');
     text.className = 'r-text';
     text.textContent = describe(entry, currentFps());
 
-    main.append(head, text);
+    // 整体问题 / 分组内又不显示名字时表头是空的，干脆不放
+    if (head.childNodes.length) main.append(head);
+    main.append(text);
     node.append(indexEl);
 
     if (entry.kind === 'annotation' && withShot) main.append(buildShot(data));
