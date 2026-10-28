@@ -119,12 +119,14 @@ danmu-yuepian/
 └── data/              # 运行时数据，已 gitignore；每个组一个子目录（brand/、short/…）
     └── brand/
         ├── db.json    # 视频元信息 + 弹幕 + 标注
-        └── uploads/   # 视频原文件
+        ├── uploads/   # 视频原文件
+        └── covers/    # 封面 JPEG（按视频 id）。没有就在第一次看到时补一张
 ```
 
 ## 实现要点
 
 - **视频流式播放**：`GET /api/videos/:id/file` 支持 `Range`，拖进度条不会整段重下。
+- **封面**：片库卡片用 `<DATA_DIR>/covers/<视频 id>.jpg`，响应带长期缓存和 `ETag`。旧片子没有这张图时，浏览器第一次看到再截一帧存上，不用每次刷新都去拉原片。
 - **实时同步**：`GET /api/events` 是 SSE 长连接，上行用普通 `POST`。没有 WebSocket 依赖。
 - **存储**：全部状态在 `<DATA_DIR>/db.json`（各组各一份），写入走临时文件 + rename，重启不丢。数据量到几万条再考虑换 SQLite。
 - **画笔坐标**：统一存 0~1 的归一化坐标，所以换屏幕、换窗口大小、全屏，圈都落在同一位置。

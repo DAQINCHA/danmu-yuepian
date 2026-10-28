@@ -70,36 +70,52 @@ export function createFrameGrabber() {
     }
   }
 
-  async function run(url, time, maxWidth) {
-    ensure(url);
-    if (video.readyState < 1) await waitEvent(video, 'loadedmetadata');
+  function dropVideo() {
+    if (!video) return;
+    src = '';
+    video.pause();
+    video.removeAttribute('src');
+    // load() 会掐掉还在飞的 Range，避免封面截完一帧后继续把整段片子下完
+    video.load();
+  }
 
-    const total = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : time + 1;
-    const target = Math.min(Math.max(0, time), Math.max(0, total - 0.001));
-    if (Math.abs(video.currentTime - target) > 0.0005 || video.readyState < 2) {
-      const presented = frameReady(video);
-      const seeked = waitEvent(video, 'seeked');
-      video.currentTime = target;
-      await seeked;
-      await presented;
+  async function run(url, time, maxWidth, release) {
+    try {
+      ensure(url);
+      if (video.readyState < 1) await waitEvent(video, 'loadedmetadata');
+
+      const total = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : time + 1;
+      const target = Math.min(Math.max(0, time), Math.max(0, total - 0.001));
+      if (Math.abs(video.currentTime - target) > 0.0005 || video.readyState < 2) {
+        const presented = frameReady(video);
+        const seeked = waitEvent(video, 'seeked');
+        video.currentTime = target;
+        await seeked;
+        await presented;
+      }
+      if (video.readyState < 2) await waitEvent(video, 'loadeddata');
+
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      if (!width || !height) throw new Error('读不到画面尺寸');
+      const scale = maxWidth ? Math.min(1, maxWidth / width) : 1;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(width * scale);
+      canvas.height = Math.round(height * scale);
+      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+      return canvas;
+    } finally {
+      if (release) dropVideo();
     }
-    if (video.readyState < 2) await waitEvent(video, 'loadeddata');
-
-    const width = video.videoWidth;
-    const height = video.videoHeight;
-    if (!width || !height) throw new Error('读不到画面尺寸');
-    const scale = maxWidth ? Math.min(1, maxWidth / width) : 1;
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(width * scale);
-    canvas.height = Math.round(height * scale);
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas;
   }
 
   return {
-    /** 取 time 秒处的画面，返回画布；多次调用自动排队，同一时间只 seek 一次 */
-    grab(url, time, { maxWidth = 0 } = {}) {
-      const job = chain.catch(() => {}).then(() => run(url, time, maxWidth));
+    /**
+     * 取 time 秒处的画面，返回画布；多次调用自动排队，同一时间只 seek 一次。
+     * release：截完就卸掉 src，不再缓冲后面的片子。封面只要一帧，报告要连续截就别开。
+     */
+    grab(url, time, { maxWidth = 0, release = false } = {}) {
+      const job = chain.catch(() => {}).then(() => run(url, time, maxWidth, release));
       chain = job;
       return job;
     },

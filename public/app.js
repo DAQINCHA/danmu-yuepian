@@ -865,6 +865,7 @@ function tick() {
     }
     annView.render(state.annotations, t);
     updateTransport();
+    maybeSavePlayingCover();
 
     const now = performance.now();
     if (now - lastFitCheck > 400) {
@@ -2319,8 +2320,6 @@ async function startUpload() {
   }
 }
 
-const coverGrabber = createFrameGrabber();
-
 function hasLibraryContent() {
   return state.projects.length > 0 || Boolean(state.uncategorized?.videoCount);
 }
@@ -2380,23 +2379,191 @@ function versionOf(videos) {
   return map;
 }
 
-function paintCover(canvas, videoId) {
+// 封面是一张小 JPEG，存在 DATA_DIR/covers。有图就直接给 <img>（浏览器长期缓存）；
+// 旧片子没有图时，进了可视区域再截一帧上传，同一支片子只截一次，截完立刻停掉视频下载。
+const COVER_MAX_EDGE = 640;
+const knownCovers = new Map();
+const coverJobs = new Map();
+const coverGrabber = createFrameGrabber();
+let coverObserver = null;
+let coverSeedFor = '';
+let coverSeedFailed = '';
+
+function coverUrl(id) {
+  return `/api/videos/${id}/cover`;
+}
+
+function canvasToJpeg(canvas, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) reject(new Error('生成封面失败'));
+      else resolve(blob);
+    }, 'image/jpeg', quality);
+  });
+}
+
+async function coverBlob(canvas) {
+  let blob = await canvasToJpeg(canvas, 0.72);
+  if (blob.size > 480 * 1024) blob = await canvasToJpeg(canvas, 0.5);
+  return blob;
+}
+
+function rememberCover(videoId, url) {
+  knownCovers.set(videoId, url);
+  const video = state.videos.find((item) => item.id === videoId);
+  if (video) video.hasCover = true;
+  if (state.video?.id === videoId) state.video.hasCover = true;
+  for (const project of state.projects) {
+    if (project.coverVideoId === videoId) project.hasCover = true;
+  }
+  if (state.uncategorized?.coverVideoId === videoId) state.uncategorized.hasCover = true;
+}
+
+function resolveCover(videoId) {
+  const known = knownCovers.get(videoId);
+  if (known) return Promise.resolve(known);
+  const pending = coverJobs.get(videoId);
+  if (pending) return pending;
+  const job = createCover(videoId).then((url) => {
+    knownCovers.set(videoId, url);
+    return url;
+  }).catch((err) => {
+    coverJobs.delete(videoId);
+    throw err;
+  });
+  coverJobs.set(videoId, job);
+  return job;
+}
+
+async function createCover(videoId) {
+  const res = await fetch(coverUrl(videoId));
+  if (res.ok) {
+    await res.blob();
+    rememberCover(videoId, coverUrl(videoId));
+    return coverUrl(videoId);
+  }
+  res.body?.cancel?.();
+  if (res.status !== 404) throw new Error('封面读取失败');
+
+  const frame = await coverGrabber.grab(`/api/videos/${videoId}/file`, 0.4, { maxWidth: COVER_MAX_EDGE, release: true });
+  const blob = await coverBlob(frame);
+  const put = await fetch(coverUrl(videoId), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'image/jpeg' },
+    body: blob,
+  });
+  if (!put.ok) throw new Error('封面保存失败');
+  const url = URL.createObjectURL(blob);
+  rememberCover(videoId, url);
+  return url;
+}
+
+function ensureCoverObserver() {
+  if (coverObserver || typeof IntersectionObserver !== 'function') return coverObserver;
+  coverObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      coverObserver.unobserve(entry.target);
+      const id = entry.target.dataset.cover;
+      if (!id || !entry.target.isConnected) continue;
+      loadMissingCover(entry.target, id);
+    }
+  }, { rootMargin: '240px' });
+  return coverObserver;
+}
+
+function releaseCovers(root) {
+  if (!coverObserver || !root) return;
+  root.querySelectorAll('img[data-cover]').forEach((node) => coverObserver.unobserve(node));
+}
+
+function assignCover(img, videoId, url) {
+  img.loading = 'lazy';
+  img.addEventListener('error', () => {
+    if (img.dataset.cover !== videoId || img.dataset.coverRetry === '1') return;
+    img.dataset.coverRetry = '1';
+    knownCovers.delete(videoId);
+    coverJobs.delete(videoId);
+    img.removeAttribute('src');
+    watchMissingCover(img, videoId);
+  }, { once: true });
+  img.src = url;
+}
+
+function loadMissingCover(img, videoId) {
+  if (!img.isConnected || img.dataset.cover !== videoId || img.dataset.coverBusy === '1') return;
+  img.dataset.coverBusy = '1';
+  resolveCover(videoId).then((url) => {
+    if (!img.isConnected || img.dataset.cover !== videoId) return;
+    assignCover(img, videoId, url);
+  }).catch(() => {}).finally(() => {
+    if (img.dataset.cover === videoId) delete img.dataset.coverBusy;
+  });
+}
+
+function watchMissingCover(img, videoId) {
+  const arm = () => {
+    if (!img.isConnected || img.dataset.cover !== videoId) return;
+    const observer = ensureCoverObserver();
+    if (!observer) {
+      loadMissingCover(img, videoId);
+      return;
+    }
+    observer.observe(img);
+  };
+  // 卡片先组好再挂进文档。等这次渲染结束再观察，避免对还没进页面的节点漏掉回调
+  if (img.isConnected) arm();
+  else queueMicrotask(() => (img.isConnected ? arm() : requestAnimationFrame(arm)));
+}
+
+function mountCover(img, videoId, ready) {
   if (!videoId) return;
-  canvas.dataset.cover = videoId;
-  coverGrabber.grab(`/api/videos/${videoId}/file`, 0.4, { maxWidth: 640 }).then((frame) => {
-    if (canvas.dataset.cover !== videoId || !canvas.isConnected) return;
-    const ctx = canvas.getContext('2d');
-    const width = 640;
-    const height = 360;
-    canvas.width = width;
-    canvas.height = height;
-    const sw = frame.width;
-    const sh = frame.height;
-    const scale = Math.max(width / sw, height / sh);
-    const dw = sw * scale;
-    const dh = sh * scale;
-    ctx.drawImage(frame, (width - dw) / 2, (height - dh) / 2, dw, dh);
-  }).catch(() => {});
+  img.alt = '';
+  img.decoding = 'async';
+  img.draggable = false;
+  img.dataset.cover = videoId;
+  const known = knownCovers.get(videoId);
+  if (ready || known) {
+    assignCover(img, videoId, known || coverUrl(videoId));
+    return;
+  }
+  watchMissingCover(img, videoId);
+}
+
+/** 正在看的片子已经解码出画面时，顺手把封面存上，回片库就不用再下一遍原片 */
+function maybeSavePlayingCover() {
+  const meta = state.video;
+  const el = dom.video;
+  if (!meta || meta.hasCover || coverSeedFor === meta.id || coverSeedFailed === meta.id) return;
+  if (knownCovers.has(meta.id) || coverJobs.has(meta.id)) return;
+  const t = el.currentTime || 0;
+  const total = el.duration;
+  const nearEnd = Number.isFinite(total) && total > 0 && t >= Math.max(0, total - 0.05);
+  if (t < 0.4 && !nearEnd) return;
+  if (el.readyState < 2 || !el.videoWidth || !el.videoHeight) return;
+  coverSeedFor = meta.id;
+  const scale = Math.min(1, COVER_MAX_EDGE / el.videoWidth);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(el.videoWidth * scale));
+  canvas.height = Math.max(1, Math.round(el.videoHeight * scale));
+  canvas.getContext('2d').drawImage(el, 0, 0, canvas.width, canvas.height);
+  const job = coverBlob(canvas).then(async (blob) => {
+    const put = await fetch(coverUrl(meta.id), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'image/jpeg' },
+      body: blob,
+    });
+    if (!put.ok) throw new Error('封面保存失败');
+    const url = URL.createObjectURL(blob);
+    rememberCover(meta.id, url);
+    return url;
+  }).catch((err) => {
+    coverJobs.delete(meta.id);
+    coverSeedFailed = meta.id;
+    if (coverSeedFor === meta.id) coverSeedFor = '';
+    throw err;
+  });
+  coverJobs.set(meta.id, job);
 }
 
 function renderLibraryView() {
@@ -2439,6 +2606,7 @@ function renderCrumb() {
 }
 
 function renderProjectCards() {
+  releaseCovers(dom.projectGrid);
   const cards = [];
   const projects = [...state.projects].sort((a, b) => (b.latestAt || 0) - (a.latestAt || 0));
   for (const project of projects) cards.push(projectCard(project));
@@ -2449,6 +2617,7 @@ function renderProjectCards() {
       videoCount: state.uncategorized.videoCount,
       latestAt: state.uncategorized.latestAt,
       coverVideoId: state.uncategorized.coverVideoId,
+      hasCover: state.uncategorized.hasCover,
     }));
   }
   cards.push(addProjectCard());
@@ -2471,11 +2640,9 @@ function projectCard(project) {
   card.className = 'project-card';
   const frame = document.createElement('div');
   frame.className = 'project-cover-frame';
-  const cover = document.createElement('canvas');
+  const cover = document.createElement('img');
   cover.className = 'project-cover';
-  cover.width = 640;
-  cover.height = 360;
-  paintCover(cover, project.coverVideoId);
+  mountCover(cover, project.coverVideoId, project.hasCover);
   frame.append(cover);
   const body = document.createElement('div');
   body.className = 'project-body';
@@ -2495,6 +2662,7 @@ function projectCard(project) {
 }
 
 function renderVersionList() {
+  releaseCovers(dom.versionList);
   const projectId = state.libraryProjectId;
   const list = videosIn(projectId);
   if (!list.length) {
@@ -2516,11 +2684,9 @@ function renderVersionList() {
 function versionRow(video, version) {
   const row = document.createElement('div');
   row.className = 'version-row';
-  const cover = document.createElement('canvas');
+  const cover = document.createElement('img');
   cover.className = 'version-cover';
-  cover.width = 320;
-  cover.height = 180;
-  paintCover(cover, video.id);
+  mountCover(cover, video.id, video.hasCover);
 
   const main = document.createElement('div');
   main.className = 'version-main';

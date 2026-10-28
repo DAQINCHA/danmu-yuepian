@@ -463,9 +463,12 @@ body.author-spotlight .toast { z-index: 100; }
 }
 .version-cover {
   flex: none;
+  display: block;
   width: 128px;
   height: 72px;
   border-radius: 8px;
+  object-fit: cover;
+  object-position: center;
   background: #10141c;
 }
 .version-main { flex: 1 1 auto; min-width: 0; cursor: pointer; }
