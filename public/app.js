@@ -11,7 +11,6 @@ const DRAW_COLORS = ['#ff5a4d', '#ffd166', '#4ec9a0', '#8ab4ff'];
 const STORE = {
   author: 'danmu:author',
   danmaku: 'danmu:danmaku',
-  portraitSplit: 'danmu:portrait-split',
 };
 
 // 和服务端 config.maxAnnotationSpan 保持一致
@@ -67,33 +66,10 @@ let lastFitCheck = 0;
 
 /* ── 启动 ─────────────────────────────────────────────────────────── */
 
-/** 手机竖屏：播放器贴满两边，高度按比例；超出上限时左右留黑边并居中 */
+/** 手机竖屏：播放器贴满两边，高度跟着视频比例走，上下不留黑边 */
 const edgeToEdgeQuery = window.matchMedia('(max-width: 860px) and (orientation: portrait)');
 
-// 画面高度占视口的比例。0.8 是原先贴边上限；没拖过时用默认值，把列表留在同一屏里
-const SPLIT_MIN = 0.2;
-const SPLIT_MAX = 0.8;
-const SPLIT_DEFAULT = 0.42;
-const SPLIT_MIN_LIST = 112;
-
-function loadSplitRatio() {
-  try {
-    const raw = localStorage.getItem(STORE.portraitSplit);
-    if (raw == null || raw === '') return null;
-    const n = Number(raw);
-    if (!Number.isFinite(n)) return null;
-    return Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, n));
-  } catch {
-    return null;
-  }
-}
-
-let splitRatio = loadSplitRatio();
 let composerExpanded = false;
-
-function activeSplitRatio() {
-  return splitRatio == null ? SPLIT_DEFAULT : splitRatio;
-}
 
 boot();
 
@@ -141,7 +117,6 @@ function boot() {
   initComposer();
   initOverall();
   initDrawToolbar();
-  initSplitHandle();
   initModals();
   initDrop();
   initKeyboard();
@@ -187,7 +162,7 @@ function cacheDom() {
     'transport', 'step-back', 'step-fwd', 'draw-toggle', 'fps-input', 'fps-badge', 'fps-field',
     'danmaku-toggle', 'snap-btn', 'fullscreen-btn',
     'composer', 'composer-time', 'composer-input', 'composer-reveal', 'composer-collapse',
-    'overall-form', 'overall-input', 'split-handle',
+    'overall-form', 'overall-input',
     'video-title', 'video-meta', 'tabs', 'list', 'count-all', 'count-comment', 'count-annotation',
     'report-open',
     'library-modal', 'library-grid', 'upload-modal', 'dropzone', 'file-input', 'title-input',
@@ -366,35 +341,6 @@ function onMetadata() {
   }
 }
 
-function visibleBoxHeight(el) {
-  if (!el || el.hidden) return 0;
-  const style = getComputedStyle(el);
-  if (style.display === 'none' || style.visibility === 'hidden') return 0;
-  return el.offsetHeight + (parseFloat(style.marginTop) || 0) + (parseFloat(style.marginBottom) || 0);
-}
-
-/**
- * 竖屏画面高度上限（像素）。拖动条记的是占视口的比例，同时给顶栏、
- * 播放条、输入区和一小段列表留位置，避免把手被挤出屏幕。
- */
-function portraitVideoMaxHeight(vh) {
-  const hardMax = Math.round(vh * SPLIT_MAX);
-  const dragged = Math.round(vh * activeSplitRatio());
-  const below = visibleBoxHeight(document.querySelector('.topbar'))
-    + visibleBoxHeight(dom.drawToolbar)
-    + visibleBoxHeight(dom.transport)
-    + visibleBoxHeight(dom.composerReveal)
-    + visibleBoxHeight(dom.composer)
-    + visibleBoxHeight(dom.overallForm)
-    + visibleBoxHeight(dom.splitHandle)
-    + visibleBoxHeight(document.querySelector('.sidebar-head'))
-    + visibleBoxHeight(dom.tabs)
-    + SPLIT_MIN_LIST;
-  const fitCap = vh - below;
-  const floor = Math.round(Math.max(96, vh * SPLIT_MIN));
-  return Math.max(floor, Math.min(hardMax, dragged, Math.max(floor, fitCap)));
-}
-
 function computeFit() {
   const width = dom.video.videoWidth;
   const height = dom.video.videoHeight;
@@ -404,10 +350,8 @@ function computeFit() {
     const fullW = dom.frame.clientWidth;
     if (fullW < 48) return null;
     const ratio = width / height;
-    // 竖版片子按宽度撑满会太高：默认压到大约 42% 屏高，拖分隔条可在 20%–80% 之间改。
-    // 超过上限才缩宽度，画面在黑色底上居中。
-    const vh = window.innerHeight || fullW / ratio;
-    const maxH = portraitVideoMaxHeight(vh);
+    // 竖版片子按宽度撑满会太高，封顶到屏幕高度的 80%，超出才两边留一点
+    const maxH = Math.round((window.innerHeight || fullW / ratio) * 0.8);
     let w = fullW;
     let h = w / ratio;
     if (h > maxH) {
@@ -439,11 +383,6 @@ function computeFit() {
  * 布局晚一步就绪（字体、侧栏回流、媒体查询切换）也能自己纠正回来。
  */
 function fitVideoWrap() {
-  if (dom.splitHandle && edgeToEdgeQuery.matches) {
-    const vh = window.innerHeight || 1;
-    const shown = Math.round((portraitVideoMaxHeight(vh) / vh) * 100);
-    dom.splitHandle.setAttribute('aria-valuenow', String(Math.min(80, Math.max(20, shown))));
-  }
   const size = computeFit();
   if (!size) return;
   const w = `${size.w}px`;
@@ -459,7 +398,6 @@ function fitVideoWrap() {
 function syncComposerCollapse() {
   // 正在画的时候不能收起，否则工具条被藏掉、画面却还停在画笔模式
   const collapse = edgeToEdgeQuery.matches && !!state.video && !composerExpanded && !state.draw;
-  document.body.classList.toggle('watching', !!state.video);
   document.body.classList.toggle('composer-collapsed', collapse);
   if (dom.composerReveal) {
     dom.composerReveal.setAttribute('aria-expanded', collapse ? 'false' : 'true');
@@ -491,54 +429,6 @@ function collapseComposer() {
   composerExpanded = false;
   syncComposerCollapse();
   fitVideoWrap();
-}
-
-function initSplitHandle() {
-  const handle = dom.splitHandle;
-  if (!handle) return;
-  let drag = null;
-
-  const end = (event) => {
-    if (!drag || event.pointerId !== drag.id) return;
-    const moved = drag.moved;
-    drag = null;
-    handle.classList.remove('dragging');
-    if (!moved || splitRatio == null) return;
-    try {
-      localStorage.setItem(STORE.portraitSplit, String(Math.round(splitRatio * 1000) / 1000));
-    } catch {
-      /* 写不进就只在这一次里生效 */
-    }
-  };
-
-  handle.addEventListener('pointerdown', (event) => {
-    if (!edgeToEdgeQuery.matches || document.fullscreenElement) return;
-    if (event.button != null && event.button !== 0) return;
-    event.preventDefault();
-    const vh = window.innerHeight || 1;
-    drag = {
-      id: event.pointerId,
-      y: event.clientY,
-      // 从当前真正生效的上限起拖（贴边 80% 若被列表最小高度夹住，就从夹住的位置开始）
-      ratio: portraitVideoMaxHeight(vh) / vh,
-      moved: false,
-    };
-    try { handle.setPointerCapture(event.pointerId); } catch { /* 不支持就靠元素上的事件 */ }
-    handle.classList.add('dragging');
-  });
-
-  handle.addEventListener('pointermove', (event) => {
-    if (!drag || event.pointerId !== drag.id) return;
-    const vh = window.innerHeight || 1;
-    const dy = event.clientY - drag.y;
-    if (dy !== 0) drag.moved = true;
-    // 往上拖缩小画面，往下拖回到原来的高度；比例夹在 20%–80%
-    splitRatio = Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, drag.ratio + dy / vh));
-    fitVideoWrap();
-  });
-
-  handle.addEventListener('pointerup', end);
-  handle.addEventListener('pointercancel', end);
 }
 
 function renderHeader() {

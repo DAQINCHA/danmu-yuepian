@@ -705,8 +705,6 @@ h1, h2, p { margin: 0; }
 .composer-reveal,
 .composer-collapse { display: none; }
 
-.split-handle { display: none; }
-
 /* ── 侧栏 ───────────────────────────────────────────────────────────── */
 
 .sidebar {
@@ -1454,10 +1452,8 @@ body.dragging::after {
 }
 
 /* 竖屏：播放器贴满两边，高度由 JS 按视频比例算，上下不留黑边，也不要圆角。
-   画面和列表之间有一条可拖的分隔；输入区默认收成一颗「发弹幕」。 */
+   输入区默认收成一颗「发弹幕」。 */
 @media (max-width: 860px) and (orientation: portrait) {
-  body { overflow: hidden; }
-  .workspace { min-height: 0; overflow: hidden; }
   .stage { flex: 0 0 auto; }
   .frame {
     flex: 0 0 auto;
@@ -1470,39 +1466,6 @@ body.dragging::after {
     box-shadow: none;
   }
   .stage:fullscreen .frame { flex: 1 1 auto; }
-
-  .sidebar {
-    flex: 1 1 auto;
-    max-height: none;
-    min-height: 0;
-  }
-
-  body.watching .split-handle {
-    display: flex;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    height: 44px;
-    padding: 0;
-    border: 0;
-    border-top: 1px solid var(--line);
-    border-bottom: 1px solid var(--line);
-    background: var(--bg-soft);
-    color: var(--text-faint);
-    cursor: row-resize;
-    touch-action: none;
-    user-select: none;
-    -webkit-user-select: none;
-  }
-  .split-handle::before {
-    content: '';
-    width: 44px;
-    height: 4px;
-    border-radius: 999px;
-    background: #465066;
-  }
-  .split-handle.dragging { background: rgba(34, 193, 195, 0.14); }
-  .split-handle.dragging::before { background: var(--accent); }
 
   body.composer-collapsed .composer-reveal {
     display: flex;
