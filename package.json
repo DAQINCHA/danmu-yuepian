@@ -1,0 +1,12 @@
+{
+  "name": "danmu-yuepian",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "弹幕阅片：局域网里的视频审片工具，任意一帧发弹幕，圈出任意连续帧",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test",
+    "check": "for f in server.js lib/*.js public/app.js public/js/*.js; do node --check \"$f\" || exit 1; done"
+  }
+}
