@@ -100,6 +100,34 @@ export function createDanmaku(layer, options = {}) {
     return node;
   }
 
+  /**
+   * 兜底防叠：车道只是“理想位置”，真正的 top 按实际渲染高度从上往下推，
+   * 保证每条气泡的顶部不高于上一条的底部。气泡出现后因为窗口缩放、全屏、
+   * 侧栏开合导致换行变化而变高时，也会重新推一遍。
+   */
+  function relayout() {
+    const entries = [...live].sort((a, b) => a[1].lane - b[1].lane || a[1].born - b[1].born);
+    let bottom = -Infinity;
+    for (const [node, info] of entries) {
+      const ideal = TOP + info.lane * info.laneHeight;
+      const top = Math.max(ideal, bottom + LANE_GAP);
+      node.style.top = `${top}px`;
+      bottom = top + node.offsetHeight;
+    }
+  }
+
+  if (typeof ResizeObserver === 'function') {
+    let queued = false;
+    new ResizeObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        relayout();
+      });
+    }).observe(layer);
+  }
+
   function retire(node) {
     node.remove();
     live.delete(node);
@@ -157,8 +185,8 @@ export function createDanmaku(layer, options = {}) {
     if (span > 1 || node.offsetHeight > laneHeight * 1.2) node.classList.add('is-wrapped');
     const lane = place(count, span);
     node.style.left = `${SIDE}px`;
-    node.style.top = `${TOP + lane * laneHeight}px`;
-    live.set(node, { id: comment.id, lane, span, born: performance.now() });
+    live.set(node, { id: comment.id, lane, span, born: performance.now(), laneHeight });
+    relayout();
 
     node.addEventListener('animationend', () => retire(node));
   }
