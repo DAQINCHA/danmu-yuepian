@@ -1407,6 +1407,8 @@ body.dragging::after {
   .transport-right { width: 100%; justify-content: flex-end; }
   .brand-text small { display: none; }
   .author-field input { width: 78px; }
+  /* 手机端不提供审片报告：唯一入口是侧栏这个按钮 */
+  .report-open { display: none !important; }
 }
 
 @media (max-width: 620px) {
