@@ -1,10 +1,14 @@
 import { timecode, clockTime, authorColor } from './format.js';
 import { drawStrokes } from './annotations.js';
+import { createFrameGrabber } from './capture.js';
 
 /**
  * 审片报告：把散在时间轴上的弹幕和画笔按时间码收成一张逐条清单，
  * 每条带「已改」勾选，进度存服务端，剪辑师可以分几次核对完。
+ * 画笔标注会附上起始帧截图（画面 + 笔迹），打印和下载的 .md 里都带着。
  */
+
+const SHOT_MAX_WIDTH = 1280;
 
 function collect(data) {
   const entries = [];
@@ -27,7 +31,8 @@ function describe(entry, fps) {
   return `画面标注 · 第 ${framesOf(annotation, fps)} 帧 · ${timecode(annotation.start)} – ${timecode(annotation.end)}`;
 }
 
-export function buildMarkdown(data) {
+/** shots：可选，annotationId -> 起始帧图片的 data URL；复制文本时不带图，免得剪贴板塞满 base64 */
+export function buildMarkdown(data, shots = null) {
   const entries = collect(data);
   const done = entries.filter((e) => e.data.done).length;
   const lines = [
@@ -49,6 +54,11 @@ export function buildMarkdown(data) {
     lines.push('');
     lines.push(describe(entry, data.fps));
     lines.push('');
+    const shot = entry.kind === 'annotation' ? shots?.get(entry.data.id) : null;
+    if (shot) {
+      lines.push(`![起始帧 ${at}](${shot})`);
+      lines.push('');
+    }
     lines.push(`- [${entry.data.done ? 'x' : ' '}] 已修改`);
     lines.push('');
   });
@@ -81,8 +91,8 @@ async function copyToClipboard(text) {
   }
 }
 
-function downloadMarkdown(data) {
-  const blob = new Blob([buildMarkdown(data)], { type: 'text/markdown;charset=utf-8' });
+function downloadMarkdown(data, shots) {
+  const blob = new Blob([buildMarkdown(data, shots)], { type: 'text/markdown;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   const safeTitle = data.video.title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
@@ -104,6 +114,48 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
   const filtersEl = document.getElementById('report-filters');
 
   let filter = 'all';
+  const grabber = createFrameGrabber();
+  /** `${videoId}:${annotationId}:${start}` -> Promise<dataURL | null> */
+  const shots = new Map();
+
+  function shotKey(video, annotation) {
+    return `${video.id}:${annotation.id}:${annotation.start}`;
+  }
+
+  /** 起始帧 = 入点那一帧的画面，再把这条标注的笔迹叠上去 */
+  function shotFor(video, annotation) {
+    const key = shotKey(video, annotation);
+    if (!shots.has(key)) {
+      const url = `/api/videos/${encodeURIComponent(video.id)}/file`;
+      const job = grabber
+        .grab(url, annotation.start + 0.001, { maxWidth: SHOT_MAX_WIDTH })
+        .then((canvas) => {
+          drawStrokes(canvas.getContext('2d'), annotation.strokes || [], canvas.width, canvas.height);
+          return canvas.toDataURL('image/jpeg', 0.88);
+        })
+        .catch(() => {
+          shots.delete(key); // 失败的下次打开报告再试
+          return null;
+        });
+      shots.set(key, job);
+    }
+    return shots.get(key);
+  }
+
+  /** 等当前片子所有画笔的起始帧截完，返回 annotationId -> dataURL */
+  async function collectShots(data) {
+    const result = new Map();
+    await Promise.all(data.annotations.map(async (annotation) => {
+      const url = await shotFor(data.video, annotation);
+      if (url) result.set(annotation.id, url);
+    }));
+    return result;
+  }
+
+  async function waitImages() {
+    const images = [...listEl.querySelectorAll('img')];
+    await Promise.all(images.map((img) => (img.decode ? img.decode().catch(() => {}) : null)));
+  }
 
   filtersEl.addEventListener('click', (event) => {
     const button = event.target.closest('[data-filter]');
@@ -118,11 +170,25 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     notify(ok ? '报告已复制到剪贴板' : '复制不了，用「下载 .md」吧', !ok);
   });
 
-  document.getElementById('report-download').addEventListener('click', () => {
-    downloadMarkdown(getData());
+  document.getElementById('report-download').addEventListener('click', async () => {
+    const data = getData();
+    if (!data.video) return;
+    if (data.annotations.length) notify('正在截取画笔标注的起始帧…');
+    const images = await collectShots(data);
+    downloadMarkdown(data, images);
+    const missing = data.annotations.length - images.size;
+    if (missing > 0) notify(`有 ${missing} 个标注的起始帧没截到，报告里只有文字`, true);
   });
 
-  document.getElementById('report-print').addEventListener('click', () => window.print());
+  document.getElementById('report-print').addEventListener('click', async () => {
+    const data = getData();
+    if (data.video && data.annotations.length) {
+      notify('正在截取画笔标注的起始帧…');
+      await collectShots(data);
+      await waitImages();
+    }
+    window.print();
+  });
 
   function buildItem(entry, index) {
     const { data } = entry;
@@ -174,21 +240,7 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     main.append(head, text);
     node.append(indexEl);
 
-    if (entry.kind === 'annotation') {
-      const thumb = document.createElement('canvas');
-      const tw = 84;
-      const th = Math.round(tw / 1.78);
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      thumb.className = 'r-thumb';
-      thumb.width = tw * dpr;
-      thumb.height = th * dpr;
-      thumb.style.width = `${tw}px`;
-      thumb.style.height = `${th}px`;
-      const ctx = thumb.getContext('2d');
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drawStrokes(ctx, data.strokes, tw, th);
-      node.append(thumb);
-    }
+    if (entry.kind === 'annotation') main.append(buildShot(data));
 
     node.append(main);
 
@@ -204,6 +256,48 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     node.append(check);
 
     return node;
+  }
+
+  /** 起始帧截图：先占位，截到了换成图片；截不到就退回只画笔迹的小图 */
+  function buildShot(annotation) {
+    const figure = document.createElement('figure');
+    figure.className = 'r-shot loading';
+    const caption = document.createElement('figcaption');
+    caption.className = 'mono';
+    caption.textContent = `起始帧 ${timecode(annotation.start)} · 截取中…`;
+    figure.append(caption);
+
+    const video = getData().video;
+    if (!video) return figure;
+
+    shotFor(video, annotation).then((url) => {
+      figure.classList.remove('loading');
+      if (url) {
+        const img = document.createElement('img');
+        img.alt = `起始帧 ${timecode(annotation.start)}`;
+        img.src = url;
+        img.title = '点击跳到这一帧';
+        img.addEventListener('click', () => onJump(annotation.start));
+        caption.textContent = `起始帧 ${timecode(annotation.start)}`;
+        figure.prepend(img);
+        return;
+      }
+      figure.classList.add('failed');
+      const thumb = document.createElement('canvas');
+      const tw = 160;
+      const th = 90;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      thumb.width = tw * dpr;
+      thumb.height = th * dpr;
+      thumb.style.width = `${tw}px`;
+      thumb.style.height = `${th}px`;
+      const ctx = thumb.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawStrokes(ctx, annotation.strokes || [], tw, th);
+      caption.textContent = `起始帧没截到，只显示笔迹（${timecode(annotation.start)}）`;
+      figure.prepend(thumb);
+    });
+    return figure;
   }
 
   function currentFps() {

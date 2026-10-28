@@ -4,6 +4,7 @@ import { createDanmaku } from './js/danmaku.js';
 import { createAnnotationView, createDrawPad, drawStrokes } from './js/annotations.js';
 import { createReportView } from './js/report.js';
 import { detectFrameRate } from './js/fps.js';
+import { drawOverlayBoxes, drawWatermark, downloadCanvas, safeFileName } from './js/capture.js';
 
 const $ = (id) => document.getElementById(id);
 const DRAW_COLORS = ['#ff5a4d', '#ffd166', '#4ec9a0', '#8ab4ff'];
@@ -28,6 +29,8 @@ const state = {
   es: null,
   lastTime: 0,
   lastTick: -1,
+  // 开始输入弹幕那一刻的视频时间；发送时用它，而不是敲完回车时已经播过去的时间
+  composeTime: null,
   uploading: false,
   pendingFile: null,
 };
@@ -81,7 +84,12 @@ function boot() {
   dom.video.addEventListener('play', onPlay);
   dom.video.addEventListener('pause', onPause);
   dom.video.addEventListener('seeked', () => {
-    if (dom.video.paused) updateFocus();
+    // 输入中途拖了进度/逐帧，说明在找更准的那一帧，以新位置为准
+    if (state.composeTime !== null) lockComposeTime(dom.video.currentTime || 0);
+    if (!dom.video.paused) return;
+    // 暂停时换了位置，之前定住的弹幕已经不属于这一帧了
+    danmaku.clearLive();
+    updateFocus();
   });
   dom.video.addEventListener('error', () => {
     if (state.video) toast('视频解不开，可能是编码浏览器不支持（建议 H.264 的 mp4）', true);
@@ -104,7 +112,7 @@ function cacheDom() {
     'preview-range', 'draw-undo', 'draw-clear', 'draw-cancel', 'draw-save',
     'play-btn', 'tc-now', 'timeline', 'timeline-fill', 'timeline-marks', 'timeline-head', 'tc-total',
     'transport', 'step-back', 'step-fwd', 'draw-toggle', 'fps-input', 'fps-badge', 'fps-field',
-    'danmaku-toggle', 'fullscreen-btn',
+    'danmaku-toggle', 'snap-btn', 'fullscreen-btn',
     'composer', 'composer-time', 'composer-input',
     'video-title', 'video-meta', 'tabs', 'list', 'count-all', 'count-comment', 'count-annotation',
     'report-open',
@@ -221,6 +229,7 @@ async function openVideo(id) {
   state.draw = null;
   state.lastTime = 0;
   state.lastTick = -1;
+  unlockComposeTime();
 
   dom.empty.hidden = true;
   dom.frame.hidden = false;
@@ -421,6 +430,8 @@ function initTransport() {
     toast('帧率已改为手动值');
   });
 
+  dom.snapBtn.addEventListener('click', captureCurrentFrame);
+
   dom.fullscreenBtn.addEventListener('click', () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else dom.stage.requestFullscreen?.().catch(() => {});
@@ -459,13 +470,18 @@ function initTimeline() {
 
 function onPlay() {
   dom.pausedBadge.hidden = true;
-  danmaku.clear();
+  // 暂停时定住的弹幕接着淡出就行；只收掉下方的暂停卡片
+  danmaku.showFocus([]);
+  danmaku.setPaused(false);
+  // 正好停在弹幕时间点上再继续播放时，让这条也能出来（pop 自己会去重）
+  state.lastTime = Math.max(0, (dom.video.currentTime || 0) - 0.05);
   updateTransport(true);
   // 只有真正在播才能量到帧间隔
   maybeDetectFrameRate();
 }
 
 function onPause() {
+  danmaku.setPaused(true);
   dom.pausedBadge.hidden = Boolean(!state.video || state.draw);
   setTimeout(updateFocus, 50);
   updateTransport(true);
@@ -482,7 +498,7 @@ function updateTransport(force = false) {
   dom.timelineFill.style.width = `${percent}%`;
   dom.timelineHead.style.left = `${percent}%`;
   dom.tcNow.textContent = timecode(t);
-  dom.composerTime.textContent = timecode(t);
+  if (state.composeTime === null) dom.composerTime.textContent = timecode(t);
   dom.playBtn.textContent = dom.video.paused ? '▶' : '❚❚';
 }
 
@@ -493,7 +509,7 @@ function tick() {
       if (t < state.lastTime - 0.05) state.lastTime = t;
       if (t > state.lastTime) {
         for (const comment of state.comments) {
-          if (comment.time > state.lastTime && comment.time <= t) danmaku.fly(comment);
+          if (comment.time > state.lastTime && comment.time <= t) danmaku.pop(comment);
         }
         state.lastTime = t;
       }
@@ -520,6 +536,63 @@ function updateFocus() {
   const now = dom.video.currentTime || 0;
   const near = state.comments.filter((c) => Math.abs(c.time - now) <= 1.2);
   danmaku.showFocus(near);
+}
+
+/* ── 截取当前帧 ───────────────────────────────────────────────────── */
+
+function frameNumber(time) {
+  return Math.floor((time || 0) * (state.fps || 25) + 0.01);
+}
+
+/**
+ * 按视频原始分辨率截一张：画面 → 弹幕 → 画笔笔迹（和播放器里的叠放顺序一致），
+ * 左上角打时间戳水印，存成 PNG。叠加层的位置都按「原始宽 / 屏幕上的宽」等比放大。
+ */
+async function captureCurrentFrame() {
+  if (!state.video) return;
+  const video = dom.video;
+  const width = video.videoWidth;
+  const height = video.videoHeight;
+  if (!width || !height || video.readyState < 2) {
+    toast('画面还没加载好，稍等再截', true);
+    return;
+  }
+
+  const t = video.currentTime || 0;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  try {
+    ctx.drawImage(video, 0, 0, width, height);
+  } catch {
+    toast('这一帧读不出来', true);
+    return;
+  }
+
+  const scale = width / (dom.videoWrap.clientWidth || width);
+  drawOverlayBoxes(ctx, danmaku.snapshot(), scale);
+
+  const visible = state.annotations.filter((a) => t >= a.start - 0.03 && t < a.end);
+  if (visible.length) {
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    for (const annotation of visible) drawStrokes(ctx, annotation.strokes, width, height);
+    ctx.restore();
+  }
+  if (state.draw && pad.strokes.length) drawStrokes(ctx, pad.strokes, width, height);
+
+  const frame = frameNumber(t);
+  drawWatermark(ctx, `${timecode(t)} · 第 ${frame} 帧`, scale);
+
+  const stamp = timecode(t).replace(/:/g, '-').replace('.', '_');
+  const filename = `${safeFileName(state.video.title)}_${stamp}_第${frame}帧.png`;
+  try {
+    await downloadCanvas(canvas, filename);
+    toast(`已截取 ${timecode(t)}（${width}×${height}）`);
+  } catch (err) {
+    toast(err.message || '截图失败', true);
+  }
 }
 
 /* ── 时间轴标记 ───────────────────────────────────────────────────── */
@@ -734,7 +807,38 @@ function removeAnnotationLocal(id) {
 
 /* ── 弹幕输入 ─────────────────────────────────────────────────────── */
 
+function lockComposeTime(time) {
+  state.composeTime = time;
+  dom.composerTime.textContent = timecode(time);
+  dom.composerTime.classList.add('locked');
+  dom.composerTime.title = '开始输入时的时间点，发出去的弹幕就挂在这一帧';
+}
+
+function unlockComposeTime() {
+  state.composeTime = null;
+  dom.composerTime.classList.remove('locked');
+  dom.composerTime.title = '';
+  dom.composerTime.textContent = timecode(dom.video.currentTime || 0);
+}
+
 function initComposer() {
+  // 第一次按键就把时间钉住：边播边打字时，回车那一刻视频早已往后走了好几秒。
+  // 中文输入法先触发 compositionstart，拼音还没上屏也算「开始输入」。
+  const begin = () => {
+    if (state.video && state.composeTime === null) lockComposeTime(dom.video.currentTime || 0);
+  };
+  dom.composerInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === 'Escape' || event.key === 'Tab') return;
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.key.length === 1 || event.key === 'Process') begin();
+  });
+  dom.composerInput.addEventListener('compositionstart', begin);
+  dom.composerInput.addEventListener('paste', begin);
+  dom.composerInput.addEventListener('input', () => {
+    if (dom.composerInput.value) begin();
+    else unlockComposeTime(); // 删光了重来，下次按键重新取时间
+  });
+
   dom.composer.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!state.video) return;
@@ -746,8 +850,9 @@ function initComposer() {
       return;
     }
 
-    const time = dom.video.currentTime || 0;
+    const time = state.composeTime ?? (dom.video.currentTime || 0);
     dom.composerInput.value = '';
+    unlockComposeTime();
 
     try {
       const { comment } = await api.addComment(state.video.id, {
@@ -757,19 +862,35 @@ function initComposer() {
         color: authorColor(authorName()),
       });
       upsertComment(comment);
+      // 自己刚发的立刻上屏：它的时间点在输入那一刻，播放头早已越过，等时间轴触发就永远等不到
+      showNow(comment);
     } catch (err) {
       dom.composerInput.value = text;
+      lockComposeTime(time);
       toast(err.message, true);
     }
   });
 }
 
-function upsertComment(comment) {
+function upsertComment(comment, { live = false } = {}) {
   if (state.comments.some((c) => c.id === comment.id)) return;
   state.comments.push(comment);
   state.comments.sort((a, b) => a.time - b.time || a.createdAt - b.createdAt);
   renderSidebar();
   renderMarks();
+  // 同事刚发、而且就在我播放头附近的，也直接上屏
+  if (live) {
+    const gap = (dom.video.currentTime || 0) - comment.time;
+    if (gap >= -0.05 && gap <= 3) showNow(comment);
+  }
+  if (dom.video.paused) updateFocus();
+}
+
+/** 立刻在画面上方显示这条弹幕（暂停时会定住，继续播放再淡出） */
+function showNow(comment) {
+  if (!state.video || state.draw) return;
+  danmaku.setPaused(dom.video.paused);
+  danmaku.pop(comment);
   if (dom.video.paused) updateFocus();
 }
 
@@ -1003,7 +1124,7 @@ function connectEvents(videoId) {
     if (data.videoId === state.video?.id) setPresence(data.count);
   });
   on('comment:new', (data) => {
-    if (data.comment?.videoId === state.video?.id) upsertComment(data.comment);
+    if (data.comment?.videoId === state.video?.id) upsertComment(data.comment, { live: true });
   });
   on('comment:removed', (data) => {
     if (data.videoId === state.video?.id) removeCommentLocal(data.commentId);
@@ -1363,6 +1484,10 @@ function initKeyboard() {
       case 'f':
       case 'F':
         dom.fullscreenBtn.click();
+        break;
+      case 's':
+      case 'S':
+        captureCurrentFrame();
         break;
       default:
         break;
