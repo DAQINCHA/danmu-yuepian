@@ -1,6 +1,7 @@
 import { timecode, clockTime, authorColor } from './format.js';
 import { drawStrokes } from './annotations.js';
 import { createFrameGrabber } from './capture.js';
+import { createZip, dataUrlToBytes } from './zip.js';
 
 /**
  * 审片报告：把散在时间轴上的弹幕和画笔按时间码收成一张逐条清单，
@@ -34,7 +35,7 @@ function savePrefs(prefs) {
   }
 }
 
-/** 第 0 帧的弹幕 = 整体意见，单列在最前面，不截帧 */
+/** 第 0 帧的弹幕 = 整体意见，报告里单列为「整体问题」，不截帧、不写时间码 */
 function isOverall(comment) {
   return comment.time < 0.001;
 }
@@ -124,10 +125,12 @@ function describe(entry, fps) {
   return `画面标注 · 第 ${framesOf(annotation, fps)} 帧 · ${timecode(annotation.start)} – ${timecode(annotation.end)}`;
 }
 
-function pushEntry(lines, entry, index, fps, { level = '##', shot = null } = {}) {
+function pushEntry(lines, entry, index, fps, { level = '##', shot = null, overall = false } = {}) {
   const at = timecode(entry.time);
   const kind = entry.kind === 'comment' ? '弹幕' : '画笔';
-  lines.push(`${level} ${index + 1}. ${at} · ${kind} · ${entry.data.author || '匿名'}`);
+  lines.push(overall
+    ? `${level} ${index + 1}. ${entry.data.author || '匿名'}`
+    : `${level} ${index + 1}. ${at} · ${kind} · ${entry.data.author || '匿名'}`);
   lines.push('');
   lines.push(describe(entry, fps));
   lines.push('');
@@ -150,8 +153,8 @@ function pushEntry(lines, entry, index, fps, { level = '##', shot = null } = {})
 }
 
 /**
- * shots：可选，截帧 key -> 图片 data URL；复制文本时不带图，免得剪贴板塞满 base64。
- * prefs.frames 打开时按画面分组输出（整体意见在最前、每组一张图）。
+ * shots：可选，截帧 key -> 图片地址（下载 zip 时是 images/frame-001.jpg 这样的相对路径）；
+ * 复制文本时不带图。prefs.frames 打开时按画面分组输出；两种模式下「整体问题」都单列在最前。
  */
 export function buildMarkdown(data, shots = null, prefs = loadPrefs()) {
   const entries = collect(data);
@@ -168,13 +171,15 @@ export function buildMarkdown(data, shots = null, prefs = loadPrefs()) {
     '',
   ];
 
+  const overallEntries = entries.filter((e) => e.kind === 'comment' && isOverall(e.data));
+  let index = 0;
+  if (overallEntries.length) {
+    lines.push('## 整体问题', '');
+    for (const entry of overallEntries) pushEntry(lines, entry, index++, data.fps, { level: '###', overall: true });
+  }
+
   if (prefs?.frames) {
-    const { overall, groups } = groupEntries(data, prefs.gap);
-    let index = 0;
-    if (overall.length) {
-      lines.push('## 整体意见', '');
-      for (const entry of overall) pushEntry(lines, entry, index++, data.fps, { level: '###' });
-    }
+    const { groups } = groupEntries(data, prefs.gap);
     groups.forEach((group, gi) => {
       const at = timecode(group.time);
       lines.push(`## 画面 ${gi + 1} · ${at} · ${group.entries.length} 条`, '');
@@ -183,10 +188,11 @@ export function buildMarkdown(data, shots = null, prefs = loadPrefs()) {
       for (const entry of group.entries) pushEntry(lines, entry, index++, data.fps, { level: '###' });
     });
   } else {
-    entries.forEach((entry, index) => {
+    for (const entry of entries) {
+      if (overallEntries.includes(entry)) continue;
       const shot = entry.kind === 'annotation' ? shots?.get(annotationKey(entry.data)) : null;
-      pushEntry(lines, entry, index, data.fps, { shot });
-    });
+      pushEntry(lines, entry, index++, data.fps, { shot });
+    }
   }
 
   if (!entries.length) lines.push('（这一版还没有任何意见）', '');
@@ -217,13 +223,40 @@ async function copyToClipboard(text) {
   }
 }
 
-function downloadMarkdown(data, shots, prefs) {
-  const blob = new Blob([buildMarkdown(data, shots, prefs)], { type: 'text/markdown;charset=utf-8' });
+function dateStamp(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/**
+ * 打包下载：report.md + images/ 下的每张截帧，md 里按相对路径引用图片。
+ * images：截帧 key -> data URL；order：key 的出现顺序（决定 frame-001、002… 的编号）
+ */
+function downloadZip(data, images, order, prefs) {
+  const now = new Date();
+  const paths = new Map();
+  const files = [];
+  for (const key of order) {
+    const url = images.get(key);
+    if (!url || paths.has(key)) continue;
+    let image;
+    try {
+      image = dataUrlToBytes(url);
+    } catch {
+      continue;
+    }
+    const name = `images/frame-${String(files.length + 1).padStart(3, '0')}.${image.ext}`;
+    paths.set(key, name);
+    files.push({ name, data: image.bytes });
+  }
+  files.unshift({ name: 'report.md', data: buildMarkdown(data, paths, prefs) });
+
+  const blob = createZip(files, { date: now });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   const safeTitle = data.video.title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
   link.href = url;
-  link.download = `审片报告-${safeTitle}.md`;
+  link.download = `审片报告-${safeTitle}-${dateStamp(now)}.zip`;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -311,7 +344,7 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
       const url = await job();
       if (url) result.set(key, url);
     }));
-    return { images: result, total: jobs.length };
+    return { images: result, total: jobs.length, order: jobs.map((j) => j.key) };
   }
 
   async function waitImages() {
@@ -329,7 +362,7 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
 
   document.getElementById('report-copy').addEventListener('click', async () => {
     const ok = await copyToClipboard(buildMarkdown(getData(), null, prefs));
-    notify(ok ? '报告已复制到剪贴板' : '复制不了，用「下载 .md」吧', !ok);
+    notify(ok ? '报告已复制到剪贴板' : '复制不了，用「下载报告」吧', !ok);
   });
 
   document.getElementById('report-download').addEventListener('click', async () => {
@@ -337,10 +370,11 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     if (!data.video) return;
     const expected = shotJobs(data).length;
     if (expected) notify(prefs.frames ? '正在截取各条意见的画面…' : '正在截取画笔标注的起始帧…');
-    const { images, total } = await collectShots(data);
-    downloadMarkdown(data, images, prefs);
+    const { images, total, order } = await collectShots(data);
+    downloadZip(data, images, order, prefs);
     const missing = total - images.size;
     if (missing > 0) notify(`有 ${missing} 张画面没截到，报告里那部分只有文字`, true);
+    else notify('报告已打包下载（report.md + images/）');
   });
 
   document.getElementById('report-print').addEventListener('click', async () => {
@@ -372,7 +406,7 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     return list;
   }
 
-  function buildItem(entry, index, { withShot = true } = {}) {
+  function buildItem(entry, index, { withShot = true, overall = false } = {}) {
     const { data } = entry;
 
     const node = document.createElement('div');
@@ -404,7 +438,9 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     author.className = 'r-author';
     author.textContent = data.author || '匿名';
 
-    head.append(timeButton, type, author);
+    // 整体问题不挂在某一帧上，不显示时间码和类型
+    if (overall) head.append(author);
+    else head.append(timeButton, type, author);
 
     if (entry.kind === 'annotation') {
       const frames = document.createElement('span');
@@ -536,7 +572,7 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     return head;
   }
 
-  /** 截帧模式：整体意见在最前，之后每组「一张画面 + 组内各条意见」 */
+  /** 截帧模式：整体问题在最前，之后每组「一张画面 + 组内各条意见」 */
   function renderGrouped(data, visible) {
     const { overall, groups } = groupEntries(data, prefs.gap);
     const nodes = [];
@@ -544,13 +580,13 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
 
     const shownOverall = [];
     for (const entry of overall) {
-      if (visible(entry)) shownOverall.push(buildItem(entry, index));
+      if (visible(entry)) shownOverall.push(buildItem(entry, index, { overall: true }));
       index += 1;
     }
     if (shownOverall.length) {
       const section = document.createElement('section');
       section.className = 'report-group overall';
-      section.append(groupHead('整体意见'), ...shownOverall);
+      section.append(groupHead('整体问题'), ...shownOverall);
       nodes.push(section);
     }
 
@@ -608,7 +644,23 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
       listEl.replaceChildren(...renderGrouped(data, visible));
       return;
     }
-    listEl.replaceChildren(...shown.map((entry) => buildItem(entry, entries.indexOf(entry))));
+    // 不截帧：整体问题照样单列在最前，其余按时间顺序
+    const overallShown = shown.filter((e) => e.kind === 'comment' && isOverall(e.data));
+    const restShown = shown.filter((e) => !overallShown.includes(e));
+    const overallAll = entries.filter((e) => e.kind === 'comment' && isOverall(e.data));
+    const restAll = entries.filter((e) => !overallAll.includes(e));
+    const nodes = [];
+    if (overallShown.length) {
+      const section = document.createElement('section');
+      section.className = 'report-group overall';
+      section.append(
+        groupHead('整体问题'),
+        ...overallShown.map((e) => buildItem(e, overallAll.indexOf(e), { overall: true })),
+      );
+      nodes.push(section);
+    }
+    for (const entry of restShown) nodes.push(buildItem(entry, overallAll.length + restAll.indexOf(entry)));
+    listEl.replaceChildren(...nodes);
   }
 
   return {
