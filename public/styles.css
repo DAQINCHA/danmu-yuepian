@@ -991,12 +991,8 @@ h1, h2, p { margin: 0; }
   width: 100%;
   margin-top: 10px;
   height: 30px;
-  background: var(--panel-2);
-  border-color: #33405a;
-  color: #b9cdf4;
   font-size: 12.5px;
 }
-.report-open:hover { background: #232c3a; border-color: var(--accent); }
 
 .report-box {
   display: flex;
