@@ -224,7 +224,7 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
 
     const node = document.createElement('div');
     node.className = 'report-item' + (data.done ? ' done' : '');
-    node.style.setProperty('--r-color', data.color || authorColor(data.author));
+    node.style.setProperty('--r-color', authorColor(data.author));
 
     const indexEl = document.createElement('span');
     indexEl.className = 'r-index mono';

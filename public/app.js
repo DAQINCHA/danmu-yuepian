@@ -64,7 +64,7 @@ boot();
 function boot() {
   cacheDom();
   danmaku = createDanmaku(dom.danmakuLayer, {
-    colorOf: (c) => c.color || authorColor(c.author),
+    colorOf: (c) => authorColor(c.author),
     isMine: (c) => c.author === authorName(),
   });
   danmaku.setEnabled(state.danmakuOn);
@@ -897,7 +897,7 @@ function jumpTo(time) {
 function buildCommentItem(comment) {
   const item = document.createElement('div');
   item.className = 'item' + (comment.done ? ' done' : '');
-  item.style.setProperty('--dm-color', comment.color || authorColor(comment.author));
+  item.style.setProperty('--dm-color', authorColor(comment.author));
 
   const head = document.createElement('div');
   head.className = 'item-head';
