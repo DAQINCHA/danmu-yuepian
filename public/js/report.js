@@ -54,6 +54,15 @@ export function buildMarkdown(data, shots = null) {
     lines.push('');
     lines.push(describe(entry, data.fps));
     lines.push('');
+    const replies = entry.kind === 'comment' && Array.isArray(entry.data.replies) ? entry.data.replies : [];
+    if (replies.length) {
+      // 每条回复单独一段引用，免得在 Markdown 里糊成一行
+      replies.forEach((reply, i) => {
+        if (i) lines.push('>');
+        lines.push(`> ↳ **${reply.author || '匿名'}**：${reply.text}`);
+      });
+      lines.push('');
+    }
     const shot = entry.kind === 'annotation' ? shots?.get(entry.data.id) : null;
     if (shot) {
       lines.push(`![起始帧 ${at}](${shot})`);
@@ -190,6 +199,25 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     window.print();
   });
 
+  function buildReplies(replies) {
+    const list = document.createElement('div');
+    list.className = 'r-replies';
+    for (const reply of replies) {
+      const row = document.createElement('div');
+      row.className = 'r-reply';
+      row.style.setProperty('--r-color', authorColor(reply.author));
+      const author = document.createElement('span');
+      author.className = 'r-reply-author';
+      author.textContent = `↳ ${reply.author || '匿名'}`;
+      const text = document.createElement('span');
+      text.className = 'r-reply-text';
+      text.textContent = reply.text;
+      row.append(author, text);
+      list.append(row);
+    }
+    return list;
+  }
+
   function buildItem(entry, index) {
     const { data } = entry;
 
@@ -238,6 +266,9 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
       : `${timecode(data.start)} – ${timecode(data.end)} 的连续帧`;
 
     main.append(head, text);
+    if (entry.kind === 'comment' && Array.isArray(data.replies) && data.replies.length) {
+      main.append(buildReplies(data.replies));
+    }
     node.append(indexEl);
 
     if (entry.kind === 'annotation') main.append(buildShot(data));

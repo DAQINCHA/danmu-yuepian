@@ -118,6 +118,13 @@
                placeholder="在这一帧说点什么，回车发送…" />
         <button class="btn primary" type="submit">发弹幕</button>
       </form>
+
+      <form class="composer overall" id="overall-form" hidden>
+        <span class="composer-tag" title="整体意见统一挂在第 0 帧，不会跳动播放进度">整体意见</span>
+        <input id="overall-input" type="text" maxlength="500" autocomplete="off"
+               placeholder="对整支片的总体看法，回车发送（记在第 0 帧）…" />
+        <button class="btn" type="submit">发整体意见</button>
+      </form>
     </section>
 
     <aside class="sidebar" id="sidebar">

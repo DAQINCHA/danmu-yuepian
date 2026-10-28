@@ -319,9 +319,10 @@ h1, h2, p { margin: 0; }
 .dm {
   position: absolute;
   display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
   max-width: calc(100% - 24px);
-  align-items: baseline;
-  gap: 10px;
+  gap: 2px;
   padding: 5px 18px;
   border-radius: 999px;
   background: rgba(6, 8, 12, 0.55);
@@ -341,6 +342,43 @@ h1, h2, p { margin: 0; }
 .danmaku-layer.paused .dm { animation-play-state: paused; }
 
 .dm.is-mine { background: rgba(91, 140, 255, 0.34); }
+
+/* 带回复的弹幕是多行气泡，药丸形圆角会把角上的字切掉 */
+.dm.has-replies { border-radius: 18px; padding-bottom: 8px; }
+
+.dm-line,
+.dm-reply {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* 回复：缩进、小一号，跟在原弹幕下面一起出现 */
+.dm-reply {
+  gap: 8px;
+  padding-left: 22px;
+  font-size: 20px;
+  line-height: 1.35;
+  color: #e6e9f0;
+}
+
+.dm-reply-name {
+  flex: none;
+  color: var(--dm-color, #8ab4ff);
+  font-size: 17px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.dm-reply-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dm-reply.more { color: rgba(230, 233, 240, 0.7); font-size: 17px; }
 
 .dm-name {
   flex: none;
@@ -393,6 +431,18 @@ h1, h2, p { margin: 0; }
 
 .dm-focus-card .name { color: var(--dm-color, #8ab4ff); font-size: 11px; font-weight: 700; flex: none; }
 .dm-focus-card .text { color: #f0f2f7; word-break: break-word; }
+.dm-focus-card { flex-wrap: wrap; }
+.dm-focus-card .replies {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-left: 14px;
+  font-size: 12px;
+}
+.dm-focus-card .reply { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.dm-focus-card .reply .text { color: #d6dae3; min-width: 0; }
+.dm-focus-card .reply.more .text { color: rgba(214, 218, 227, 0.7); }
 
 @keyframes focus-in {
   from { opacity: 0; transform: translateY(4px); }
@@ -575,6 +625,22 @@ h1, h2, p { margin: 0; }
   color: #ffd166;
   font-size: 12px;
 }
+/* 整体意见：紧贴在弹幕输入下面，复用同一套样式 */
+.composer.overall { padding-top: 0; border-top: 0; }
+.composer-tag {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* 两行左侧标签、右侧按钮等宽，中间输入框自然对齐 */
+.composer-time, .composer-tag { box-sizing: border-box; width: 96px; text-align: center; }
+.composer > .btn { flex: none; box-sizing: border-box; width: 104px; justify-content: center; text-align: center; white-space: nowrap; }
+
 /* 开始输入后时间点锁定在那一刻，不再跟着播放走 */
 .composer-time.locked { background: rgba(255, 209, 102, 0.16); box-shadow: inset 0 0 0 1px rgba(255, 209, 102, 0.45); }
 
@@ -1004,6 +1070,73 @@ h1, h2, p { margin: 0; }
 .item.done { opacity: 0.55; }
 .item.done .item-text { text-decoration: line-through; }
 
+/* 侧栏：弹幕下的回复 */
+.item-reply-btn {
+  padding: 1px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 11px;
+  cursor: pointer;
+}
+.item-reply-btn:hover,
+.item-reply-btn.active { background: var(--accent-soft); color: #a9c3ff; }
+
+.item-replies {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+  padding-left: 10px;
+  border-left: 2px solid var(--line);
+}
+.reply { display: flex; align-items: baseline; gap: 6px; font-size: 12px; line-height: 1.5; }
+.reply-author { flex: none; color: var(--dm-color, #8ab4ff); font-weight: 650; }
+.reply-text { flex: 1; min-width: 0; color: #c9cfdb; word-break: break-word; }
+.reply-del {
+  flex: none;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 11px;
+  opacity: 0;
+  cursor: pointer;
+}
+.reply:hover .reply-del { opacity: 1; }
+.reply-del:hover { background: rgba(255, 107, 94, 0.18); color: var(--warn); }
+
+.reply-form { display: flex; gap: 6px; margin-top: 7px; }
+.reply-input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+.reply-input:focus { box-shadow: 0 0 0 2px var(--accent-soft); }
+.reply-send, .reply-cancel { padding: 4px 10px; font-size: 12px; }
+
+/* 报告：弹幕下的回复 */
+.r-replies {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  padding-left: 10px;
+  border-left: 2px solid var(--line);
+}
+.r-reply { display: flex; gap: 6px; font-size: 12px; line-height: 1.55; }
+.r-reply-author { flex: none; color: var(--r-color, #8ab4ff); font-weight: 600; }
+.r-reply-text { color: #c9cfdb; word-break: break-word; }
+
 .item-flag {
   padding: 0 5px;
   border-radius: 4px;
@@ -1111,6 +1244,8 @@ body.dragging::after {
   .r-type,
   .r-frames { color: #666; }
   .r-text { color: #111; }
+  .r-replies { border-left-color: #ddd; }
+  .r-reply-text { color: #333; }
   .r-shot { max-width: 70%; }
   .r-shot img { border-color: #ccc; }
   .r-shot figcaption { color: #666; }

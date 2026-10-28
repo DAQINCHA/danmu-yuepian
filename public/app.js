@@ -31,6 +31,10 @@ const state = {
   lastTick: -1,
   // 开始输入弹幕那一刻的视频时间；发送时用它，而不是敲完回车时已经播过去的时间
   composeTime: null,
+  // 侧栏里正在回复哪条弹幕；列表会因为别人发弹幕整体重画，草稿和焦点要能接上
+  replyOpen: null,
+  replyDraft: '',
+  replyFocus: false,
   uploading: false,
   pendingFile: null,
 };
@@ -74,6 +78,7 @@ function boot() {
   initTransport();
   initTimeline();
   initComposer();
+  initOverall();
   initDrawToolbar();
   initModals();
   initDrop();
@@ -113,7 +118,7 @@ function cacheDom() {
     'play-btn', 'tc-now', 'timeline', 'timeline-fill', 'timeline-marks', 'timeline-head', 'tc-total',
     'transport', 'step-back', 'step-fwd', 'draw-toggle', 'fps-input', 'fps-badge', 'fps-field',
     'danmaku-toggle', 'snap-btn', 'fullscreen-btn',
-    'composer', 'composer-time', 'composer-input',
+    'composer', 'composer-time', 'composer-input', 'overall-form', 'overall-input',
     'video-title', 'video-meta', 'tabs', 'list', 'count-all', 'count-comment', 'count-annotation',
     'report-open',
     'library-modal', 'library-grid', 'upload-modal', 'dropzone', 'file-input', 'title-input',
@@ -196,6 +201,7 @@ function showEmpty() {
   dom.frame.hidden = true;
   dom.transport.hidden = true;
   dom.composer.hidden = true;
+  dom.overallForm.hidden = true;
   dom.drawToolbar.hidden = true;
   dom.videoWrap.classList.remove('drawing');
   dom.presence.hidden = true;
@@ -224,6 +230,11 @@ async function openVideo(id) {
 
   state.video = data.video;
   state.comments = data.comments;
+  for (const comment of state.comments) {
+    if (!Array.isArray(comment.replies)) comment.replies = [];
+  }
+  state.replyOpen = null;
+  state.replyDraft = '';
   state.annotations = data.annotations;
   applyFps(data.video.fps || 25, data.video.fpsSource || 'default');
   state.draw = null;
@@ -235,6 +246,7 @@ async function openVideo(id) {
   dom.frame.hidden = false;
   dom.transport.hidden = false;
   dom.composer.hidden = false;
+  dom.overallForm.hidden = false;
   dom.reportOpen.hidden = false;
   dom.drawToolbar.hidden = true;
   dom.videoWrap.classList.remove('drawing');
@@ -508,8 +520,10 @@ function tick() {
     if (!dom.video.paused && !dom.video.seeking) {
       if (t < state.lastTime - 0.05) state.lastTime = t;
       if (t > state.lastTime) {
+        // 从片头起播时把第 0 帧的弹幕（含整体意见）也算进来
+        const from = state.lastTime <= 0 ? -1 : state.lastTime;
         for (const comment of state.comments) {
-          if (comment.time > state.lastTime && comment.time <= t) danmaku.pop(comment);
+          if (comment.time > from && comment.time <= t) danmaku.pop(comment);
         }
         state.lastTime = t;
       }
@@ -695,17 +709,188 @@ function buildCommentItem(comment) {
     removeComment(comment);
   });
 
+  const replies = Array.isArray(comment.replies) ? comment.replies : [];
+  const replyBtn = document.createElement('button');
+  replyBtn.className = 'item-reply-btn' + (state.replyOpen === comment.id ? ' active' : '');
+  replyBtn.type = 'button';
+  replyBtn.textContent = replies.length ? `回复 ${replies.length}` : '回复';
+  replyBtn.title = '在这条弹幕下补充意见，会和它一起出现';
+  replyBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleReply(comment.id);
+  });
+
   head.append(author, time);
   if (comment.done) head.append(doneFlag());
-  head.append(del);
+  head.append(replyBtn, del);
 
   const text = document.createElement('p');
   text.className = 'item-text';
   text.textContent = comment.text;
 
   item.append(head, text);
+  if (replies.length) item.append(buildReplyList(comment));
+  if (state.replyOpen === comment.id) item.append(buildReplyForm(comment));
   item.addEventListener('click', () => jumpTo(comment.time));
   return item;
+}
+
+/* ── 回复 ─────────────────────────────────────────────────────────── */
+
+function buildReplyList(comment) {
+  const list = document.createElement('div');
+  list.className = 'item-replies';
+  for (const reply of comment.replies) {
+    const row = document.createElement('div');
+    row.className = 'reply';
+    row.style.setProperty('--dm-color', authorColor(reply.author));
+
+    const author = document.createElement('span');
+    author.className = 'reply-author';
+    author.textContent = reply.author || '匿名';
+
+    const text = document.createElement('span');
+    text.className = 'reply-text';
+    text.textContent = reply.text;
+
+    row.append(author, text);
+    if (state.author && reply.author === state.author) {
+      const del = document.createElement('button');
+      del.className = 'reply-del';
+      del.type = 'button';
+      del.textContent = '✕';
+      del.title = '删除我的这条回复';
+      del.addEventListener('click', (event) => {
+        event.stopPropagation();
+        removeReply(comment, reply);
+      });
+      row.append(del);
+    }
+    list.append(row);
+  }
+  return list;
+}
+
+function buildReplyForm(comment) {
+  const form = document.createElement('form');
+  form.className = 'reply-form';
+  form.addEventListener('click', (event) => event.stopPropagation());
+
+  const input = document.createElement('input');
+  input.className = 'reply-input';
+  input.type = 'text';
+  input.maxLength = 500;
+  input.autocomplete = 'off';
+  input.placeholder = `回复 ${comment.author || '匿名'}，回车发送`;
+  input.value = state.replyDraft;
+  input.addEventListener('input', () => {
+    state.replyDraft = input.value;
+  });
+  input.addEventListener('focus', () => {
+    state.replyFocus = true;
+  });
+  input.addEventListener('blur', () => {
+    state.replyFocus = false;
+  });
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !event.isComposing) {
+      event.stopPropagation();
+      closeReply();
+    }
+  });
+
+  const send = document.createElement('button');
+  send.type = 'submit';
+  send.className = 'btn primary reply-send';
+  send.textContent = '回复';
+
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'btn reply-cancel';
+  cancel.textContent = '取消';
+  cancel.addEventListener('click', (event) => {
+    event.stopPropagation();
+    closeReply();
+  });
+
+  form.append(input, send, cancel);
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    if (!requireName('先写上你的名字，再回复同事的弹幕')) return;
+    input.disabled = true;
+    send.disabled = true;
+    try {
+      const { comment: updated } = await api.addReply(comment.id, { author: authorName(), text });
+      state.replyOpen = null;
+      state.replyDraft = '';
+      state.replyFocus = false;
+      applyCommentUpdate(updated);
+    } catch (err) {
+      input.disabled = false;
+      send.disabled = false;
+      input.focus();
+      toast(err.message, true);
+    }
+  });
+
+  // 列表重画前输入框是聚焦的（打字时别人发了弹幕），重画后把焦点还回去
+  if (state.replyFocus) {
+    requestAnimationFrame(() => {
+      if (!input.isConnected) return;
+      input.focus();
+      const end = input.value.length;
+      input.setSelectionRange(end, end);
+    });
+  }
+  return form;
+}
+
+function toggleReply(id) {
+  if (state.replyOpen === id) {
+    closeReply();
+    return;
+  }
+  state.replyOpen = id;
+  state.replyDraft = '';
+  state.replyFocus = true;
+  renderSidebar();
+}
+
+// 点回复框以外的地方，且没写内容时自动收起
+document.addEventListener('pointerdown', (event) => {
+  if (!state.replyOpen || state.replyDraft.trim()) return;
+  if (event.target.closest('.reply-form, .item-reply-btn')) return;
+  closeReply();
+});
+
+function closeReply() {
+  state.replyOpen = null;
+  state.replyDraft = '';
+  state.replyFocus = false;
+  renderSidebar();
+}
+
+async function removeReply(comment, reply) {
+  if (!window.confirm('删除这条回复？')) return;
+  try {
+    const { comment: updated } = await api.deleteReply(comment.id, reply.id, authorName());
+    applyCommentUpdate(updated);
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+/** 服务端推来的整条弹幕（勾选已改 / 增删回复）合进本地 */
+function applyCommentUpdate(data) {
+  const comment = state.comments.find((c) => c.id === data?.id);
+  if (!comment) return;
+  if (typeof data.done === 'boolean') comment.done = data.done;
+  if (Array.isArray(data.replies)) comment.replies = data.replies;
+  renderSidebar();
+  reportView.refresh();
+  if (dom.video.paused) updateFocus();
 }
 
 function doneFlag() {
@@ -783,6 +968,10 @@ async function removeComment(comment) {
 
 function removeCommentLocal(id) {
   state.comments = state.comments.filter((c) => c.id !== id);
+  if (state.replyOpen === id) {
+    state.replyOpen = null;
+    state.replyDraft = '';
+  }
   renderSidebar();
   renderMarks();
   updateFocus();
@@ -821,6 +1010,49 @@ function unlockComposeTime() {
   dom.composerTime.textContent = timecode(dom.video.currentTime || 0);
 }
 
+/** 发一条弹幕：主输入框和整体意见共用，接口、数据结构完全一样 */
+async function postComment(text, time) {
+  const { comment } = await api.addComment(state.video.id, {
+    text,
+    time,
+    author: authorName(),
+    color: authorColor(authorName()),
+  });
+  upsertComment(comment);
+  return comment;
+}
+
+/**
+ * 整体意见 = 一条挂在第 0 帧的普通弹幕。不 seek、不碰主输入框锁定的时间；
+ * 播放头就在片头附近时直接上屏，否则提示一下挂在哪了。
+ */
+function initOverall() {
+  dom.overallForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!state.video) return;
+    if (!requireName('发整体意见前先写个名字')) return;
+
+    const text = dom.overallInput.value.trim();
+    if (!text) {
+      dom.overallInput.focus();
+      return;
+    }
+
+    const button = dom.overallForm.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+      const comment = await postComment(text, 0);
+      dom.overallInput.value = '';
+      if ((dom.video.currentTime || 0) <= 3) showNow(comment);
+      else toast('整体意见已记在第 0 帧');
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
 function initComposer() {
   // 第一次按键就把时间钉住：边播边打字时，回车那一刻视频早已往后走了好几秒。
   // 中文输入法先触发 compositionstart，拼音还没上屏也算「开始输入」。
@@ -855,13 +1087,7 @@ function initComposer() {
     unlockComposeTime();
 
     try {
-      const { comment } = await api.addComment(state.video.id, {
-        text,
-        time,
-        author: authorName(),
-        color: authorColor(authorName()),
-      });
-      upsertComment(comment);
+      const comment = await postComment(text, time);
       // 自己刚发的立刻上屏：它的时间点在输入那一刻，播放头早已越过，等时间轴触发就永远等不到
       showNow(comment);
     } catch (err) {
@@ -874,6 +1100,7 @@ function initComposer() {
 
 function upsertComment(comment, { live = false } = {}) {
   if (state.comments.some((c) => c.id === comment.id)) return;
+  if (!Array.isArray(comment.replies)) comment.replies = [];
   state.comments.push(comment);
   state.comments.sort((a, b) => a.time - b.time || a.createdAt - b.createdAt);
   renderSidebar();
@@ -1132,13 +1359,7 @@ function connectEvents(videoId) {
   on('annotation:new', (data) => {
     if (data.annotation?.videoId === state.video?.id) upsertAnnotation(data.annotation);
   });
-  on('comment:updated', (data) => {
-    const comment = state.comments.find((c) => c.id === data.comment?.id);
-    if (!comment) return;
-    comment.done = Boolean(data.comment.done);
-    renderSidebar();
-    reportView.refresh();
-  });
+  on('comment:updated', (data) => applyCommentUpdate(data.comment));
   on('annotation:updated', (data) => {
     const annotation = state.annotations.find((a) => a.id === data.annotation?.id);
     if (!annotation) return;

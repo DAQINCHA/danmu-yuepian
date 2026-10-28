@@ -19,6 +19,11 @@ export const api = {
   addComment: (id, comment) => request('POST', `/api/videos/${id}/comments`, comment),
   setCommentDone: (id, done) => request('PATCH', `/api/comments/${id}`, { done }),
   deleteComment: (id) => request('DELETE', `/api/comments/${id}`),
+  addReply: (id, reply) => request('POST', `/api/comments/${id}/replies`, reply),
+  deleteReply: (id, replyId, author) => request(
+    'DELETE',
+    `/api/comments/${id}/replies/${replyId}?author=${encodeURIComponent(author || '')}`,
+  ),
   addAnnotation: (id, annotation) => request('POST', `/api/videos/${id}/annotations`, annotation),
   setAnnotationDone: (id, done) => request('PATCH', `/api/annotations/${id}`, { done }),
   deleteAnnotation: (id) => request('DELETE', `/api/annotations/${id}`),

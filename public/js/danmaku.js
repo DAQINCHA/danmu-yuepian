@@ -1,19 +1,50 @@
-const MAX_LANES = 8;
+const MAX_LANES = 12; // 只上下叠、不左右并排，车道上限放宽，实际由画面上方 70% 的高度决定
 const TOP = 36; // 给左上角的「已暂停」角标和截图时间戳水印留出位置
 const SIDE = 12;
-const GAP = 14;
 const LANE_GAP = 6; // 车道之间的竖向留白
+const MAX_REPLY_LINES = 3; // 弹幕上最多带几条回复，再多就显示「还有 N 条」
+
+function replyRows(comment, classes, colorOf) {
+  const replies = Array.isArray(comment.replies) ? comment.replies : [];
+  const shown = replies.slice(-MAX_REPLY_LINES);
+  const rows = shown.map((reply) => {
+    const row = document.createElement('div');
+    row.className = classes.row;
+    row.style.setProperty('--dm-color', colorOf(reply));
+    const name = document.createElement('span');
+    name.className = classes.name;
+    name.textContent = `↳ ${reply.author || '匿名'}`;
+    const text = document.createElement('span');
+    text.className = classes.text;
+    text.textContent = reply.text;
+    row.append(name, text);
+    return row;
+  });
+  if (replies.length > shown.length) {
+    const row = document.createElement('div');
+    row.className = `${classes.row} more`;
+    const text = document.createElement('span');
+    text.className = classes.text;
+    text.textContent = `…还有 ${replies.length - shown.length} 条回复`;
+    row.append(text);
+    rows.unshift(row);
+  }
+  return rows;
+}
 
 /**
  * 弹幕层：播放到时间点时，评论直接钉在画面上方的车道里出现，停留几秒后淡出，
- * 不再从右侧慢慢划入——一眼能扫完，信息密度高。同一条车道里从左往右排，
- * 排满了才换下一条；所有车道都满了，就把最久没更新的那条整条让出来。
+ * 不再从右侧慢慢划入——一眼能扫完，信息密度高。同时在场的多条弹幕
+ * 一律从上往下叠：左边对齐，每条占下一个空着的车道，绝不在同一行左右并排；
+ * 所有车道都满了，就让出最早出现的那条（连同它占的整段车道）。
  * 暂停时在场的弹幕原地定住，画面下方再补上附近还没露面的评论。
+ * 弹幕带着它的回复一起出现：回复缩进排在主文字下面、字号小一号，
+ * 这种多行气泡会同时占住相邻的几条车道，不会和上下的弹幕叠住。
  */
 export function createDanmaku(layer, options = {}) {
   const colorOf = options.colorOf || (() => '#8ab4ff');
   const isMine = options.isMine || (() => false);
-  /** node -> { id, lane, right, born } */
+  /** node -> { id, lane, span, born } —— span = 占几条车道 */
   const live = new Map();
   let enabled = true;
 
@@ -21,12 +52,21 @@ export function createDanmaku(layer, options = {}) {
   focus.className = 'danmaku-focus';
   layer.appendChild(focus);
 
-  /** 车道高度按弹幕实际渲染高度来算，字号怎么调都不会上下叠住 */
-  function metrics(nodeHeight) {
+  /**
+   * 车道高度 = 单行弹幕的实际渲染高度（主文字一行 + 上下内边距），字号怎么调都不会叠住；
+   * 带回复的气泡更高，按它的实际高度算要占几条车道。
+   */
+  function metrics(node) {
     const height = layer.clientHeight || 360;
-    const laneHeight = Math.max(24, Math.ceil(nodeHeight || 50)) + LANE_GAP;
+    const style = getComputedStyle(node);
+    const pad = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+    const line = node.firstElementChild;
+    const single = Math.ceil((line ? line.offsetHeight : 40) + pad);
+    const laneHeight = Math.max(24, single) + LANE_GAP;
     const fit = Math.floor((height * 0.7 - TOP) / laneHeight);
-    return { laneHeight, count: Math.max(2, Math.min(MAX_LANES, fit)) };
+    const count = Math.max(2, Math.min(MAX_LANES, fit));
+    const span = Math.min(count, Math.max(1, Math.ceil((node.offsetHeight + LANE_GAP) / laneHeight)));
+    return { laneHeight, count, span };
   }
 
   function build(comment) {
@@ -34,6 +74,9 @@ export function createDanmaku(layer, options = {}) {
     node.className = 'dm';
     node.style.setProperty('--dm-color', colorOf(comment));
     if (isMine(comment)) node.classList.add('is-mine');
+
+    const line = document.createElement('div');
+    line.className = 'dm-line';
 
     const name = document.createElement('span');
     name.className = 'dm-name';
@@ -43,7 +86,10 @@ export function createDanmaku(layer, options = {}) {
     text.className = 'dm-text';
     text.textContent = comment.text;
 
-    node.append(name, text);
+    line.append(name, text);
+    const rows = replyRows(comment, { row: 'dm-reply', name: 'dm-reply-name', text: 'dm-reply-text' }, colorOf);
+    if (rows.length) node.classList.add('has-replies');
+    node.append(line, ...rows);
     return node;
   }
 
@@ -52,34 +98,36 @@ export function createDanmaku(layer, options = {}) {
     live.delete(node);
   }
 
-  function laneItems(index) {
+  /** 和 [lane, lane + span) 这几条车道有交集的在场弹幕 */
+  function bandItems(lane, span) {
     const items = [];
-    for (const info of live.values()) if (info.lane === index) items.push(info);
+    for (const info of live.values()) {
+      if (info.lane < lane + span && info.lane + info.span > lane) items.push(info);
+    }
     return items;
   }
 
-  /** 找一条放得下的车道，返回 { lane, x } */
-  function place(width, count) {
-    const maxRight = (layer.clientWidth || 640) - SIDE;
-    for (let lane = 0; lane < count; lane += 1) {
-      const items = laneItems(lane);
-      if (!items.length) return { lane, x: SIDE };
-      const x = Math.max(...items.map((i) => i.right)) + GAP;
-      if (x + width <= maxRight) return { lane, x };
+  /** 从上往下找连续 span 条空车道，返回起始车道；一条车道只放一条弹幕 */
+  function place(count, span) {
+    const last = Math.max(0, count - span);
+    for (let lane = 0; lane <= last; lane += 1) {
+      if (!bandItems(lane, span).length) return lane;
     }
 
-    // 全满：让出最近一次写入最早的车道
+    // 全满：让出最早出现的那一段车道（段内最新那条也是最老的）
     let victim = 0;
     let oldest = Infinity;
-    for (let lane = 0; lane < count; lane += 1) {
-      const newest = Math.max(0, ...laneItems(lane).map((i) => i.born));
+    for (let lane = 0; lane <= last; lane += 1) {
+      const newest = Math.max(0, ...bandItems(lane, span).map((i) => i.born));
       if (newest < oldest) {
         oldest = newest;
         victim = lane;
       }
     }
-    for (const [node, info] of [...live]) if (info.lane === victim) retire(node);
-    return { lane: victim, x: SIDE };
+    for (const [node, info] of [...live]) {
+      if (info.lane < victim + span && info.lane + info.span > victim) retire(node);
+    }
+    return victim;
   }
 
   function isLive(id) {
@@ -91,18 +139,18 @@ export function createDanmaku(layer, options = {}) {
   function pop(comment) {
     if (!enabled || isLive(comment.id)) return;
     const node = build(comment);
-    const duration = Math.min(8, Math.max(4, 3.2 + (comment.text || '').length * 0.06));
+    const replyCount = Math.min(MAX_REPLY_LINES, Array.isArray(comment.replies) ? comment.replies.length : 0);
+    const duration = Math.min(12, Math.max(4, 3.2 + (comment.text || '').length * 0.06) + replyCount * 1.2);
     node.style.animationDuration = `${duration.toFixed(1)}s`;
     node.style.left = '0px';
     node.style.top = '0px';
     layer.appendChild(node);
 
-    const { laneHeight, count } = metrics(node.offsetHeight);
-    const width = node.offsetWidth;
-    const { lane, x } = place(width, count);
-    node.style.left = `${x}px`;
+    const { laneHeight, count, span } = metrics(node);
+    const lane = place(count, span);
+    node.style.left = `${SIDE}px`;
     node.style.top = `${TOP + lane * laneHeight}px`;
-    live.set(node, { id: comment.id, lane, right: x + width, born: performance.now() });
+    live.set(node, { id: comment.id, lane, span, born: performance.now() });
 
     node.addEventListener('animationend', () => retire(node));
   }
@@ -133,6 +181,13 @@ export function createDanmaku(layer, options = {}) {
       text.className = 'text';
       text.textContent = comment.text;
       card.append(name, text);
+      const rows = replyRows(comment, { row: 'reply', name: 'name', text: 'text' }, colorOf);
+      if (rows.length) {
+        const box = document.createElement('div');
+        box.className = 'replies';
+        box.append(...rows);
+        card.append(box);
+      }
       return card;
     });
     focus.replaceChildren(...cards);
@@ -167,7 +222,8 @@ export function createDanmaku(layer, options = {}) {
       const rect = node.getBoundingClientRect();
       if (rect.width < 1 || rect.height < 1) continue;
 
-      const spans = [...node.children].map((span) => {
+      // 只取叶子 span（名字 / 正文 / 回复），外层行容器不画字
+      const spans = [...node.querySelectorAll('span')].map((span) => {
         const s = getComputedStyle(span);
         const size = parseFloat(s.fontSize) || 14;
         return {
