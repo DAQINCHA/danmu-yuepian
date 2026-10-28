@@ -215,6 +215,9 @@
           <button class="tab active" data-filter="all" type="button">全部</button>
           <button class="tab" data-filter="todo" type="button">仅未处理</button>
         </div>
+        <label class="report-opt" title="关掉后报告里（页面、report.md、PDF）不显示意见和回复的署名">
+          <input type="checkbox" id="report-names" checked> 显示名字
+        </label>
         <label class="report-opt" title="给每条（或每组相近的）弹幕截一张画面">
           <input type="checkbox" id="report-frames" checked> 截帧
         </label>
@@ -226,9 +229,6 @@
             <option value="2">2 秒内合并</option>
             <option value="0">不合并</option>
           </select>
-        </label>
-        <label class="report-opt" title="关掉后报告里（页面、report.md、PDF）不显示意见和回复的署名">
-          <input type="checkbox" id="report-names" checked> 显示名字
         </label>
         <span class="spacer"></span>
         <button class="btn tiny" id="report-download" type="button" title="report.md + 所有截帧图片打成一个 .zip">下载报告 (.zip)</button>
