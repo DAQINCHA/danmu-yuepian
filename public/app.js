@@ -68,6 +68,8 @@ let lastFitCheck = 0;
 
 /** 手机竖屏：播放器贴满两边，高度跟着视频比例走，上下不留黑边 */
 const edgeToEdgeQuery = window.matchMedia('(max-width: 860px) and (orientation: portrait)');
+/** 和隐藏筛选标签同一档宽度：窄屏列表固定看「全部」 */
+const mobileListQuery = window.matchMedia('(max-width: 860px)');
 
 let composerExpanded = false;
 
@@ -145,6 +147,8 @@ function boot() {
     syncComposerCollapse();
     setTimeout(fitVideoWrap, 60);
   });
+  mobileListQuery.addEventListener?.('change', syncMobileListFilter);
+  syncMobileListFilter();
   window.addEventListener('hashchange', applyHash);
   syncComposerCollapse();
 
@@ -963,23 +967,40 @@ function updateCounts() {
   dom.countAnnotation.textContent = String(state.annotations.length);
 }
 
+/**
+ * 窄屏没有筛选标签，没法切回「全部」。
+ * 桌面选过「弹幕 / 画笔」，或这个选择被留在 state 里时，进到手机宽度就改回全部。
+ */
+function syncMobileListFilter() {
+  if (!mobileListQuery.matches || state.tab === 'all') return;
+  state.tab = 'all';
+  if (dom.tabs) {
+    for (const node of dom.tabs.querySelectorAll('.tab')) {
+      node.classList.toggle('active', node.dataset.tab === 'all');
+    }
+  }
+  renderSidebar();
+}
+
 function renderSidebar() {
   updateCounts();
   setAuthorRoster(state.comments, state.annotations);
 
   if (!state.video) return;
 
+  // 手机宽度一律按「全部」画，避免标签被藏掉后列表仍停在上一次的筛选
+  const tab = mobileListQuery.matches ? 'all' : state.tab;
   const items = [];
-  if (state.tab !== 'annotation') {
+  if (tab !== 'annotation') {
     for (const comment of state.comments) items.push({ type: 'comment', time: comment.time, data: comment });
   }
-  if (state.tab !== 'comment') {
+  if (tab !== 'comment') {
     for (const annotation of state.annotations) items.push({ type: 'annotation', time: annotation.start, data: annotation });
   }
   items.sort((a, b) => a.time - b.time);
 
   if (!items.length) {
-    const hint = state.tab === 'annotation'
+    const hint = tab === 'annotation'
       ? '还没有画笔标注。点「画笔」框住一段连续帧，直接在画面上圈重点。'
       : '还没有弹幕。暂停在任意一帧，下面输入就能发。';
     dom.list.replaceChildren(emptyHint(hint));
@@ -1958,6 +1979,11 @@ function initModals() {
 
   for (const tab of dom.tabs.querySelectorAll('.tab')) {
     tab.addEventListener('click', () => {
+      // 窄屏标签已隐藏；就算点到了也保持「全部」
+      if (mobileListQuery.matches) {
+        syncMobileListFilter();
+        return;
+      }
       state.tab = tab.dataset.tab;
       for (const node of dom.tabs.querySelectorAll('.tab')) node.classList.toggle('active', node === tab);
       renderSidebar();

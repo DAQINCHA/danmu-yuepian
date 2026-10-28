@@ -1405,8 +1405,9 @@ body.dragging::after {
   .transport-right { width: 100%; justify-content: flex-end; }
   .brand-text small { display: none; }
   .author-field input { width: 78px; }
-  /* 手机端侧栏不显示片名和上传信息，标签页直接顶上来，不留空档 */
-  .sidebar-head { display: none; }
+  /* 手机端侧栏不显示片名、上传信息和筛选标签，列表直接顶上来，不留空档 */
+  .sidebar-head,
+  .tabs { display: none; }
   /* 手机端不提供审片报告：唯一入口是侧栏这个按钮 */
   .report-open { display: none !important; }
 }
