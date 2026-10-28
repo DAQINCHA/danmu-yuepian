@@ -2390,7 +2390,12 @@ function paintCover(canvas, videoId) {
     const height = 360;
     canvas.width = width;
     canvas.height = height;
-    ctx.drawImage(frame, 0, 0, width, height);
+    const sw = frame.width;
+    const sh = frame.height;
+    const scale = Math.max(width / sw, height / sh);
+    const dw = sw * scale;
+    const dh = sh * scale;
+    ctx.drawImage(frame, (width - dw) / 2, (height - dh) / 2, dw, dh);
   }).catch(() => {});
 }
 
@@ -2446,18 +2451,32 @@ function renderProjectCards() {
       coverVideoId: state.uncategorized.coverVideoId,
     }));
   }
+  cards.push(addProjectCard());
   dom.projectGrid.replaceChildren(...cards);
+}
+
+function addProjectCard() {
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.className = 'project-card project-add';
+  card.textContent = '➕';
+  card.setAttribute('aria-label', '新建项目');
+  card.addEventListener('click', createProjectPrompt);
+  return card;
 }
 
 function projectCard(project) {
   const card = document.createElement('button');
   card.type = 'button';
   card.className = 'project-card';
+  const frame = document.createElement('div');
+  frame.className = 'project-cover-frame';
   const cover = document.createElement('canvas');
   cover.className = 'project-cover';
   cover.width = 640;
   cover.height = 360;
   paintCover(cover, project.coverVideoId);
+  frame.append(cover);
   const body = document.createElement('div');
   body.className = 'project-body';
   const title = document.createElement('div');
@@ -2468,7 +2487,7 @@ function projectCard(project) {
   const when = project.latestAt ? relativeTime(project.latestAt) : '还没有更新';
   meta.textContent = `${project.videoCount || 0} 支 · ${when}`;
   body.append(title, meta);
-  card.append(cover, body);
+  card.append(frame, body);
   card.addEventListener('click', () => {
     location.hash = project.id === 'uncategorized' ? '#/p/uncategorized' : `#/p/${project.id}`;
   });
