@@ -12,7 +12,8 @@
  *     heading?: string,            // 「整体问题」「画面 1 · 00:12.040 · 3 条」；不分组模式下可省略
  *     image?: string,              // 截帧 data URL
  *     imageCaption?: string,
- *     items: [{ index, time?, kind, author, color, text, done, replies: [{ author, color, text }] }]
+ *     items: [{ index, time?, kind?, author, color, text, done, replies: [{ author, color, text }] }]
+ *     // time 为空：整体问题或画面分组内（时间码只在组标题上）；kind 为空：整体问题
  *   }],
  *   empty?: string,
  * }
@@ -256,6 +257,8 @@ async function drawItem(pager, item) {
           c.fillStyle = COLORS.time;
           c.fillText(item.time, hx, base);
           hx += c.measureText(item.time).width + 14;
+        }
+        if (item.kind) {
           setFont(c, 16, 500);
           c.fillStyle = COLORS.dim;
           const kind = item.kind === 'annotation' ? '画笔' : '弹幕';
@@ -393,15 +396,9 @@ async function drawHeader(pager, model) {
     c.fillText(model.summary, MARGIN_X, y + 26);
     y += 34;
   }
-  if (typeof model.progress === 'number') {
-    c.fillStyle = '#e5e7eb';
-    c.fillRect(MARGIN_X, y + 8, CONTENT_W, 8);
-    c.fillStyle = COLORS.ok;
-    c.fillRect(MARGIN_X, y + 8, CONTENT_W * Math.min(1, Math.max(0, model.progress)), 8);
-    y += 22;
-  }
+  // 表头和正文之间只留一条细分隔线（进度已经写在「意见」那一行）
   c.fillStyle = COLORS.line;
-  c.fillRect(MARGIN_X, y + 14, CONTENT_W, 2);
+  c.fillRect(MARGIN_X, y + 14, CONTENT_W, 1.5);
   pager.y = y + 40;
 }
 

@@ -1,4 +1,4 @@
-import { timecode, clockTime, authorColor } from './format.js';
+import { timecode, authorColor } from './format.js';
 import { drawStrokes } from './annotations.js';
 import { createFrameGrabber } from './capture.js';
 import { createZip, dataUrlToBytes } from './zip.js';
@@ -123,20 +123,26 @@ function framesOf(annotation, fps) {
 function describe(entry, fps) {
   if (entry.kind === 'comment') return entry.data.text;
   const annotation = entry.data;
-  return `画面标注 · 第 ${framesOf(annotation, fps)} 帧 · ${timecode(annotation.start)} – ${timecode(annotation.end)}`;
+  return `画笔标注 · 共 ${framesOf(annotation, fps)} 帧`;
 }
 
-function pushEntry(lines, entry, index, fps, { level = '##', shot = null, overall = false } = {}) {
+/**
+ * overall：整体问题，不带时间码和类型；inGroup：画面分组内，时间码只出现在组标题上。
+ * 每条（每个画面）只出现一次时间码。
+ */
+function pushEntry(lines, entry, index, fps, { level = '##', shot = null, overall = false, inGroup = false } = {}) {
   const at = timecode(entry.time);
   const kind = entry.kind === 'comment' ? '弹幕' : '画笔';
-  lines.push(overall
-    ? `${level} ${index + 1}. ${entry.data.author || '匿名'}`
-    : `${level} ${index + 1}. ${at} · ${kind} · ${entry.data.author || '匿名'}`);
+  const author = entry.data.author || '匿名';
+  let head = `${level} ${index + 1}. ${at} · ${kind} · ${author}`;
+  if (overall) head = `${level} ${index + 1}. ${author}`;
+  else if (inGroup) head = `${level} ${index + 1}. ${kind} · ${author}`;
+  lines.push(head);
   lines.push('');
   lines.push(describe(entry, fps));
   lines.push('');
   if (shot) {
-    lines.push(`![起始帧 ${at}](${shot})`);
+    lines.push(`![起始帧](${shot})`);
     lines.push('');
   }
   // 弹幕和画笔标注的回复：放在正文 / 起始帧之后、「已修改」之前
@@ -163,8 +169,6 @@ export function buildMarkdown(data, shots = null, prefs = loadPrefs()) {
   const lines = [
     `# 审片报告 · ${data.video.title}`,
     '',
-    `- 上传者：${data.video.uploader || '未署名'}`,
-    `- 时长：${clockTime(data.video.duration)} · ${data.fps} fps`,
     `- 生成时间：${new Date().toLocaleString('zh-CN')}`,
     `- 意见：共 ${entries.length} 条，已改 ${done} 条，待改 ${entries.length - done} 条`,
     '',
@@ -185,8 +189,8 @@ export function buildMarkdown(data, shots = null, prefs = loadPrefs()) {
       const at = timecode(group.time);
       lines.push(`## 画面 ${gi + 1} · ${at} · ${group.entries.length} 条`, '');
       const shot = shots?.get(group.key);
-      if (shot) lines.push(`![画面 ${at}](${shot})`, '');
-      for (const entry of group.entries) pushEntry(lines, entry, index++, data.fps, { level: '###' });
+      if (shot) lines.push(`![画面 ${gi + 1}](${shot})`, '');
+      for (const entry of group.entries) pushEntry(lines, entry, index++, data.fps, { level: '###', inGroup: true });
     });
   } else {
     for (const entry of entries) {
@@ -200,13 +204,14 @@ export function buildMarkdown(data, shots = null, prefs = loadPrefs()) {
   return lines.join('\n');
 }
 
-function pdfItem(entry, index, fps, overall = false) {
+function pdfItem(entry, index, fps, { overall = false, inGroup = false } = {}) {
   const author = entry.data.author || '匿名';
   const replies = Array.isArray(entry.data.replies) ? entry.data.replies : [];
   return {
     index,
-    time: overall ? null : timecode(entry.time),
-    kind: entry.kind,
+    // 整体问题不带时间码和类型；画面分组内时间码只在组标题上
+    time: overall || inGroup ? null : timecode(entry.time),
+    kind: overall ? null : entry.kind,
     author,
     color: authorColor(author),
     text: describe(entry, fps),
@@ -229,7 +234,7 @@ function buildPdfModel(data, images, prefs) {
   if (overallEntries.length) {
     sections.push({
       heading: '整体问题',
-      items: overallEntries.map((entry) => pdfItem(entry, index++, data.fps, true)),
+      items: overallEntries.map((entry) => pdfItem(entry, index++, data.fps, { overall: true })),
     });
   }
   if (prefs?.frames) {
@@ -240,8 +245,8 @@ function buildPdfModel(data, images, prefs) {
       sections.push({
         heading: `画面 ${gi + 1} · ${at} · ${group.entries.length} 条`,
         image,
-        imageCaption: image ? `画面 ${at}` : '',
-        items: group.entries.map((entry) => pdfItem(entry, index++, data.fps)),
+        imageCaption: image && group.annotations.length ? '含画笔笔迹' : '',
+        items: group.entries.map((entry) => pdfItem(entry, index++, data.fps, { inGroup: true })),
       });
     });
   } else {
@@ -258,7 +263,6 @@ function buildPdfModel(data, images, prefs) {
         // 带截帧的画笔单独成段：起始帧在上、意见在下，后面的弹幕另起一段
         flat.items.push(item);
         flat.image = image;
-        flat.imageCaption = `起始帧 ${item.time}`;
         flat = null;
       } else {
         flat.items.push(item);
@@ -268,12 +272,8 @@ function buildPdfModel(data, images, prefs) {
   return {
     title: `审片报告 · ${data.video.title}`,
     footer: `审片报告 · ${data.video.title}`,
-    meta: [
-      `上传者：${data.video.uploader || '未署名'}    时长：${clockTime(data.video.duration)} · ${data.fps} fps`,
-      `生成时间：${new Date().toLocaleString('zh-CN')}`,
-    ],
+    meta: [`生成时间：${new Date().toLocaleString('zh-CN')}`],
     summary: `意见：共 ${entries.length} 条，已改 ${done} 条，待改 ${entries.length - done} 条`,
-    progress: entries.length ? done / entries.length : undefined,
     sections,
     empty: '（这一版还没有任何意见）',
   };
@@ -442,7 +442,6 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
   const modal = document.getElementById('report-modal');
   const titleEl = document.getElementById('report-title');
   const subEl = document.getElementById('report-sub');
-  const barEl = document.getElementById('report-bar');
   const countEl = document.getElementById('report-count');
   const listEl = document.getElementById('report-list');
   const filtersEl = document.getElementById('report-filters');
@@ -590,7 +589,7 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     return list;
   }
 
-  function buildItem(entry, index, { withShot = true, overall = false } = {}) {
+  function buildItem(entry, index, { withShot = true, overall = false, inGroup = false } = {}) {
     const { data } = entry;
 
     const node = document.createElement('div');
@@ -622,22 +621,14 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     author.className = 'r-author';
     author.textContent = data.author || '匿名';
 
-    // 整体问题不挂在某一帧上，不显示时间码和类型
+    // 整体问题不挂在某一帧上，不显示时间码和类型；画面分组内时间码只在组标题上
     if (overall) head.append(author);
+    else if (inGroup) head.append(type, author);
     else head.append(timeButton, type, author);
-
-    if (entry.kind === 'annotation') {
-      const frames = document.createElement('span');
-      frames.className = 'r-frames';
-      frames.textContent = `${framesOf(data, currentFps())} 帧`;
-      head.append(frames);
-    }
 
     const text = document.createElement('p');
     text.className = 'r-text';
-    text.textContent = entry.kind === 'comment'
-      ? data.text
-      : `${timecode(data.start)} – ${timecode(data.end)} 的连续帧`;
+    text.textContent = describe(entry, currentFps());
 
     main.append(head, text);
     node.append(indexEl);
@@ -667,7 +658,7 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     figure.className = 'r-shot loading';
     const caption = document.createElement('figcaption');
     caption.className = 'mono';
-    caption.textContent = `起始帧 ${timecode(annotation.start)} · 截取中…`;
+    caption.textContent = '起始帧截取中…';
     figure.append(caption);
 
     const video = getData().video;
@@ -677,11 +668,11 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
       figure.classList.remove('loading');
       if (url) {
         const img = document.createElement('img');
-        img.alt = `起始帧 ${timecode(annotation.start)}`;
+        img.alt = '起始帧';
         img.src = url;
         img.title = '点击跳到这一帧';
         img.addEventListener('click', () => onJump(annotation.start));
-        caption.textContent = `起始帧 ${timecode(annotation.start)}`;
+        caption.remove(); // 时间码已经在这条的表头上
         figure.prepend(img);
         return;
       }
@@ -697,7 +688,7 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
       const ctx = thumb.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       drawStrokes(ctx, annotation.strokes || [], tw, th);
-      caption.textContent = `起始帧没截到，只显示笔迹（${timecode(annotation.start)}）`;
+      caption.textContent = '起始帧没截到，只显示笔迹';
       figure.prepend(thumb);
     });
     return figure;
@@ -709,9 +700,8 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     figure.className = 'r-shot loading';
     const caption = document.createElement('figcaption');
     caption.className = 'mono';
-    const at = timecode(group.time);
     const strokesNote = group.annotations.length ? ' · 含画笔笔迹' : '';
-    caption.textContent = `画面 ${at}${strokesNote} · 截取中…`;
+    caption.textContent = `画面截取中…${strokesNote}`;
     figure.append(caption);
 
     const video = getData().video;
@@ -721,16 +711,18 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
       figure.classList.remove('loading');
       if (url) {
         const img = document.createElement('img');
-        img.alt = `画面 ${at}`;
+        img.alt = '画面';
         img.src = url;
         img.title = '点击跳到这一帧';
         img.addEventListener('click', () => onJump(group.time));
-        caption.textContent = `画面 ${at}${strokesNote}`;
+        // 时间码只留在组标题上；有画笔时只注明含笔迹
+        if (group.annotations.length) caption.textContent = '含画笔笔迹';
+        else caption.remove();
         figure.prepend(img);
         return;
       }
       figure.classList.add('failed');
-      caption.textContent = `画面没截到（${at}）`;
+      caption.textContent = '画面没截到';
       if (!group.annotations.length) return;
       const thumb = document.createElement('canvas');
       const tw = 160;
@@ -743,7 +735,7 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
       const ctx = thumb.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       for (const annotation of group.annotations) drawStrokes(ctx, annotation.strokes || [], tw, th);
-      caption.textContent = `画面没截到，只显示笔迹（${at}）`;
+      caption.textContent = '画面没截到，只显示笔迹';
       figure.prepend(thumb);
     });
     return figure;
@@ -777,7 +769,7 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     groups.forEach((group, gi) => {
       const items = [];
       for (const entry of group.entries) {
-        if (visible(entry)) items.push(buildItem(entry, index, { withShot: false }));
+        if (visible(entry)) items.push(buildItem(entry, index, { withShot: false, inGroup: true }));
         index += 1;
       }
       if (!items.length) return;
@@ -806,13 +798,7 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     const pending = entries.length - done;
 
     titleEl.textContent = `审片报告 · ${data.video.title}`;
-    subEl.textContent = [
-      `上传 ${data.video.uploader || '未署名'}`,
-      `${clockTime(data.video.duration)} · ${data.fps} fps`,
-      `生成于 ${new Date().toLocaleString('zh-CN', { hour12: false })}`,
-    ].join(' · ');
-
-    barEl.style.width = entries.length ? `${(done / entries.length) * 100}%` : '0%';
+    subEl.textContent = `生成于 ${new Date().toLocaleString('zh-CN', { hour12: false })}`;
     countEl.textContent = entries.length ? `${done} / ${entries.length} 已改 · 待改 ${pending}` : '还没有意见';
 
     const visible = (entry) => filter !== 'todo' || !entry.data.done;

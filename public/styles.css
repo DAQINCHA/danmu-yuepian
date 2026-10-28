@@ -1012,8 +1012,6 @@ h1, h2, p { margin: 0; }
 .report-sub { margin-top: 3px; color: var(--text-faint); font-size: 11.5px; }
 
 .report-progress { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.report-progress .bar { flex: 1 1 auto; }
-.bar-fill.ok { background: linear-gradient(90deg, #2f9e77, #4ec9a0); }
 .report-progress span { color: var(--text-dim); font-size: 11.5px; white-space: nowrap; }
 
 /* 报告PDF 预览层（在审片报告之上） */
@@ -1119,7 +1117,6 @@ h1, h2, p { margin: 0; }
   font-size: 10.5px;
 }
 .r-author { color: var(--r-color, #8ab4ff); font-weight: 650; }
-.r-frames { color: var(--text-faint); }
 .r-text { color: #dde2ee; font-size: 13px; line-height: 1.6; word-break: break-word; }
 
 .r-shot {
@@ -1368,8 +1365,6 @@ body.dragging::after {
   .report-head h2 { color: #111; font-size: 16px; }
   .report-sub,
   .report-progress span { color: #555; }
-  .report-progress .bar { background: #e5e5e5; }
-  .bar-fill.ok { background: #2f9e77; }
 
   .report-list { overflow: visible; padding: 0; }
   .report-item {
@@ -1382,7 +1377,6 @@ body.dragging::after {
   .report-item.done .r-text { color: #888; }
   .r-index,
   .r-type,
-  .r-frames { color: #666; }
   .r-text { color: #111; }
   .r-replies { border-left-color: #ddd; }
   .r-reply-text { color: #333; }
