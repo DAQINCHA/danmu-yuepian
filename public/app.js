@@ -293,8 +293,8 @@ function placeAuthorHint() {
   const spaceRight = vw - margin - tipX;
   const extendLeft = spaceLeft >= spaceRight;
   const across = Math.max(36, extendLeft ? spaceLeft : spaceRight);
-  // 给文案留一行高度，线条按空档缩小，避免手机上画出屏幕
-  const scale = Math.min(1, across / HINT_REACH_X, Math.max(48, along - 32) / HINT_REACH_Y);
+  // 给文案留一行高度，线条按空档缩小，再收到约 85%，避免手机上画出屏幕
+  const scale = Math.min(1, across / HINT_REACH_X, Math.max(48, along - 32) / HINT_REACH_Y) * 0.85;
   const sx = extendLeft ? 1 : -1;
   const sy = pointUp ? 1 : -1;
 

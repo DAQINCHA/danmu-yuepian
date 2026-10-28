@@ -206,7 +206,7 @@ body.author-spotlight .author-field.need input { background: rgba(0, 0, 0, 0.28)
 
 body.author-spotlight .toast { z-index: 100; }
 
-/* 弹簧箭头 + 文案。位置由 JS 按署名框算，pointer-events 让点击落到输入框上 */
+/* 弹簧箭头 + 文案放在同一个容器里，浮动动画只加在容器上，两者同步 */
 .author-hint {
   position: fixed;
   z-index: 96;
@@ -216,19 +216,19 @@ body.author-spotlight .toast { z-index: 100; }
   height: 0;
   overflow: visible;
   pointer-events: none;
+  animation: author-hint-float 1.8s ease-in-out infinite;
 }
 
 .author-hint-arrow {
-  position: fixed;
+  position: absolute;
   overflow: visible;
   pointer-events: none;
-  animation: author-hint-float 1.8s ease-in-out infinite;
 }
 
 .author-hint-shaft,
 .author-hint-head {
   fill: none;
-  stroke: #22c1c3;
+  stroke: #fff;
   stroke-width: 4;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -236,7 +236,7 @@ body.author-spotlight .toast { z-index: 100; }
 }
 
 .author-hint-text {
-  position: fixed;
+  position: absolute;
   margin: 0;
   color: #fff;
   font-family: inherit;
