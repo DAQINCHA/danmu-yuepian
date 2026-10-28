@@ -216,6 +216,15 @@
           <button class="tab active" data-filter="all" type="button">全部</button>
           <button class="tab" data-filter="todo" type="button">仅未处理</button>
         </div>
+        <label class="report-opt" title="给每条（或每组相近的）弹幕截一张画面">
+          <input type="checkbox" id="report-frames" checked> 截帧
+        </label>
+        <select class="report-gap" id="report-gap" title="相隔不超过这么久的弹幕合成一张截帧">
+          <option value="0.5">0.5秒</option>
+          <option value="1" selected>1秒</option>
+          <option value="2">2秒</option>
+          <option value="0">不合并</option>
+        </select>
         <span class="spacer"></span>
         <button class="btn tiny" id="report-copy" type="button">复制文本</button>
         <button class="btn tiny" id="report-download" type="button">下载 .md</button>

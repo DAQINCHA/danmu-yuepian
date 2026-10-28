@@ -1098,6 +1098,45 @@ h1, h2, p { margin: 0; }
 .r-shot figcaption { margin-top: 4px; color: var(--text-faint); font-size: 11px; }
 .r-shot.failed figcaption { color: #ff9b8f; }
 
+/* 报告：截帧开关 + 合并间隔 */
+.report-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.report-opt input { width: 14px; height: 14px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.report-gap {
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+}
+.report-gap:focus { border-color: var(--accent); }
+.report-gap:disabled { opacity: 0.45; cursor: default; }
+
+/* 报告：按画面分组 */
+.report-group { margin-bottom: 14px; }
+.r-group-head {
+  margin: 0 0 6px;
+  padding-left: 8px;
+  border-left: 3px solid var(--accent);
+  color: #8fe6e7;
+  font-size: 12px;
+  font-weight: 650;
+}
+.report-group > .r-shot { margin: 0 0 7px; }
+
 .r-check {
   flex: none;
   display: inline-flex;
@@ -1298,6 +1337,8 @@ body.dragging::after {
   .r-replies { border-left-color: #ddd; }
   .r-reply-text { color: #333; }
   .r-shot { max-width: 70%; }
+  .report-group > .r-shot { break-inside: avoid; break-after: avoid; }
+  .r-group-head { color: #1f7f86; border-left-color: #1f7f86; break-after: avoid; }
   .r-shot img { border-color: #ccc; }
   .r-shot figcaption { color: #666; }
   .r-time { color: #8a6100; }

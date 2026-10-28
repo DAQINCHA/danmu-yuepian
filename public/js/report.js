@@ -9,6 +9,99 @@ import { createFrameGrabber } from './capture.js';
  */
 
 const SHOT_MAX_WIDTH = 1280;
+const PREFS_KEY = 'danmu:report';
+/** 合并间隔（秒）；0 = 不合并，每条弹幕各截一帧 */
+const GAPS = [0.5, 1, 2, 0];
+const DEFAULT_PREFS = { frames: true, gap: 1 };
+
+export function loadPrefs() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+    return {
+      frames: raw.frames !== false,
+      gap: GAPS.includes(raw.gap) ? raw.gap : DEFAULT_PREFS.gap,
+    };
+  } catch {
+    return { ...DEFAULT_PREFS };
+  }
+}
+
+function savePrefs(prefs) {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    /* 无痕模式存不了就算了 */
+  }
+}
+
+/** 第 0 帧的弹幕 = 整体意见，单列在最前面，不截帧 */
+function isOverall(comment) {
+  return comment.time < 0.001;
+}
+
+function byTime(a, b) {
+  return a.time - b.time || (a.data.createdAt || 0) - (b.data.createdAt || 0);
+}
+
+/**
+ * 截帧模式下的分组：相邻弹幕时间差 <= gap 的并成一组，只截组里第一条的那一帧；
+ * 画笔标注的入点落在某组的时间范围内（前后放宽 gap）就并进去，这组改用标注入点那一帧并叠上笔迹。
+ * 没并进任何组的画笔标注各自成组。gap = 0 时每条弹幕单独一组，标注只和同一帧的弹幕合并。
+ * 返回 { overall: entry[], groups: { time, entries, annotations, key }[] }
+ */
+export function groupEntries(data, gap) {
+  const fps = data.fps || 25;
+  const overall = [];
+  const comments = [];
+  for (const comment of data.comments) {
+    const entry = { kind: 'comment', time: comment.time, data: comment };
+    (isOverall(comment) ? overall : comments).push(entry);
+  }
+  overall.sort(byTime);
+  comments.sort(byTime);
+
+  const groups = [];
+  let current = null;
+  for (const entry of comments) {
+    if (!current || gap <= 0 || entry.time - current.last > gap + 1e-6) {
+      current = { first: entry.time, last: entry.time, entries: [], annotations: [], hasComments: true };
+      groups.push(current);
+    }
+    current.entries.push(entry);
+    current.last = entry.time;
+  }
+
+  const tolerance = gap > 0 ? gap : 0.5 / fps;
+  const annotations = data.annotations
+    .map((annotation) => ({ kind: 'annotation', time: annotation.start, data: annotation }))
+    .sort(byTime);
+  for (const entry of annotations) {
+    const host = groups.find((g) => g.hasComments
+      && entry.time >= g.first - tolerance && entry.time <= g.last + tolerance);
+    if (host) {
+      host.entries.push(entry);
+      host.annotations.push(entry.data);
+    } else {
+      groups.push({ first: entry.time, last: entry.time, entries: [entry], annotations: [entry.data], hasComments: false });
+    }
+  }
+
+  for (const group of groups) {
+    group.entries.sort(byTime);
+    group.from = group.entries[0].time;
+    group.time = group.annotations.length ? group.annotations[0].start : group.first;
+    group.key = group.annotations.length
+      ? `a:${group.annotations.map((a) => `${a.id}@${a.start}`).join(',')}`
+      : `c:${group.time}`;
+  }
+  groups.sort((a, b) => a.from - b.from);
+  return { overall, groups };
+}
+
+/** 单个画笔标注（不分组模式）的截帧 key，和只含这一条标注的组共用缓存 */
+function annotationKey(annotation) {
+  return `a:${annotation.id}@${annotation.start}`;
+}
 
 function collect(data) {
   const entries = [];
@@ -31,8 +124,36 @@ function describe(entry, fps) {
   return `画面标注 · 第 ${framesOf(annotation, fps)} 帧 · ${timecode(annotation.start)} – ${timecode(annotation.end)}`;
 }
 
-/** shots：可选，annotationId -> 起始帧图片的 data URL；复制文本时不带图，免得剪贴板塞满 base64 */
-export function buildMarkdown(data, shots = null) {
+function pushEntry(lines, entry, index, fps, { level = '##', shot = null } = {}) {
+  const at = timecode(entry.time);
+  const kind = entry.kind === 'comment' ? '弹幕' : '画笔';
+  lines.push(`${level} ${index + 1}. ${at} · ${kind} · ${entry.data.author || '匿名'}`);
+  lines.push('');
+  lines.push(describe(entry, fps));
+  lines.push('');
+  if (shot) {
+    lines.push(`![起始帧 ${at}](${shot})`);
+    lines.push('');
+  }
+  // 弹幕和画笔标注的回复：放在正文 / 起始帧之后、「已修改」之前
+  const replies = Array.isArray(entry.data.replies) ? entry.data.replies : [];
+  if (replies.length) {
+    // 每条回复单独一段引用，免得在 Markdown 里糊成一行
+    replies.forEach((reply, i) => {
+      if (i) lines.push('>');
+      lines.push(`> ↳ **${reply.author || '匿名'}**：${reply.text}`);
+    });
+    lines.push('');
+  }
+  lines.push(`- [${entry.data.done ? 'x' : ' '}] 已修改`);
+  lines.push('');
+}
+
+/**
+ * shots：可选，截帧 key -> 图片 data URL；复制文本时不带图，免得剪贴板塞满 base64。
+ * prefs.frames 打开时按画面分组输出（整体意见在最前、每组一张图）。
+ */
+export function buildMarkdown(data, shots = null, prefs = loadPrefs()) {
   const entries = collect(data);
   const done = entries.filter((e) => e.data.done).length;
   const lines = [
@@ -47,31 +168,26 @@ export function buildMarkdown(data, shots = null) {
     '',
   ];
 
-  entries.forEach((entry, index) => {
-    const at = timecode(entry.time);
-    const kind = entry.kind === 'comment' ? '弹幕' : '画笔';
-    lines.push(`## ${index + 1}. ${at} · ${kind} · ${entry.data.author || '匿名'}`);
-    lines.push('');
-    lines.push(describe(entry, data.fps));
-    lines.push('');
-    const shot = entry.kind === 'annotation' ? shots?.get(entry.data.id) : null;
-    if (shot) {
-      lines.push(`![起始帧 ${at}](${shot})`);
-      lines.push('');
+  if (prefs?.frames) {
+    const { overall, groups } = groupEntries(data, prefs.gap);
+    let index = 0;
+    if (overall.length) {
+      lines.push('## 整体意见', '');
+      for (const entry of overall) pushEntry(lines, entry, index++, data.fps, { level: '###' });
     }
-    // 弹幕和画笔标注的回复：放在正文 / 起始帧之后、「已修改」之前
-    const replies = Array.isArray(entry.data.replies) ? entry.data.replies : [];
-    if (replies.length) {
-      // 每条回复单独一段引用，免得在 Markdown 里糊成一行
-      replies.forEach((reply, i) => {
-        if (i) lines.push('>');
-        lines.push(`> ↳ **${reply.author || '匿名'}**：${reply.text}`);
-      });
-      lines.push('');
-    }
-    lines.push(`- [${entry.data.done ? 'x' : ' '}] 已修改`);
-    lines.push('');
-  });
+    groups.forEach((group, gi) => {
+      const at = timecode(group.time);
+      lines.push(`## 画面 ${gi + 1} · ${at} · ${group.entries.length} 条`, '');
+      const shot = shots?.get(group.key);
+      if (shot) lines.push(`![画面 ${at}](${shot})`, '');
+      for (const entry of group.entries) pushEntry(lines, entry, index++, data.fps, { level: '###' });
+    });
+  } else {
+    entries.forEach((entry, index) => {
+      const shot = entry.kind === 'annotation' ? shots?.get(annotationKey(entry.data)) : null;
+      pushEntry(lines, entry, index, data.fps, { shot });
+    });
+  }
 
   if (!entries.length) lines.push('（这一版还没有任何意见）', '');
   return lines.join('\n');
@@ -101,8 +217,8 @@ async function copyToClipboard(text) {
   }
 }
 
-function downloadMarkdown(data, shots) {
-  const blob = new Blob([buildMarkdown(data, shots)], { type: 'text/markdown;charset=utf-8' });
+function downloadMarkdown(data, shots, prefs) {
+  const blob = new Blob([buildMarkdown(data, shots, prefs)], { type: 'text/markdown;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   const safeTitle = data.video.title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
@@ -124,42 +240,78 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
   const filtersEl = document.getElementById('report-filters');
 
   let filter = 'all';
+  let prefs = loadPrefs();
   const grabber = createFrameGrabber();
-  /** `${videoId}:${annotationId}:${start}` -> Promise<dataURL | null> */
+  /** `${videoId}:${截帧 key}` -> Promise<dataURL | null>；grabber 本身排队，同一帧只截一次 */
   const shots = new Map();
 
-  function shotKey(video, annotation) {
-    return `${video.id}:${annotation.id}:${annotation.start}`;
+  const framesInput = document.getElementById('report-frames');
+  const gapSelect = document.getElementById('report-gap');
+  framesInput.checked = prefs.frames;
+  gapSelect.value = String(prefs.gap);
+  gapSelect.disabled = !prefs.frames;
+  framesInput.addEventListener('change', () => {
+    prefs = { ...prefs, frames: framesInput.checked };
+    gapSelect.disabled = !prefs.frames;
+    savePrefs(prefs);
+    render();
+  });
+  gapSelect.addEventListener('change', () => {
+    const gap = Number(gapSelect.value);
+    prefs = { ...prefs, gap: GAPS.includes(gap) ? gap : DEFAULT_PREFS.gap };
+    savePrefs(prefs);
+    render();
+  });
+
+  /** 截 time 处的画面，叠上给定标注的笔迹（没有标注就是纯画面） */
+  function shotAt(video, key, time, annotations = []) {
+    const cacheKey = `${video.id}:${key}`;
+    if (!shots.has(cacheKey)) {
+      const url = `/api/videos/${encodeURIComponent(video.id)}/file`;
+      const job = grabber
+        .grab(url, time + 0.001, { maxWidth: SHOT_MAX_WIDTH })
+        .then((canvas) => {
+          const ctx = canvas.getContext('2d');
+          for (const annotation of annotations) {
+            drawStrokes(ctx, annotation.strokes || [], canvas.width, canvas.height);
+          }
+          return canvas.toDataURL('image/jpeg', 0.88);
+        })
+        .catch(() => {
+          shots.delete(cacheKey); // 失败的下次打开报告再试
+          return null;
+        });
+      shots.set(cacheKey, job);
+    }
+    return shots.get(cacheKey);
   }
 
   /** 起始帧 = 入点那一帧的画面，再把这条标注的笔迹叠上去 */
   function shotFor(video, annotation) {
-    const key = shotKey(video, annotation);
-    if (!shots.has(key)) {
-      const url = `/api/videos/${encodeURIComponent(video.id)}/file`;
-      const job = grabber
-        .grab(url, annotation.start + 0.001, { maxWidth: SHOT_MAX_WIDTH })
-        .then((canvas) => {
-          drawStrokes(canvas.getContext('2d'), annotation.strokes || [], canvas.width, canvas.height);
-          return canvas.toDataURL('image/jpeg', 0.88);
-        })
-        .catch(() => {
-          shots.delete(key); // 失败的下次打开报告再试
-          return null;
-        });
-      shots.set(key, job);
-    }
-    return shots.get(key);
+    return shotAt(video, annotationKey(annotation), annotation.start, [annotation]);
   }
 
-  /** 等当前片子所有画笔的起始帧截完，返回 annotationId -> dataURL */
+  function shotForGroup(video, group) {
+    return shotAt(video, group.key, group.time, group.annotations);
+  }
+
+  /** 当前模式下要截的所有图：{ key, job }[] */
+  function shotJobs(data) {
+    if (prefs.frames) {
+      return groupEntries(data, prefs.gap).groups.map((group) => ({ key: group.key, job: () => shotForGroup(data.video, group) }));
+    }
+    return data.annotations.map((annotation) => ({ key: annotationKey(annotation), job: () => shotFor(data.video, annotation) }));
+  }
+
+  /** 等当前模式下所有截帧完成，返回 key -> dataURL 和应截张数 */
   async function collectShots(data) {
     const result = new Map();
-    await Promise.all(data.annotations.map(async (annotation) => {
-      const url = await shotFor(data.video, annotation);
-      if (url) result.set(annotation.id, url);
+    const jobs = shotJobs(data);
+    await Promise.all(jobs.map(async ({ key, job }) => {
+      const url = await job();
+      if (url) result.set(key, url);
     }));
-    return result;
+    return { images: result, total: jobs.length };
   }
 
   async function waitImages() {
@@ -176,24 +328,25 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
   });
 
   document.getElementById('report-copy').addEventListener('click', async () => {
-    const ok = await copyToClipboard(buildMarkdown(getData()));
+    const ok = await copyToClipboard(buildMarkdown(getData(), null, prefs));
     notify(ok ? '报告已复制到剪贴板' : '复制不了，用「下载 .md」吧', !ok);
   });
 
   document.getElementById('report-download').addEventListener('click', async () => {
     const data = getData();
     if (!data.video) return;
-    if (data.annotations.length) notify('正在截取画笔标注的起始帧…');
-    const images = await collectShots(data);
-    downloadMarkdown(data, images);
-    const missing = data.annotations.length - images.size;
-    if (missing > 0) notify(`有 ${missing} 个标注的起始帧没截到，报告里只有文字`, true);
+    const expected = shotJobs(data).length;
+    if (expected) notify(prefs.frames ? '正在截取各条意见的画面…' : '正在截取画笔标注的起始帧…');
+    const { images, total } = await collectShots(data);
+    downloadMarkdown(data, images, prefs);
+    const missing = total - images.size;
+    if (missing > 0) notify(`有 ${missing} 张画面没截到，报告里那部分只有文字`, true);
   });
 
   document.getElementById('report-print').addEventListener('click', async () => {
     const data = getData();
-    if (data.video && data.annotations.length) {
-      notify('正在截取画笔标注的起始帧…');
+    if (data.video && shotJobs(data).length) {
+      notify(prefs.frames ? '正在截取各条意见的画面…' : '正在截取画笔标注的起始帧…');
       await collectShots(data);
       await waitImages();
     }
@@ -219,7 +372,7 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     return list;
   }
 
-  function buildItem(entry, index) {
+  function buildItem(entry, index, { withShot = true } = {}) {
     const { data } = entry;
 
     const node = document.createElement('div');
@@ -269,7 +422,7 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     main.append(head, text);
     node.append(indexEl);
 
-    if (entry.kind === 'annotation') main.append(buildShot(data));
+    if (entry.kind === 'annotation' && withShot) main.append(buildShot(data));
     if (Array.isArray(data.replies) && data.replies.length) main.append(buildReplies(data.replies));
 
     node.append(main);
@@ -330,6 +483,96 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     return figure;
   }
 
+  /** 一组意见共用的画面：先占位，截到了换成图片；截不到时有笔迹就画笔迹，没有就只留提示 */
+  function buildGroupShot(group) {
+    const figure = document.createElement('figure');
+    figure.className = 'r-shot loading';
+    const caption = document.createElement('figcaption');
+    caption.className = 'mono';
+    const at = timecode(group.time);
+    const strokesNote = group.annotations.length ? ' · 含画笔笔迹' : '';
+    caption.textContent = `画面 ${at}${strokesNote} · 截取中…`;
+    figure.append(caption);
+
+    const video = getData().video;
+    if (!video) return figure;
+
+    shotForGroup(video, group).then((url) => {
+      figure.classList.remove('loading');
+      if (url) {
+        const img = document.createElement('img');
+        img.alt = `画面 ${at}`;
+        img.src = url;
+        img.title = '点击跳到这一帧';
+        img.addEventListener('click', () => onJump(group.time));
+        caption.textContent = `画面 ${at}${strokesNote}`;
+        figure.prepend(img);
+        return;
+      }
+      figure.classList.add('failed');
+      caption.textContent = `画面没截到（${at}）`;
+      if (!group.annotations.length) return;
+      const thumb = document.createElement('canvas');
+      const tw = 160;
+      const th = 90;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      thumb.width = tw * dpr;
+      thumb.height = th * dpr;
+      thumb.style.width = `${tw}px`;
+      thumb.style.height = `${th}px`;
+      const ctx = thumb.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      for (const annotation of group.annotations) drawStrokes(ctx, annotation.strokes || [], tw, th);
+      caption.textContent = `画面没截到，只显示笔迹（${at}）`;
+      figure.prepend(thumb);
+    });
+    return figure;
+  }
+
+  function groupHead(text) {
+    const head = document.createElement('div');
+    head.className = 'r-group-head';
+    head.textContent = text;
+    return head;
+  }
+
+  /** 截帧模式：整体意见在最前，之后每组「一张画面 + 组内各条意见」 */
+  function renderGrouped(data, visible) {
+    const { overall, groups } = groupEntries(data, prefs.gap);
+    const nodes = [];
+    let index = 0;
+
+    const shownOverall = [];
+    for (const entry of overall) {
+      if (visible(entry)) shownOverall.push(buildItem(entry, index));
+      index += 1;
+    }
+    if (shownOverall.length) {
+      const section = document.createElement('section');
+      section.className = 'report-group overall';
+      section.append(groupHead('整体意见'), ...shownOverall);
+      nodes.push(section);
+    }
+
+    groups.forEach((group, gi) => {
+      const items = [];
+      for (const entry of group.entries) {
+        if (visible(entry)) items.push(buildItem(entry, index, { withShot: false }));
+        index += 1;
+      }
+      if (!items.length) return;
+      const section = document.createElement('section');
+      section.className = 'report-group';
+      section.append(
+        groupHead(`画面 ${gi + 1} · ${timecode(group.time)} · ${group.entries.length} 条`),
+        buildGroupShot(group),
+        ...items,
+      );
+      nodes.push(section);
+    });
+    return nodes;
+  }
+
   function currentFps() {
     return getData().fps || 25;
   }
@@ -352,12 +595,17 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     barEl.style.width = entries.length ? `${(done / entries.length) * 100}%` : '0%';
     countEl.textContent = entries.length ? `${done} / ${entries.length} 已改 · 待改 ${pending}` : '还没有意见';
 
-    const shown = filter === 'todo' ? entries.filter((e) => !e.data.done) : entries;
+    const visible = (entry) => filter !== 'todo' || !entry.data.done;
+    const shown = entries.filter(visible);
     if (!shown.length) {
       const hint = document.createElement('div');
       hint.className = 'list-empty';
       hint.textContent = entries.length ? '全部改完了，可以交片了。' : '这一版还没人提意见，先暂停在某一帧发条弹幕吧。';
       listEl.replaceChildren(hint);
+      return;
+    }
+    if (prefs.frames) {
+      listEl.replaceChildren(...renderGrouped(data, visible));
       return;
     }
     listEl.replaceChildren(...shown.map((entry) => buildItem(entry, entries.indexOf(entry))));
