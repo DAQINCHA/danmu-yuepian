@@ -165,6 +165,7 @@ function boot() {
   mobileListQuery.addEventListener?.('change', syncMobileListFilter);
   syncMobileListFilter();
   window.addEventListener('hashchange', applyHash);
+  syncTopbarNav();
   syncComposerCollapse();
   // 没署名就先压暗，首页和带片地址都一样，不必等列表回来
   syncAuthorSpotlight({ focus: !state.author });
@@ -396,12 +397,22 @@ function applyHash() {
   const videoMatch = /^#\/v\/([\w-]+)/.exec(location.hash);
   if (videoMatch) {
     openVideo(videoMatch[1]);
+    syncTopbarNav();
     return;
   }
   leaveVideo();
   const projectMatch = /^#\/p\/([\w-]+)/.exec(location.hash);
   if (projectMatch) showProjectPage(projectMatch[1]);
   else showProjectHome();
+  syncTopbarNav();
+}
+
+/** 首页已经是片库，不再放返回按钮；项目页不放「新建项目」。看片时两个都留着。 */
+function syncTopbarNav() {
+  const onProject = /^#\/p\/[\w-]+/.test(location.hash);
+  const onHome = !onProject && !/^#\/v\/[\w-]+/.test(location.hash);
+  dom.libraryOpen.hidden = onHome;
+  dom.projectNew.hidden = onProject;
 }
 
 function leaveVideo() {
