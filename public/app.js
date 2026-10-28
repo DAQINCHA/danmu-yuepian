@@ -142,19 +142,27 @@ function boot() {
   dom.video.addEventListener('ended', onPause);
 
   new ResizeObserver(() => fitVideoWrap()).observe(dom.frame);
-  window.addEventListener('resize', fitVideoWrap);
+  window.addEventListener('resize', () => {
+    fitVideoWrap();
+    placeAuthorHint();
+  });
+  window.visualViewport?.addEventListener('resize', placeAuthorHint);
+  window.visualViewport?.addEventListener('scroll', placeAuthorHint);
   edgeToEdgeQuery.addEventListener?.('change', () => {
     syncComposerCollapse();
     // 转成竖屏时署名框会被收起规则藏掉，没名字就维持聚光并回到输入框
-    if (!state.author && (state.video || videoRoutePending())) syncAuthorSpotlight({ focus: true });
-    setTimeout(fitVideoWrap, 60);
+    if (!state.author) syncAuthorSpotlight({ focus: true });
+    setTimeout(() => {
+      fitVideoWrap();
+      placeAuthorHint();
+    }, 60);
   });
   mobileListQuery.addEventListener?.('change', syncMobileListFilter);
   syncMobileListFilter();
   window.addEventListener('hashchange', applyHash);
   syncComposerCollapse();
-  // 带片地址直接进来时，列表请求还没回来也先压暗，避免先亮一屏
-  if (!state.author && videoRoutePending()) syncAuthorSpotlight({ focus: true });
+  // 没署名就先压暗，首页和带片地址都一样，不必等列表回来
+  syncAuthorSpotlight({ focus: !state.author });
 
   requestAnimationFrame(tick);
   refreshVideos().finally(applyHash);
@@ -162,7 +170,7 @@ function boot() {
 
 function cacheDom() {
   const ids = [
-    'author-field', 'author-input', 'author-veil', 'presence', 'presence-count', 'library-open', 'upload-open', 'upload-open-empty',
+    'author-field', 'author-input', 'author-veil', 'author-hint', 'presence', 'presence-count', 'library-open', 'upload-open', 'upload-open-empty',
     'empty-state', 'frame', 'video-wrap', 'video', 'danmaku-layer', 'ann-layer', 'draw-layer', 'paused-badge',
     'draw-toolbar', 'range-in', 'range-out', 'range-summary', 'swatches', 'mark-in', 'mark-out',
     'preview-range', 'draw-undo', 'draw-clear', 'draw-cancel', 'draw-save',
@@ -223,31 +231,100 @@ function setAuthor(raw, source) {
   syncAuthorSpotlight();
 }
 
-/** 地址栏已经指向一支片，但数据还没回来。这时也先压暗，避免先闪一屏亮的。 */
-function videoRoutePending() {
-  return !state.video && /^#\/v\/[\w-]+/.test(location.hash);
-}
+/** 和 index.html 里弹簧箭头一致：尖端是开口 V 的顶点，尾端是线的起点 */
+const HINT_TIP = { x: 256, y: 114 };
+const HINT_TAIL = { x: 80, y: 205 };
+const HINT_SVG = { w: 400, h: 260 };
+/** 线本身占的宽高（不含画布留白），用来按屏幕空档缩放 */
+const HINT_REACH_X = HINT_TIP.x - HINT_TAIL.x;
+const HINT_REACH_Y = 225 - 110;
 
 /**
- * 没署名时：整页压暗，署名框留在暗层上面并聚焦。
- * 有非空名字（沿用 setAuthor 的 trim）立刻撤掉。竖屏会先展开输入区，
- * 否则署名框被收成「发弹幕」后 display:none，聚光灯照空。
+ * 没署名时：整页压暗，署名框留在暗层上面并聚焦。首页和看片都一样。
+ * 有非空名字（沿用 setAuthor 的 trim）立刻撤掉遮罩、箭头和文案。
+ * 竖屏看片会先展开输入区，否则署名框被收成「发弹幕」后 display:none。
  */
 function syncAuthorSpotlight({ focus = false } = {}) {
-  const on = !state.author && (!!state.video || videoRoutePending());
+  const on = !state.author;
   const was = document.body.classList.contains('author-spotlight');
   document.body.classList.toggle('author-spotlight', on);
   if (dom.authorVeil) dom.authorVeil.hidden = !on;
+  if (dom.authorHint) dom.authorHint.hidden = !on;
   if (!on) return;
 
   // 全屏只显示画面，署名框在顶栏外面，先退出才能看见
   if (state.video && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
   if (state.video && edgeToEdgeQuery.matches && !composerExpanded && !state.draw) expandComposer();
-  if (focus || !was) {
-    requestAnimationFrame(() => {
-      if (!state.author && (state.video || videoRoutePending())) focusAuthorInput();
-    });
+  requestAnimationFrame(() => {
+    if (state.author) return;
+    if (focus || !was) focusAuthorInput();
+    placeAuthorHint();
+  });
+}
+
+/** 箭头尖端对准署名框，文案放在尾端外侧；转屏和键盘弹出时重算，避免挤出屏幕 */
+function placeAuthorHint() {
+  const hint = dom.authorHint;
+  const arrow = hint?.querySelector('.author-hint-arrow');
+  const text = hint?.querySelector('.author-hint-text');
+  if (!hint || !arrow || !text || hint.hidden) return;
+  if (!document.body.classList.contains('author-spotlight')) return;
+
+  const field = dom.authorField.getBoundingClientRect();
+  if (field.width < 2 || field.height < 2) return;
+
+  const vv = window.visualViewport;
+  const vw = vv?.width || window.innerWidth;
+  const vh = vv?.height || window.innerHeight;
+  const ox = vv?.offsetLeft || 0;
+  const oy = vv?.offsetTop || 0;
+  const margin = 8;
+
+  const spaceBelow = vh - field.bottom - margin;
+  const spaceAbove = field.top - margin;
+  const pointUp = spaceBelow >= 88 || spaceBelow >= spaceAbove;
+  const tipX = Math.min(vw - margin, Math.max(margin, field.left + field.width / 2));
+  const tipY = pointUp
+    ? Math.min(vh - margin, field.bottom + 4)
+    : Math.max(margin, field.top - 4);
+
+  const along = Math.max(36, pointUp ? vh - tipY - margin : tipY - margin);
+  const spaceLeft = tipX - margin;
+  const spaceRight = vw - margin - tipX;
+  const extendLeft = spaceLeft >= spaceRight;
+  const across = Math.max(36, extendLeft ? spaceLeft : spaceRight);
+  // 给文案留一行高度，线条按空档缩小，避免手机上画出屏幕
+  const scale = Math.min(1, across / HINT_REACH_X, Math.max(48, along - 32) / HINT_REACH_Y);
+  const sx = extendLeft ? 1 : -1;
+  const sy = pointUp ? 1 : -1;
+
+  const left = tipX - sx * scale * HINT_TIP.x;
+  const top = tipY - sy * scale * HINT_TIP.y;
+  arrow.style.left = `${left + ox}px`;
+  arrow.style.top = `${top + oy}px`;
+  arrow.style.width = `${HINT_SVG.w * scale}px`;
+  arrow.style.height = `${HINT_SVG.h * scale}px`;
+  arrow.style.transformOrigin = '0 0';
+  arrow.style.transform = `scale(${sx}, ${sy})`;
+
+  const tailX = tipX + sx * scale * (HINT_TAIL.x - HINT_TIP.x);
+  const tailY = tipY + sy * scale * (HINT_TAIL.y - HINT_TIP.y);
+  const tw = text.offsetWidth;
+  const th = text.offsetHeight;
+  let textX = tailX - tw / 2;
+  let textY = pointUp ? tailY + 6 : tailY - th - 6;
+  textX = Math.max(margin, Math.min(textX, vw - margin - tw));
+  textY = Math.max(margin, Math.min(textY, vh - margin - th));
+  const textBox = { left: textX, right: textX + tw, top: textY, bottom: textY + th };
+  const hitsField = textBox.left < field.right && textBox.right > field.left
+    && textBox.top < field.bottom && textBox.bottom > field.top;
+  if (hitsField) {
+    const below = field.bottom + 8;
+    const above = field.top - th - 8;
+    textY = below + th <= vh - margin ? below : Math.max(margin, above);
   }
+  text.style.left = `${textX + ox}px`;
+  text.style.top = `${textY + oy}px`;
 }
 
 function focusAuthorInput() {
@@ -274,9 +351,9 @@ function initAuthorSpotlight() {
 
   // Esc 会主动 blur。名字还空着时把焦点拉回来，暗层不撤。
   dom.authorInput.addEventListener('blur', () => {
-    if (state.author || (!state.video && !videoRoutePending())) return;
+    if (state.author) return;
     requestAnimationFrame(() => {
-      if (!state.author && (state.video || videoRoutePending())) focusAuthorInput();
+      if (!state.author) focusAuthorInput();
     });
   });
 }
@@ -290,8 +367,8 @@ function requireName(message, preferUpload = false) {
 
 function focusAuthor(preferUpload = false) {
   dom.authorField.classList.add('need');
-  // 正在看片就只让顶栏署名框亮着，上传弹窗里的同名输入会被暗层挡住
-  if (!state.author && (state.video || videoRoutePending())) {
+  // 没署名时整页都压暗，只把顶栏署名框留出来（上传弹窗里的同名输入在暗层下面）
+  if (!state.author) {
     syncAuthorSpotlight({ focus: true });
     return;
   }

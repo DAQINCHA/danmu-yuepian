@@ -154,7 +154,7 @@ h1, h2, p { margin: 0; }
   50% { box-shadow: 0 0 0 3px rgba(255, 180, 84, 0.22); }
 }
 
-/* 看片但还没署名：整页压暗，只留署名框。顶栏单独抬高，再用 ::before
+/* 没署名（首页或看片）：整页压暗，只留署名框。顶栏单独抬高，再用 ::before
    把牌子和按钮一起压暗，署名框 z-index 压过这层。 */
 .author-veil {
   position: fixed;
@@ -205,6 +205,54 @@ body.author-spotlight .author-field input,
 body.author-spotlight .author-field.need input { background: rgba(0, 0, 0, 0.28); }
 
 body.author-spotlight .toast { z-index: 100; }
+
+/* 弹簧箭头 + 文案。位置由 JS 按署名框算，pointer-events 让点击落到输入框上 */
+.author-hint {
+  position: fixed;
+  z-index: 96;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.author-hint-arrow {
+  position: fixed;
+  overflow: visible;
+  pointer-events: none;
+  animation: author-hint-float 1.8s ease-in-out infinite;
+}
+
+.author-hint-shaft,
+.author-hint-head {
+  fill: none;
+  stroke: #22c1c3;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.author-hint-text {
+  position: fixed;
+  margin: 0;
+  color: #fff;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.72);
+  pointer-events: none;
+}
+
+@keyframes author-hint-float {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 5px; }
+}
 
 /* ── 按钮 ───────────────────────────────────────────────────────────── */
 
@@ -1388,6 +1436,7 @@ body.dragging::after {
   .workspace,
   .toast,
   .author-veil,
+  .author-hint,
   .modal:not(#report-modal),
   .pdf-preview { display: none !important; }
 

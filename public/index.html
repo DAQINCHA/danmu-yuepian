@@ -246,6 +246,14 @@
 
   <!-- 没署名时盖住整页；署名框在顶栏里单独抬到这层上面 -->
   <div id="author-veil" class="author-veil" hidden></div>
+  <!-- 弹簧绕圈，画布 400×260。线尾 (80,205)，箭头尖 (256,114)。换样式只改这两条 d -->
+  <div id="author-hint" class="author-hint" hidden>
+    <svg class="author-hint-arrow" viewBox="0 0 400 260" aria-hidden="true">
+      <path class="author-hint-shaft" fill="none" d="M80 205 C 110 205,120 170,140 180 C 165 195,140 225,125 205 C 110 180,170 150,190 160 C 215 172,190 200,178 182 C 165 160,220 130,248 118" />
+      <path class="author-hint-head" fill="none" d="M228 110 L 256 114 L 244 138" />
+    </svg>
+    <p class="author-hint-text">先写一个昵称吧</p>
+  </div>
 
   <div class="toast" id="toast" hidden></div>
 
