@@ -1163,6 +1163,8 @@ h1, h2, p { margin: 0; }
 }
 .report-gap:focus { border-color: var(--accent); }
 .report-gap:disabled { opacity: 0.45; cursor: default; }
+/* 不截帧时合并间隔不起作用，标签跟着变淡 */
+.report-opt:has(.report-gap:disabled) { color: var(--text-faint); cursor: default; }
 
 /* 报告：按画面分组 */
 .report-group { margin-bottom: 14px; }
