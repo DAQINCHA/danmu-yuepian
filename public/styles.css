@@ -465,7 +465,9 @@ body.author-spotlight .toast { z-index: 100; }
   font-weight: 700;
 }
 .version-meta { margin-top: 3px; color: var(--text-dim); font-size: 12px; }
-.version-move { flex: none; display: flex; gap: 6px; align-items: center; }
+.version-move { flex: none; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; }
+.version-row.renaming { border-color: #1f7f86; }
+.version-row .rename-form { margin: 0 0 4px; }
 .version-move select {
   height: 30px;
   max-width: 160px;

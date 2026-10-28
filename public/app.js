@@ -2487,6 +2487,11 @@ function renderVersionList() {
     .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id))
     .map((video) => versionRow(video, versions.get(video.id)));
   dom.versionList.replaceChildren(...rows);
+  const input = dom.versionList.querySelector('.rename-input');
+  if (input) {
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
 }
 
 function versionRow(video, version) {
@@ -2516,8 +2521,11 @@ function versionRow(video, version) {
     video.uploader ? `上传 ${video.uploader}` : '',
     relativeTime(video.createdAt),
   ].filter(Boolean).join(' · ');
-  main.append(title, meta);
-  main.addEventListener('click', () => { location.hash = `#/v/${video.id}`; });
+  if (state.renameId === video.id) main.append(buildRenameForm(video), meta);
+  else {
+    main.append(title, meta);
+    main.addEventListener('click', () => { location.hash = `#/v/${video.id}`; });
+  }
 
   const move = document.createElement('div');
   move.className = 'version-move';
@@ -2552,8 +2560,44 @@ function versionRow(video, version) {
       select.value = '';
     }
   });
+
+  const rename = document.createElement('button');
+  rename.className = 'btn tiny ghost';
+  rename.type = 'button';
+  rename.textContent = '改名';
+  rename.title = '只改显示名称，链接和文件不变';
+  rename.addEventListener('click', (event) => {
+    event.stopPropagation();
+    state.renameId = video.id;
+    state.renameDraft = video.title;
+    renderLibraryView();
+  });
+
+  const del = document.createElement('button');
+  del.className = 'btn tiny ghost';
+  del.type = 'button';
+  del.textContent = '删除';
+  del.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    if (!window.confirm(`删除《${video.title}》及其全部弹幕和标注？文件会被移除。`)) return;
+    try {
+      if (state.renameId === video.id) {
+        state.renameId = null;
+        state.renameDraft = '';
+      }
+      await api.deleteVideo(video.id);
+      await refreshVideos();
+      if (state.video?.id === video.id) location.hash = '#/';
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
   move.append(select);
+  if (state.renameId !== video.id) move.append(rename);
+  move.append(del);
   row.append(cover, main, move);
+  if (state.renameId === video.id) row.classList.add('renaming');
   return row;
 }
 
@@ -2692,6 +2736,7 @@ function closeRename() {
   state.renameId = null;
   state.renameDraft = '';
   renderLibrary();
+  if (!state.video) renderLibraryView();
 }
 
 function buildRenameForm(video) {
