@@ -41,7 +41,10 @@ export function relativeTime(timestamp) {
   return new Date(Number(timestamp)).toLocaleDateString('zh-CN');
 }
 
-export const PALETTE = ['#8ab4ff', '#ffd166', '#7ee787', '#ff9ecb', '#c3a6ff', '#6ee7d7', '#ffa46b'];
+export const PALETTE = [
+  '#8ab4ff', '#ffd166', '#7ee787', '#ff9ecb', '#c3a6ff', '#6ee7d7', '#ffa46b', '#f28b82',
+  '#b5e48c', '#ffc6ff', '#90dbf4', '#fde68a', '#a0c4ff', '#ffb3a7', '#caffbf', '#d0a2f7',
+];
 
 export function authorColor(name) {
   let hash = 0;
