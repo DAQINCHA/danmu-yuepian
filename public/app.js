@@ -294,7 +294,7 @@ function placeAuthorHint() {
   const extendLeft = spaceLeft >= spaceRight;
   const across = Math.max(36, extendLeft ? spaceLeft : spaceRight);
   // 给文案留一行高度，线条按空档缩小，再收到约 85%，避免手机上画出屏幕
-  const scale = Math.min(1, across / HINT_REACH_X, Math.max(48, along - 32) / HINT_REACH_Y) * 0.85;
+  const scale = Math.min(1, across / HINT_REACH_X, Math.max(48, along - 46) / HINT_REACH_Y) * 0.85;
   const sx = extendLeft ? 1 : -1;
   const sy = pointUp ? 1 : -1;
 
@@ -308,11 +308,15 @@ function placeAuthorHint() {
   arrow.style.transform = `scale(${sx}, ${sy})`;
 
   const tailX = tipX + sx * scale * (HINT_TAIL.x - HINT_TIP.x);
-  const tailY = tipY + sy * scale * (HINT_TAIL.y - HINT_TIP.y);
   const tw = text.offsetWidth;
   const th = text.offsetHeight;
+  // 线圈最低落到画布 y=225，比线的起点更靠外。文字从这圈外缘再隔开约 14px
+  const coilY = (y) => tipY + sy * scale * (y - HINT_TIP.y);
+  const inkTop = Math.min(coilY(110), coilY(225)) - 2;
+  const inkBottom = Math.max(coilY(110), coilY(225)) + 2;
+  const tailGap = 14;
   let textX = tailX - tw / 2;
-  let textY = pointUp ? tailY + 6 : tailY - th - 6;
+  let textY = pointUp ? inkBottom + tailGap : inkTop - tailGap - th;
   textX = Math.max(margin, Math.min(textX, vw - margin - tw));
   textY = Math.max(margin, Math.min(textY, vh - margin - th));
   const textBox = { left: textX, right: textX + tw, top: textY, bottom: textY + th };
