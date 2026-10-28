@@ -188,7 +188,7 @@ function cacheDom() {
     'report-open',
     'library-modal', 'library-grid', 'library-page', 'library-crumb', 'project-grid', 'version-list',
     'project-rename', 'project-delete', 'empty-card',
-    'upload-modal', 'dropzone', 'file-input', 'title-input', 'upload-project', 'upload-project-select', 'upload-new-project',
+    'upload-modal', 'dropzone', 'file-input', 'title-label', 'title-input', 'upload-project', 'upload-project-select', 'upload-new-project',
     'upload-author', 'upload-pending', 'pending-name', 'pending-size', 'upload-start',
     'upload-progress', 'bar-fill', 'upload-status', 'toast',
   ];
@@ -2178,10 +2178,14 @@ function initModals() {
   dom.projectDelete.addEventListener('click', deleteCurrentProject);
   dom.uploadOpen.addEventListener('click', openUpload);
   dom.uploadOpenEmpty.addEventListener('click', openUpload);
-  dom.uploadNewProject.addEventListener('input', updateUploadButton);
+  dom.uploadNewProject.addEventListener('input', () => {
+    updateUploadButton();
+    syncUploadTitleCopy();
+  });
   dom.uploadProjectSelect.addEventListener('change', () => {
     if (dom.uploadProjectSelect.value) dom.uploadNewProject.value = '';
     updateUploadButton();
+    syncUploadTitleCopy();
   });
 
   for (const button of document.querySelectorAll('[data-close-modal]')) {
@@ -2229,6 +2233,7 @@ function openUpload() {
   dom.uploadNewProject.value = '';
   fillUploadProjectSelect();
   syncUploadProjectFields();
+  syncUploadTitleCopy();
   updateUploadButton();
   openModal(dom.uploadModal);
   if (!state.author) setTimeout(() => dom.uploadAuthor.focus(), 60);
@@ -2344,6 +2349,14 @@ function uploadPayload() {
 function syncUploadProjectFields() {
   const ask = uploadContext().mode === 'ask';
   dom.uploadProject.hidden = !ask;
+}
+
+/** 放进某个项目时，标题框引导填写这一版改了什么；未分类仍用中性的「片名」。空标题仍由服务端用文件名兜底。 */
+function syncUploadTitleCopy() {
+  const target = uploadPayload();
+  const intoProject = Boolean(target.projectId || target.newProjectName);
+  dom.titleLabel.textContent = intoProject ? '这版改了什么' : '片名';
+  dom.titleInput.placeholder = intoProject ? '例如：换了片尾音乐、调色更暖' : '片名';
 }
 
 function fillUploadProjectSelect() {
@@ -2628,10 +2641,26 @@ function addProjectCard() {
   const card = document.createElement('button');
   card.type = 'button';
   card.className = 'project-card project-add';
-  card.textContent = '➕';
   card.setAttribute('aria-label', '新建项目');
+  card.append(projectAddMark());
   card.addEventListener('click', createProjectPrompt);
   return card;
+}
+
+function projectAddMark() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'project-add-mark');
+  svg.setAttribute('viewBox', '0 0 64 64');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const bar = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  bar.setAttribute('d', 'M32 14V50M14 32H50');
+  bar.setAttribute('fill', 'none');
+  bar.setAttribute('stroke', 'currentColor');
+  bar.setAttribute('stroke-width', '5');
+  bar.setAttribute('stroke-linecap', 'round');
+  svg.append(bar);
+  return svg;
 }
 
 function projectCard(project) {
@@ -2692,12 +2721,16 @@ function versionRow(video, version) {
   main.className = 'version-main';
   const title = document.createElement('div');
   title.className = 'version-title';
-  const badge = document.createElement('span');
-  badge.className = 'ver-badge';
-  badge.textContent = `v${version}`;
+  // 未分类页不标 v1、v2；项目里按上传顺序显示版本
+  if (state.libraryProjectId) {
+    const badge = document.createElement('span');
+    badge.className = 'ver-badge';
+    badge.textContent = `v${version}`;
+    title.append(badge);
+  }
   const name = document.createElement('span');
   name.textContent = video.title;
-  title.append(badge, name);
+  title.append(name);
   const meta = document.createElement('div');
   meta.className = 'version-meta';
   meta.textContent = [

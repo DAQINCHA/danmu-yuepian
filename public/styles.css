@@ -432,9 +432,11 @@ body.author-spotlight .toast { z-index: 100; }
   border: 1.5px dashed #22c1c3;
   background: rgba(34, 193, 195, 0.1);
   color: #22c1c3;
-  font-size: 56px;
-  font-weight: 500;
-  line-height: 1;
+}
+.project-add-mark {
+  display: block;
+  width: 80px;
+  height: 80px;
 }
 .project-add:hover {
   background: rgba(34, 193, 195, 0.18);
