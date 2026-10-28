@@ -346,6 +346,9 @@ h1, h2, p { margin: 0; }
 /* 带回复的弹幕是多行气泡，药丸形圆角会把角上的字切掉 */
 .dm.has-replies { border-radius: 18px; padding-bottom: 8px; }
 
+/* 画笔标注的回复气泡：正文是「（画笔）」占位，弱化一点 */
+.dm.is-annotation .dm-text { color: rgba(255, 255, 255, 0.72); font-size: 22px; }
+
 .dm-line,
 .dm-reply {
   display: flex;
@@ -546,7 +549,48 @@ h1, h2, p { margin: 0; }
 }
 .mark.comment { top: 2px; height: 7px; background: #ffd166; opacity: 0.75; }
 .mark.annotation { top: 12px; height: 7px; background: #ff6b5e; opacity: 0.85; }
-.mark.annotation.span { min-width: 4px; border-radius: 2px; background: rgba(255, 107, 94, 0.5); transform: none; }
+.mark.annotation.span { min-width: 4px; border-radius: 2px; background: rgba(255, 107, 94, 0.5); transform: none; pointer-events: auto; cursor: pointer; }
+.mark.annotation.span:hover { z-index: 2; background: rgba(255, 107, 94, 0.8); }
+.mark.annotation.span.selected { z-index: 3; background: rgba(255, 107, 94, 0.95); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85); }
+
+/* 选中标注两端的入点/出点手把；热区比看得见的竖条宽，方便手指拖 */
+.ann-handle {
+  position: absolute;
+  top: -7px;
+  bottom: -7px;
+  width: 16px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.ann-handle.start { left: -8px; }
+.ann-handle.end { right: -8px; }
+.ann-handle::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  bottom: 2px;
+  width: 4px;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #ff6b5e;
+}
+.ann-handle:hover::after,
+.mark.dragging .ann-handle::after { background: #ffd2cd; }
+
+.ann-tip {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  z-index: 5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
 
 .timeline-head {
   position: absolute;

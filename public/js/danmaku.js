@@ -4,6 +4,12 @@ const SIDE = 12;
 const LANE_GAP = 6; // 车道之间的竖向留白
 const MAX_REPLY_LINES = 3; // 弹幕上最多带几条回复，再多就显示「还有 N 条」
 
+/** 气泡第一行的署名：画笔标注的气泡前面加个 ✎，一眼和普通弹幕区分开 */
+function headName(item) {
+  const author = item.author || '匿名';
+  return item.kind === 'annotation' ? `✎ ${author}` : author;
+}
+
 function replyRows(comment, classes, colorOf) {
   const replies = Array.isArray(comment.replies) ? comment.replies : [];
   const shown = replies.slice(-MAX_REPLY_LINES);
@@ -80,7 +86,7 @@ export function createDanmaku(layer, options = {}) {
 
     const name = document.createElement('span');
     name.className = 'dm-name';
-    name.textContent = comment.author || '匿名';
+    name.textContent = headName(comment);
 
     const text = document.createElement('span');
     text.className = 'dm-text';
@@ -89,6 +95,7 @@ export function createDanmaku(layer, options = {}) {
     line.append(name, text);
     const rows = replyRows(comment, { row: 'dm-reply', name: 'dm-reply-name', text: 'dm-reply-text' }, colorOf);
     if (rows.length) node.classList.add('has-replies');
+    if (comment.kind === 'annotation') node.classList.add('is-annotation');
     node.append(line, ...rows);
     return node;
   }
@@ -155,6 +162,11 @@ export function createDanmaku(layer, options = {}) {
     node.addEventListener('animationend', () => retire(node));
   }
 
+  /** 收掉某一条在场的气泡（回复变了要重画时用） */
+  function drop(id) {
+    for (const [node, info] of [...live]) if (info.id === id) retire(node);
+  }
+
   function liveIds() {
     const ids = new Set();
     for (const info of live.values()) ids.add(info.id);
@@ -176,7 +188,7 @@ export function createDanmaku(layer, options = {}) {
       card.style.setProperty('--dm-color', colorOf(comment));
       const name = document.createElement('span');
       name.className = 'name';
-      name.textContent = comment.author || '匿名';
+      name.textContent = headName(comment);
       const text = document.createElement('span');
       text.className = 'text';
       text.textContent = comment.text;
@@ -254,6 +266,7 @@ export function createDanmaku(layer, options = {}) {
   return {
     pop,
     isLive,
+    drop,
     showFocus,
     clear,
     clearLive,

@@ -13,6 +13,9 @@ const STORE = {
   danmaku: 'danmu:danmaku',
 };
 
+// 和服务端 config.maxAnnotationSpan 保持一致
+const MAX_ANN_SPAN = 12;
+
 const state = {
   author: (localStorage.getItem(STORE.author) || '').trim(),
   fps: 25,
@@ -31,6 +34,13 @@ const state = {
   lastTick: -1,
   // 开始输入弹幕那一刻的视频时间；发送时用它，而不是敲完回车时已经播过去的时间
   composeTime: null,
+  // 这一段连续播放里已经弹过气泡的画笔标注，免得在区间内反复弹
+  annShown: new Set(),
+  // 时间轴上选中的画笔标注（只有它显示入点/出点手把，标注叠在一起时也不会抢）
+  annSelected: null,
+  // 正在拖手把：{ id, which }；拖动期间别的地方触发的 renderMarks 先攒着
+  annDrag: null,
+  marksPending: false,
   // 侧栏里正在回复哪一条（'comment:<id>' 或 'annotation:<id>'，全局只开一个）；
   // 列表会因为别人发弹幕整体重画，草稿和焦点要能接上
   replyOpen: null,
@@ -92,6 +102,7 @@ function boot() {
   dom.video.addEventListener('seeked', () => {
     // 输入中途拖了进度/逐帧，说明在找更准的那一帧，以新位置为准
     if (state.composeTime !== null) lockComposeTime(dom.video.currentTime || 0);
+    state.annShown.clear();
     if (!dom.video.paused) return;
     // 暂停时换了位置，之前定住的弹幕已经不属于这一帧了
     danmaku.clearLive();
@@ -522,12 +533,26 @@ function tick() {
   if (state.video) {
     const t = dom.video.currentTime || 0;
     if (!dom.video.paused && !dom.video.seeking) {
-      if (t < state.lastTime - 0.05) state.lastTime = t;
+      if (t < state.lastTime - 0.05) {
+        state.lastTime = t;
+        state.annShown.clear();
+      }
       if (t > state.lastTime) {
         // 从片头起播时把第 0 帧的弹幕（含整体意见）也算进来
         const from = state.lastTime <= 0 ? -1 : state.lastTime;
         for (const comment of state.comments) {
           if (comment.time > from && comment.time <= t) danmaku.pop(comment);
+        }
+        // 画笔标注有回复的，播到它的区间也弹一个气泡（从区间中间开始播也算）
+        for (const annotation of state.annotations) {
+          if (state.annShown.has(annotation.id)) continue;
+          const reached = annotation.start > from && annotation.start <= t;
+          const inside = annotation.start <= t && t <= annotation.end;
+          if (!reached && !inside) continue;
+          const bubble = annotationBubble(annotation);
+          if (!bubble) continue;
+          state.annShown.add(annotation.id);
+          danmaku.pop(bubble);
         }
         state.lastTime = t;
       }
@@ -553,7 +578,51 @@ function updateFocus() {
   }
   const now = dom.video.currentTime || 0;
   const near = state.comments.filter((c) => Math.abs(c.time - now) <= 1.2);
+  // 停在画笔区间里（或刚过起点附近）时，带回复的标注也列出来
+  for (const annotation of state.annotations) {
+    if (!annotationInRange(annotation, now)) continue;
+    const bubble = annotationBubble(annotation);
+    if (bubble) near.push(bubble);
+  }
+  near.sort((a, b) => a.time - b.time);
   danmaku.showFocus(near);
+}
+
+/**
+ * 画笔标注在画面上的气泡：「✎ 作者（画笔）」+ 下面挂回复。
+ * 只有有回复（或将来有备注文字）时才弹，光有笔迹的标注不占弹幕位。
+ */
+function annotationBubble(annotation) {
+  const replies = Array.isArray(annotation.replies) ? annotation.replies : [];
+  const note = typeof annotation.note === 'string' ? annotation.note.trim() : '';
+  if (!replies.length && !note) return null;
+  return {
+    id: annotation.id,
+    kind: 'annotation',
+    time: annotation.start,
+    author: annotation.author,
+    text: note || '（画笔）',
+    replies,
+    color: authorColor(annotation.author),
+  };
+}
+
+function annotationInRange(annotation, t) {
+  return t >= annotation.start - 0.05 && t <= Math.max(annotation.end, annotation.start + 1.2);
+}
+
+/** 回复变了：在场的气泡就地换成新内容；自己刚回复、播放头又在区间里的标注直接弹出来 */
+function refreshBubble(kind, item, { fromSelf = false } = {}) {
+  if (!state.video) return;
+  const bubble = kind === 'comment' ? item : annotationBubble(item);
+  const live = danmaku.isLive(item.id);
+  if (live) danmaku.drop(item.id);
+  if (!bubble) return;
+  const inRange = kind === 'annotation' && annotationInRange(item, dom.video.currentTime || 0);
+  if (live || (fromSelf && inRange)) {
+    if (kind === 'annotation') state.annShown.add(item.id);
+    showNow(bubble);
+  }
 }
 
 /* ── 截取当前帧 ───────────────────────────────────────────────────── */
@@ -616,8 +685,14 @@ async function captureCurrentFrame() {
 /* ── 时间轴标记 ───────────────────────────────────────────────────── */
 
 function renderMarks() {
+  if (state.annDrag) {
+    state.marksPending = true;
+    return;
+  }
+  state.marksPending = false;
   const total = duration() || 1;
   const nodes = [];
+  let selectedMark = null;
 
   for (const comment of state.comments) {
     const mark = document.createElement('div');
@@ -633,10 +708,142 @@ function renderMarks() {
     mark.className = 'mark annotation span';
     mark.style.left = `${left}%`;
     mark.style.width = `${Math.max(0.4, widthPercent)}%`;
+    mark.title = `${annotation.author || '匿名'} 的画笔 · 点一下选中后可拖两端改入点/出点`;
+    mark.addEventListener('pointerdown', (event) => {
+      if (!state.video || state.draw || event.button > 0) return;
+      // 别让时间轴把这一下当成拖进度
+      event.stopPropagation();
+      event.preventDefault();
+      selectAnnotation(annotation.id);
+      jumpTo(annotation.start);
+    });
+    if (annotation.id === state.annSelected && !state.draw) {
+      mark.classList.add('selected');
+      mark.append(annHandle(annotation, 'start'), annHandle(annotation, 'end'));
+      selectedMark = mark;
+      continue;
+    }
     nodes.push(mark);
   }
+  // 选中的放最后，叠在别的标注上面
+  if (selectedMark) nodes.push(selectedMark);
 
   dom.timelineMarks.replaceChildren(...nodes);
+}
+
+function selectAnnotation(id) {
+  if (state.annSelected === id) return;
+  state.annSelected = id;
+  renderMarks();
+}
+
+function annHandle(annotation, which) {
+  const handle = document.createElement('div');
+  handle.className = `ann-handle ${which}`;
+  handle.title = which === 'start' ? '拖动修改入点' : '拖动修改出点';
+  handle.addEventListener('pointerdown', (event) => startAnnDrag(event, annotation, which, handle));
+  return handle;
+}
+
+/** 拖画笔标注的入点/出点：按帧吸附、实时预览，松手再存 */
+function startAnnDrag(event, annotation, which, handle) {
+  if (!state.video || state.draw || state.annDrag || event.button > 0) return;
+  event.stopPropagation();
+  event.preventDefault();
+  const total = duration();
+  if (!total) return;
+
+  const fps = state.fps || 25;
+  const frame = 1 / fps;
+  const maxSpan = MAX_ANN_SPAN;
+  const orig = { start: annotation.start, end: annotation.end };
+  const mark = handle.parentElement;
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const snap = (t) => Math.round(t * fps) / fps;
+
+  dom.video.pause();
+  state.annDrag = { id: annotation.id, which };
+  handle.setPointerCapture(event.pointerId);
+  mark.classList.add('dragging');
+
+  const tip = document.createElement('div');
+  tip.className = 'ann-tip mono';
+  dom.timeline.append(tip);
+
+  let sidebarQueued = false;
+  const paint = () => {
+    const left = (annotation.start / total) * 100;
+    mark.style.left = `${Math.min(100, left)}%`;
+    mark.style.width = `${Math.max(0.4, Math.min(100 - left, ((annotation.end - annotation.start) / total) * 100))}%`;
+    const at = which === 'start' ? annotation.start : annotation.end;
+    const frames = Math.max(1, Math.round((annotation.end - annotation.start) * fps));
+    tip.textContent = `${which === 'start' ? '入点' : '出点'} ${timecode(at)} · 共 ${frames} 帧`;
+    tip.style.left = `${Math.min(100, (at / total) * 100)}%`;
+    if (!sidebarQueued) {
+      sidebarQueued = true;
+      requestAnimationFrame(() => {
+        sidebarQueued = false;
+        renderSidebar();
+      });
+    }
+  };
+
+  const move = (ev) => {
+    const rect = dom.timeline.getBoundingClientRect();
+    const raw = clamp((ev.clientX - rect.left) / rect.width, 0, 1) * total;
+    if (which === 'start') {
+      const lo = Math.max(0, annotation.end - maxSpan);
+      annotation.start = clamp(snap(raw), lo, annotation.end - frame);
+    } else {
+      const hi = Math.min(total, annotation.start + maxSpan);
+      annotation.end = clamp(snap(raw), annotation.start + frame, hi);
+    }
+    paint();
+    // 画面跟着停到拖到的那一帧：入点看第一帧，出点看最后一帧（end 本身不含）
+    const preview = which === 'start' ? annotation.start : Math.max(annotation.start, annotation.end - frame);
+    seekTo(preview + 0.001);
+  };
+
+  const finish = async (ev, cancelled) => {
+    handle.removeEventListener('pointermove', move);
+    handle.removeEventListener('pointerup', onUp);
+    handle.removeEventListener('pointercancel', onCancel);
+    if (handle.hasPointerCapture?.(ev.pointerId)) handle.releasePointerCapture(ev.pointerId);
+    tip.remove();
+    state.annDrag = null;
+
+    const changed = Math.abs(annotation.start - orig.start) > 1e-6 || Math.abs(annotation.end - orig.end) > 1e-6;
+    if (cancelled || !changed) {
+      Object.assign(annotation, orig);
+      afterRangeChange();
+      return;
+    }
+    afterRangeChange();
+    try {
+      const result = await api.setAnnotationRange(annotation.id, annotation.start, annotation.end);
+      applyItemUpdate('annotation', result.annotation);
+    } catch (err) {
+      Object.assign(annotation, orig);
+      afterRangeChange();
+      toast(err.message, true);
+    }
+  };
+  const onUp = (ev) => finish(ev, false);
+  const onCancel = (ev) => finish(ev, true);
+
+  handle.addEventListener('pointermove', move);
+  handle.addEventListener('pointerup', onUp);
+  handle.addEventListener('pointercancel', onCancel);
+  paint();
+}
+
+/** 标注区间改了之后：重新排序，时间轴、侧栏、报告一起刷新 */
+function afterRangeChange() {
+  state.annotations.sort((a, b) => a.start - b.start || a.createdAt - b.createdAt);
+  renderMarks();
+  renderSidebar();
+  reportView.refresh();
+  if (dom.video.paused) updateFocus();
 }
 
 /* ── 侧栏 ─────────────────────────────────────────────────────────── */
@@ -849,7 +1056,7 @@ function buildReplyForm(kind, target) {
       state.replyOpen = null;
       state.replyDraft = '';
       state.replyFocus = false;
-      applyItemUpdate(kind, result[kind]);
+      applyItemUpdate(kind, result[kind], { fromSelf: true });
     } catch (err) {
       input.disabled = false;
       send.disabled = false;
@@ -916,15 +1123,34 @@ async function removeReply(kind, target, reply) {
 }
 
 /** 服务端推来的整条弹幕 / 画笔标注（勾选已改 / 增删回复）合进本地 */
-function applyItemUpdate(kind, data) {
+function applyItemUpdate(kind, data, { fromSelf = false } = {}) {
   const list = kind === 'comment' ? state.comments : state.annotations;
   const item = list.find((x) => x.id === data?.id);
   if (!item) return;
   if (typeof data.done === 'boolean') item.done = data.done;
-  if (Array.isArray(data.replies)) item.replies = data.replies;
+  // 入点/出点被改了（自己松手保存，或同事拖的）；自己正拖着这条时不让推送打断
+  let rangeChanged = false;
+  if (kind === 'annotation' && typeof data.start === 'number' && typeof data.end === 'number'
+    && state.annDrag?.id !== item.id && (item.start !== data.start || item.end !== data.end)) {
+    item.start = data.start;
+    item.end = data.end;
+    rangeChanged = true;
+  }
+  let repliesChanged = false;
+  if (Array.isArray(data.replies)) {
+    const key = (arr) => (arr || []).map((r) => r.id).join(',');
+    repliesChanged = key(item.replies) !== key(data.replies);
+    item.replies = data.replies;
+  }
+  if (rangeChanged) {
+    state.annotations.sort((a, b) => a.start - b.start || a.createdAt - b.createdAt);
+    renderMarks();
+  }
   renderSidebar();
   reportView.refresh();
-  if (kind === 'comment' && dom.video.paused) updateFocus();
+  // 自己的请求和 SSE 会各来一次，回复没变就不重弹
+  if (repliesChanged) refreshBubble(kind, item, { fromSelf });
+  if (dom.video.paused) updateFocus();
 }
 
 function doneFlag() {
@@ -986,7 +1212,10 @@ function buildAnnotationItem(annotation) {
 
   body.append(head, sub, ...buildReplyParts('annotation', annotation));
   item.append(thumb, body);
-  item.addEventListener('click', () => jumpTo(annotation.start));
+  item.addEventListener('click', () => {
+    selectAnnotation(annotation.id);
+    jumpTo(annotation.start);
+  });
   return item;
 }
 
@@ -1244,12 +1473,14 @@ function enterDrawMode() {
   refreshDrawButtons();
   seekTo(state.draw.start);
   updateRangeUI();
+  renderMarks(); // 画画时收起标注手把
   danmaku.showFocus([]);
   toast('框好帧区间，直接在画面上圈');
 }
 
 function exitDrawMode() {
   state.draw = null;
+  renderMarks();
   dom.drawToolbar.hidden = true;
   dom.drawToggle.classList.remove('active');
   dom.videoWrap.classList.remove('drawing');

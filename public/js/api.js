@@ -27,6 +27,7 @@ export const api = {
   ),
   addAnnotation: (id, annotation) => request('POST', `/api/videos/${id}/annotations`, annotation),
   setAnnotationDone: (id, done) => request('PATCH', `/api/annotations/${id}`, { done }),
+  setAnnotationRange: (id, start, end) => request('PATCH', `/api/annotations/${id}`, { start, end }),
   deleteAnnotation: (id) => request('DELETE', `/api/annotations/${id}`),
 };
 
