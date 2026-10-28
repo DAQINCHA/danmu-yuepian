@@ -8,8 +8,8 @@
   --text: #e8ebf2;
   --text-dim: #98a1b3;
   --text-faint: #6b7488;
-  --accent: #5b8cff;
-  --accent-soft: rgba(91, 140, 255, 0.14);
+  --accent: #22c1c3;
+  --accent-soft: rgba(34, 193, 195, 0.14);
   --warn: #ff6b5e;
   --ok: #4ec9a0;
   --radius: 10px;
@@ -71,7 +71,7 @@ h1, h2, p { margin: 0; }
   width: 30px;
   height: 30px;
   border-radius: 9px;
-  background: linear-gradient(150deg, #5b8cff, #8a5bff);
+  background: linear-gradient(150deg, #22c1c3, #0e7490);
   color: #fff;
   font-size: 15px;
   font-weight: 700;
@@ -175,13 +175,13 @@ h1, h2, p { margin: 0; }
 
 .btn:hover { background: var(--panel-2); border-color: #333c4b; }
 .btn:active { transform: translateY(0.5px); }
-.btn.primary { background: var(--accent); border-color: transparent; color: #fff; font-weight: 600; }
-.btn.primary:hover { background: #6f9aff; }
+.btn.primary { background: var(--accent); border-color: transparent; color: #04262b; font-weight: 600; }
+.btn.primary:hover { background: #45d0d2; }
 .btn.ghost { background: transparent; }
 .btn.ghost:hover { background: var(--panel); }
 .btn.tiny { height: 26px; padding: 0 9px; font-size: 12px; }
 .btn.lg { height: 38px; padding: 0 20px; font-size: 14px; }
-.btn.active { background: var(--accent-soft); border-color: #3a5c9e; color: #a9c3ff; }
+.btn.active { background: var(--accent-soft); border-color: #1f7f86; color: #8fe6e7; }
 .btn[disabled] { opacity: 0.45; pointer-events: none; }
 
 .icon-btn {
@@ -341,7 +341,7 @@ h1, h2, p { margin: 0; }
 /* 暂停时原地定住，继续播放再接着淡出 */
 .danmaku-layer.paused .dm { animation-play-state: paused; }
 
-.dm.is-mine { background: rgba(91, 140, 255, 0.34); }
+.dm.is-mine { background: rgba(34, 193, 195, 0.34); }
 
 /* 带回复的弹幕是多行气泡，药丸形圆角会把角上的字切掉 */
 .dm.has-replies { border-radius: 18px; padding-bottom: 8px; }
@@ -465,8 +465,8 @@ h1, h2, p { margin: 0; }
 }
 
 .draw-toolbar {
-  background: linear-gradient(180deg, rgba(91, 140, 255, 0.1), transparent), var(--bg-soft);
-  border-top-color: #2b3a55;
+  background: linear-gradient(180deg, rgba(34, 193, 195, 0.1), transparent), var(--bg-soft);
+  border-top-color: #1f4a52;
 }
 
 .range-field { display: flex; align-items: center; gap: 6px; }
@@ -536,7 +536,7 @@ h1, h2, p { margin: 0; }
   inset: 0 auto 0 0;
   width: 0;
   border-radius: 999px;
-  background: linear-gradient(90deg, #4f7de8, #6f9aff);
+  background: linear-gradient(90deg, #0e9aa7, #45d0d2);
 }
 
 .timeline-marks { position: absolute; inset: -7px 0; pointer-events: none; }
@@ -749,7 +749,7 @@ h1, h2, p { margin: 0; }
   cursor: pointer;
 }
 .tab:hover { background: var(--panel); }
-.tab.active { background: var(--accent-soft); color: #a9c3ff; border-color: #2f4772; }
+.tab.active { background: var(--accent-soft); color: #8fe6e7; border-color: #1d5a62; }
 
 .count {
   min-width: 16px;
@@ -792,7 +792,7 @@ h1, h2, p { margin: 0; }
   transition: border-color 0.12s, background 0.12s;
 }
 .item:hover { border-color: #313a49; background: var(--panel-2); }
-.item.current { border-color: #3a5c9e; background: rgba(91, 140, 255, 0.1); }
+.item.current { border-color: #1f7f86; background: rgba(34, 193, 195, 0.1); }
 
 .item-head {
   display: flex;
@@ -1127,7 +1127,7 @@ h1, h2, p { margin: 0; }
   cursor: pointer;
 }
 .item-reply-btn:hover,
-.item-reply-btn.active { background: var(--accent-soft); color: #a9c3ff; }
+.item-reply-btn.active { background: var(--accent-soft); color: #8fe6e7; }
 
 .item-replies {
   display: flex;
@@ -1229,7 +1229,7 @@ body.dragging::after {
   border: 2px dashed var(--accent);
   border-radius: 14px;
   background: rgba(11, 13, 17, 0.72);
-  color: #a9c3ff;
+  color: #8fe6e7;
   font-size: 15px;
   letter-spacing: 0.02em;
   pointer-events: none;

@@ -2,25 +2,17 @@
   <title id="title">弹幕阅片</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#5b8cff"/>
-      <stop offset="1" stop-color="#8a5bff"/>
+      <stop offset="0" stop-color="#22c1c3"/>
+      <stop offset="1" stop-color="#0e7490"/>
     </linearGradient>
   </defs>
   <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- 叠放的弹幕 + 画笔圈 -->
   <g id="art">
-    <!-- 画面 -->
-    <rect x="76" y="112" width="360" height="270" rx="36" fill="#0b0d11"/>
-    <!-- 自上而下堆叠的弹幕 -->
-    <rect x="104" y="140" width="176" height="26" rx="13" fill="#ffffff"/>
-    <rect x="104" y="178" width="124" height="26" rx="13" fill="#ffd166"/>
-    <rect x="104" y="216" width="88" height="26" rx="13" fill="#8fb0ff"/>
-    <!-- 播放键 -->
-    <path d="M252 252 316 290 252 328Z" fill="#ffffff" stroke="#ffffff" stroke-width="10" stroke-linejoin="round"/>
-    <!-- 画笔圈 -->
-    <path d="M356 252c22 30 4 78-62 94-62 15-120-2-128-38-7-31 24-62 76-76 48-13 98-8 118 14" fill="none" stroke="#ff6b5e" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
-    <!-- 时间轴：进度 + 弹幕点 + 画笔区间 -->
-    <rect x="76" y="412" width="360" height="12" rx="6" fill="#ffffff" opacity=".35"/>
-    <rect x="76" y="412" width="168" height="12" rx="6" fill="#ffffff"/>
-    <rect x="300" y="408" width="64" height="20" rx="6" fill="#ff6b5e"/>
+    <rect x="88" y="116" width="280" height="50" rx="25" fill="#ffffff"/>
+    <rect x="128" y="204" width="200" height="50" rx="25" fill="#ffd166"/>
+    <rect x="88" y="292" width="320" height="50" rx="25" fill="#a5d8ff"/>
+    <rect x="88" y="380" width="150" height="40" rx="20" fill="#ffffff" opacity=".55"/>
+    <path d="M300 196c70 2 126 14 126 34 0 24-78 40-176 40S78 252 82 226c4-22 74-38 166-38 60 0 108 8 136 20" fill="none" stroke="#ff6b5e" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
 </svg>
