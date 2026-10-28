@@ -66,6 +66,9 @@ let lastFitCheck = 0;
 
 /* ── 启动 ─────────────────────────────────────────────────────────── */
 
+/** 手机竖屏：播放器贴满两边，高度跟着视频比例走，上下不留黑边 */
+const edgeToEdgeQuery = window.matchMedia('(max-width: 860px) and (orientation: portrait)');
+
 boot();
 
 /** 多组部署：服务端 GROUP_NAME 不为空时，标题和左上角显示「弹幕阅片 · 品牌组」 */
@@ -136,6 +139,7 @@ function boot() {
 
   new ResizeObserver(() => fitVideoWrap()).observe(dom.frame);
   window.addEventListener('resize', fitVideoWrap);
+  edgeToEdgeQuery.addEventListener?.('change', () => setTimeout(fitVideoWrap, 60));
   window.addEventListener('hashchange', applyHash);
 
   requestAnimationFrame(tick);
@@ -328,6 +332,21 @@ function computeFit() {
   const height = dom.video.videoHeight;
   if (!width || !height || dom.frame.hidden) return null;
 
+  if (edgeToEdgeQuery.matches && !document.fullscreenElement) {
+    const fullW = dom.frame.clientWidth;
+    if (fullW < 48) return null;
+    const ratio = width / height;
+    // 竖版片子按宽度撑满会太高，封顶到屏幕高度的 80%，超出才两边留一点
+    const maxH = Math.round((window.innerHeight || fullW / ratio) * 0.8);
+    let w = fullW;
+    let h = w / ratio;
+    if (h > maxH) {
+      h = maxH;
+      w = h * ratio;
+    }
+    return { w: Math.round(w), h: Math.round(h) };
+  }
+
   const style = getComputedStyle(dom.frame);
   const padX = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
   const padY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
@@ -387,8 +406,11 @@ function applyFps(fps, source) {
 }
 
 function updateFpsBadge() {
-  const labels = { auto: '自动', manual: '手动', default: '默认' };
-  dom.fpsBadge.textContent = labels[state.fpsSource] || '默认';
+  // 自动识别出来的帧率不再挂「自动」字样，只显示数值；手动 / 默认照旧提示
+  const labels = { auto: '', manual: '手动', default: '默认' };
+  const label = labels[state.fpsSource] ?? '默认';
+  dom.fpsBadge.textContent = label;
+  dom.fpsBadge.hidden = !label;
   dom.fpsBadge.className = `fps-badge ${state.fpsSource}`;
   dom.fpsField.title = state.fpsSource === 'auto'
     ? `帧率已自动识别为 ${state.fps}，识别不准可以手动改`

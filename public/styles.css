@@ -1409,3 +1409,54 @@ body.dragging::after {
   .author-field { flex: 1 1 auto; }
   .author-field input { width: 100%; }
 }
+
+/* ── 手机端 ─────────────────────────────────────────────────────────── */
+
+/* 弹幕缩小一号：车道高度由 danmaku.js 按实际行高 + 内边距算，这里改字号会自动跟上 */
+@media (max-width: 860px), (max-height: 500px) {
+  .dm {
+    gap: 1px;
+    padding: 3px 10px;
+    font-size: 15px;
+    line-height: 1.4;
+  }
+  .dm.has-replies { border-radius: 10px; padding-bottom: 5px; }
+  .dm.is-wrapped { border-radius: 10px; }
+  .dm.is-annotation .dm-text { font-size: 13px; }
+  .dm-line { gap: 6px; }
+  .dm-name { font-size: 13px; }
+  .dm-reply { gap: 5px; padding-left: 12px; font-size: 12px; }
+  .dm-reply-name,
+  .dm-reply.more { font-size: 11px; }
+}
+
+/* 弹幕开关那一行：放不下就横向滑动，不再从左边被切掉 */
+@media (max-width: 860px) {
+  .transport-right {
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .transport-right::-webkit-scrollbar { display: none; }
+  .transport-right > * { flex: none; }
+}
+
+/* 竖屏：播放器贴满两边，高度由 JS 按视频比例算，上下不留黑边，也不要圆角 */
+@media (max-width: 860px) and (orientation: portrait) {
+  .stage { flex: 0 0 auto; }
+  .frame {
+    flex: 0 0 auto;
+    min-height: 0;
+    padding: 0;
+    background: #000;
+  }
+  .video-wrap {
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .stage:fullscreen .frame { flex: 1 1 auto; }
+}
