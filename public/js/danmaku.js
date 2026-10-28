@@ -66,8 +66,8 @@ export function createDanmaku(layer, options = {}) {
     const height = layer.clientHeight || 360;
     const style = getComputedStyle(node);
     const pad = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
-    const line = node.firstElementChild;
-    const single = Math.ceil((line ? line.offsetHeight : 40) + pad);
+    // 用行高而不是首行实际高度：长弹幕换行后首行会变高，不能把车道一起撑高
+    const single = Math.ceil((parseFloat(style.lineHeight) || 40) + pad);
     const laneHeight = Math.max(24, single) + LANE_GAP;
     const fit = Math.floor((height * 0.7 - TOP) / laneHeight);
     const count = Math.max(2, Math.min(MAX_LANES, fit));
@@ -154,6 +154,7 @@ export function createDanmaku(layer, options = {}) {
     layer.appendChild(node);
 
     const { laneHeight, count, span } = metrics(node);
+    if (span > 1 || node.offsetHeight > laneHeight * 1.2) node.classList.add('is-wrapped');
     const lane = place(count, span);
     node.style.left = `${SIDE}px`;
     node.style.top = `${TOP + lane * laneHeight}px`;

@@ -330,7 +330,7 @@ h1, h2, p { margin: 0; }
   font-size: 28px;
   font-weight: 500;
   line-height: 1.4;
-  white-space: nowrap;
+  white-space: normal;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.85);
   animation-name: dm-pop;
   animation-timing-function: linear;
@@ -377,8 +377,7 @@ h1, h2, p { margin: 0; }
 
 .dm-reply-text {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .dm-reply.more { color: rgba(230, 233, 240, 0.7); font-size: 17px; }
@@ -393,9 +392,11 @@ h1, h2, p { margin: 0; }
 
 .dm-text {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
+
+/* 长弹幕自动换行：多行时药丸圆角会切字，改成圆角矩形 */
+.dm.is-wrapped { border-radius: 18px; }
 
 /* 直接在原地出现：快速淡入，停留，最后一小段淡出 */
 @keyframes dm-pop {
