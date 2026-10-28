@@ -46,6 +46,10 @@ const state = {
   replyOpen: null,
   replyDraft: '',
   replyFocus: false,
+  // 侧栏里正在修改哪条自己的弹幕（comment id，全局只开一个），同样要扛住列表重画
+  editOpen: null,
+  editDraft: '',
+  editFocus: false,
   uploading: false,
   pendingFile: null,
 };
@@ -248,6 +252,9 @@ async function openVideo(id) {
   }
   state.replyOpen = null;
   state.replyDraft = '';
+  state.editOpen = null;
+  state.editDraft = '';
+  state.editFocus = false;
   state.annotations = data.annotations;
   for (const annotation of state.annotations) {
     if (!Array.isArray(annotation.replies)) annotation.replies = [];
@@ -924,18 +931,150 @@ function buildCommentItem(comment) {
   });
 
   const replyBtn = buildReplyButton('comment', comment);
+  const mine = Boolean(state.author) && comment.author === state.author;
+  const editing = mine && state.editOpen === comment.id;
 
   head.append(author, time);
+  if (comment.editedAt) head.append(editedFlag(comment));
   if (comment.done) head.append(doneFlag());
+  if (mine) head.append(buildEditButton(comment, editing));
   head.append(replyBtn, del);
 
-  const text = document.createElement('p');
-  text.className = 'item-text';
-  text.textContent = comment.text;
+  let text;
+  if (editing) {
+    text = buildEditForm(comment);
+  } else {
+    text = document.createElement('p');
+    text.className = 'item-text';
+    text.textContent = comment.text;
+  }
 
   item.append(head, text, ...buildReplyParts('comment', comment));
   item.addEventListener('click', () => jumpTo(comment.time));
   return item;
+}
+
+/* ── 修改自己的弹幕 ─────────────────────────────────────────────── */
+
+function editedFlag(comment) {
+  const flag = document.createElement('span');
+  flag.className = 'item-edited';
+  flag.textContent = '已编辑';
+  const at = new Date(comment.editedAt);
+  if (!Number.isNaN(at.getTime())) flag.title = `修改于 ${at.toLocaleString()}`;
+  return flag;
+}
+
+function buildEditButton(comment, editing) {
+  const button = document.createElement('button');
+  button.className = 'item-reply-btn item-edit-btn' + (editing ? ' active' : '');
+  button.type = 'button';
+  button.textContent = '编辑';
+  button.title = '修改我的这条弹幕';
+  button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (state.editOpen === comment.id) closeEdit();
+    else openEdit(comment);
+  });
+  return button;
+}
+
+function openEdit(comment) {
+  state.replyOpen = null;
+  state.replyDraft = '';
+  state.replyFocus = false;
+  state.editOpen = comment.id;
+  state.editDraft = comment.text || '';
+  state.editFocus = true;
+  renderSidebar();
+}
+
+function closeEdit() {
+  state.editOpen = null;
+  state.editDraft = '';
+  state.editFocus = false;
+  renderSidebar();
+}
+
+function buildEditForm(comment) {
+  const form = document.createElement('form');
+  form.className = 'reply-form edit-form';
+  form.addEventListener('click', (event) => event.stopPropagation());
+
+  const input = document.createElement('input');
+  input.className = 'reply-input';
+  input.type = 'text';
+  input.maxLength = 500;
+  input.autocomplete = 'off';
+  input.placeholder = '修改弹幕内容，回车保存';
+  input.value = state.editDraft;
+  input.addEventListener('input', () => {
+    state.editDraft = input.value;
+  });
+  input.addEventListener('focus', () => {
+    state.editFocus = true;
+  });
+  input.addEventListener('blur', () => {
+    state.editFocus = false;
+  });
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !event.isComposing) {
+      event.stopPropagation();
+      closeEdit();
+    }
+  });
+
+  const save = document.createElement('button');
+  save.type = 'submit';
+  save.className = 'btn primary reply-send';
+  save.textContent = '保存';
+
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'btn reply-cancel';
+  cancel.textContent = '取消';
+  cancel.addEventListener('click', (event) => {
+    event.stopPropagation();
+    closeEdit();
+  });
+
+  form.append(input, save, cancel);
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const text = input.value.trim();
+    if (!text) {
+      toast('弹幕内容不能为空', true);
+      return;
+    }
+    if (text === comment.text) {
+      closeEdit();
+      return;
+    }
+    input.disabled = true;
+    save.disabled = true;
+    try {
+      const result = await api.editComment(comment.id, text, state.author);
+      state.editOpen = null;
+      state.editDraft = '';
+      state.editFocus = false;
+      applyItemUpdate('comment', result.comment);
+    } catch (err) {
+      input.disabled = false;
+      save.disabled = false;
+      input.focus();
+      toast(err.message, true);
+    }
+  });
+
+  if (state.editFocus) {
+    requestAnimationFrame(() => {
+      if (!input.isConnected) return;
+      input.focus();
+      const end = input.value.length;
+      input.setSelectionRange(end, end);
+    });
+  }
+  return form;
 }
 
 /* ── 回复（弹幕和画笔标注共用） ─────────────────────────────────── */
@@ -1090,13 +1229,16 @@ function toggleReply(kind, id) {
   state.replyOpen = key;
   state.replyDraft = '';
   state.replyFocus = true;
+  state.editOpen = null;
+  state.editDraft = '';
+  state.editFocus = false;
   renderSidebar();
 }
 
 // 点回复框以外的地方，且没写内容时自动收起
 document.addEventListener('pointerdown', (event) => {
   if (!state.replyOpen || state.replyDraft.trim()) return;
-  if (event.target.closest('.reply-form, .item-reply-btn')) return;
+  if (event.target.closest('.reply-form, .item-reply-btn, .edit-form')) return;
   closeReply();
 });
 
@@ -1145,6 +1287,13 @@ function applyItemUpdate(kind, data, { fromSelf = false } = {}) {
     repliesChanged = key(item.replies) !== key(data.replies);
     item.replies = data.replies;
   }
+  // 作者改了弹幕文字（自己保存，或 SSE 推来的同一次修改）
+  let textChanged = false;
+  if (kind === 'comment' && typeof data.text === 'string' && data.text !== item.text) {
+    item.text = data.text;
+    textChanged = true;
+  }
+  if (kind === 'comment' && data.editedAt) item.editedAt = data.editedAt;
   if (rangeChanged) {
     state.annotations.sort((a, b) => a.start - b.start || a.createdAt - b.createdAt);
     renderMarks();
@@ -1152,7 +1301,8 @@ function applyItemUpdate(kind, data, { fromSelf = false } = {}) {
   renderSidebar();
   reportView.refresh();
   // 自己的请求和 SSE 会各来一次，回复没变就不重弹
-  if (repliesChanged) refreshBubble(kind, item, { fromSelf });
+  // 气泡在场就收掉重弹，显示新文字 / 新回复
+  if (repliesChanged || textChanged) refreshBubble(kind, item, { fromSelf });
   if (dom.video.paused) updateFocus();
 }
 
@@ -1235,6 +1385,11 @@ async function removeComment(comment) {
 function removeCommentLocal(id) {
   state.comments = state.comments.filter((c) => c.id !== id);
   dropReplyFor('comment', id);
+  if (state.editOpen === id) {
+    state.editOpen = null;
+    state.editDraft = '';
+    state.editFocus = false;
+  }
   renderSidebar();
   renderMarks();
   updateFocus();

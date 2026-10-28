@@ -18,6 +18,8 @@ export const api = {
   deleteVideo: (id) => request('DELETE', `/api/videos/${id}`),
   addComment: (id, comment) => request('POST', `/api/videos/${id}/comments`, comment),
   setCommentDone: (id, done) => request('PATCH', `/api/comments/${id}`, { done }),
+  // 只能改自己署名的弹幕，服务端按 author 核对
+  editComment: (id, text, author) => request('PATCH', `/api/comments/${id}`, { text, author }),
   deleteComment: (id) => request('DELETE', `/api/comments/${id}`),
   // kind = 'comment' | 'annotation'，弹幕和画笔标注的回复接口同构
   addReply: (kind, id, reply) => request('POST', `/api/${kind}s/${id}/replies`, reply),

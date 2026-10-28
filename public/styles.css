@@ -1171,6 +1171,10 @@ h1, h2, p { margin: 0; }
 .reply-input:focus { box-shadow: 0 0 0 2px var(--accent-soft); }
 .reply-send, .reply-cancel { padding: 4px 10px; font-size: 12px; }
 
+/* 侧栏：修改自己的弹幕 */
+.edit-form { margin-top: 2px; }
+.item-edited { color: var(--text-faint); font-size: 10.5px; }
+
 /* 报告：弹幕下的回复 */
 .r-replies {
   display: flex;
