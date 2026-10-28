@@ -312,6 +312,120 @@ function dateStamp(date = new Date()) {
  * 打包下载：report.md + images/ 下的每张截帧，md 里按相对路径引用图片。
  * images：截帧 key -> data URL；order：key 的出现顺序（决定 frame-001、002… 的编号）
  */
+function safeTitleOf(data) {
+  return data.video.title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
+}
+
+function pdfFileName(data, date = new Date()) {
+  return `审片报告-${safeTitleOf(data)}-${dateStamp(date)}.pdf`;
+}
+
+function triggerDownload(url, name) {
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+/**
+ * 页内 PDF 预览层（不弹打印对话框）：blob: 地址塞进 iframe，配「下载PDF」「关闭」；
+ * Esc / 关闭 / 点背景都会收起并释放 blob 地址。
+ */
+function createPdfPreview() {
+  let overlay = null;
+  let url = '';
+  let onKey = null;
+
+  function close() {
+    if (!overlay) return;
+    window.removeEventListener('keydown', onKey, true);
+    overlay.remove();
+    overlay = null;
+    if (url) URL.revokeObjectURL(url);
+    url = '';
+  }
+
+  function build(title) {
+    close();
+    overlay = document.createElement('div');
+    overlay.className = 'pdf-preview';
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) close();
+    });
+    const box = document.createElement('div');
+    box.className = 'pdf-preview-box';
+    const head = document.createElement('div');
+    head.className = 'pdf-preview-head';
+    const name = document.createElement('span');
+    name.className = 'pdf-preview-title';
+    name.textContent = title;
+    const spacer = document.createElement('span');
+    spacer.className = 'spacer';
+    const download = document.createElement('button');
+    download.type = 'button';
+    download.className = 'btn tiny primary';
+    download.textContent = '下载PDF';
+    download.disabled = true;
+    const shut = document.createElement('button');
+    shut.type = 'button';
+    shut.className = 'btn tiny';
+    shut.textContent = '关闭';
+    shut.addEventListener('click', close);
+    head.append(name, spacer, download, shut);
+    const body = document.createElement('div');
+    body.className = 'pdf-preview-body';
+    const loading = document.createElement('div');
+    loading.className = 'pdf-preview-loading';
+    loading.textContent = '正在生成 PDF…';
+    body.append(loading);
+    box.append(head, body);
+    overlay.append(box);
+    document.body.append(overlay);
+
+    // 捕获阶段先拦下 Esc：只关预览，不让全局快捷键把审片报告也关掉
+    onKey = (event) => {
+      if (event.key !== 'Escape' || event.isComposing) return;
+      event.stopPropagation();
+      event.preventDefault();
+      close();
+    };
+    window.addEventListener('keydown', onKey, true);
+    shut.focus();
+    return { overlay, body, loading, download, shut };
+  }
+
+  return {
+    /** 先显示「生成中」，generate() 返回 { bytes, fileName } 后换成预览 */
+    async open(title, generate) {
+      const parts = build(title);
+      const mine = parts.overlay;
+      try {
+        const { bytes, fileName } = await generate((text) => {
+          parts.loading.textContent = text;
+        });
+        if (overlay !== mine) return true; // 生成期间已经关掉了
+        url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        const frame = document.createElement('iframe');
+        frame.className = 'pdf-preview-frame';
+        frame.title = title;
+        frame.src = url;
+        parts.body.replaceChildren(frame);
+        parts.download.disabled = false;
+        parts.download.addEventListener('click', () => triggerDownload(url, fileName));
+        parts.shut.focus();
+        return true;
+      } catch (err) {
+        console.error('生成 PDF 失败', err);
+        if (overlay === mine) close();
+        return false;
+      }
+    },
+    close,
+  };
+}
+
 async function downloadZip(data, images, order, prefs) {
   const now = new Date();
   const paths = new Map();
@@ -329,12 +443,12 @@ async function downloadZip(data, images, order, prefs) {
     paths.set(key, name);
     files.push({ name, data: image.bytes });
   }
-  const safeTitle = data.video.title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
+  const safeTitle = safeTitleOf(data);
   const head = [{ name: 'report.md', data: buildMarkdown(data, paths, prefs) }];
   let pdfOk = true;
   try {
     const pdf = await renderReportPdf(buildPdfModel(data, images, prefs));
-    head.push({ name: `审片报告-${safeTitle}-${dateStamp(now)}.pdf`, data: pdf });
+    head.push({ name: pdfFileName(data, now), data: pdf });
   } catch (err) {
     console.error('生成 PDF 失败', err);
     pdfOk = false;
@@ -343,12 +457,7 @@ async function downloadZip(data, images, order, prefs) {
 
   const blob = createZip(files, { date: now });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `审片报告-${safeTitle}-${dateStamp(now)}.zip`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+  triggerDownload(url, `审片报告-${safeTitle}-${dateStamp(now)}.zip`);
   setTimeout(() => URL.revokeObjectURL(url), 2000);
   return { pdfOk };
 }
@@ -437,11 +546,6 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     return { images: result, total: jobs.length, order: jobs.map((j) => j.key) };
   }
 
-  async function waitImages() {
-    const images = [...listEl.querySelectorAll('img')];
-    await Promise.all(images.map((img) => (img.decode ? img.decode().catch(() => {}) : null)));
-  }
-
   filtersEl.addEventListener('click', (event) => {
     const button = event.target.closest('[data-filter]');
     if (!button) return;
@@ -469,14 +573,31 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     else notify('报告已打包下载（PDF + report.md + images/）');
   });
 
-  document.getElementById('report-print').addEventListener('click', async () => {
+  // 报告PDF：不走打印对话框，生成和 zip 里同一份 PDF，在页内预览
+  const pdfButton = document.getElementById('report-print');
+  const preview = createPdfPreview();
+  pdfButton.addEventListener('click', async () => {
     const data = getData();
-    if (data.video && shotJobs(data).length) {
-      notify(prefs.frames ? '正在截取各条意见的画面…' : '正在截取画笔标注的起始帧…');
-      await collectShots(data);
-      await waitImages();
+    if (!data.video || pdfButton.disabled) return;
+    pdfButton.disabled = true;
+    const label = pdfButton.textContent;
+    pdfButton.textContent = '生成中…';
+    try {
+      const ok = await preview.open(`审片报告 · ${data.video.title}`, async (status) => {
+        let images = new Map();
+        if (shotJobs(data).length) {
+          status(prefs.frames ? '正在截取各条意见的画面…' : '正在截取画笔标注的起始帧…');
+          images = (await collectShots(data)).images;
+        }
+        status('正在排版 PDF…');
+        const bytes = await renderReportPdf(buildPdfModel(data, images, prefs));
+        return { bytes, fileName: pdfFileName(data) };
+      });
+      if (!ok) notify('PDF 生成失败，请重试', true);
+    } finally {
+      pdfButton.disabled = false;
+      pdfButton.textContent = label;
     }
-    window.print();
   });
 
   function buildReplies(replies) {
