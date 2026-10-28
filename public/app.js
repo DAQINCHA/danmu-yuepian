@@ -31,7 +31,8 @@ const state = {
   lastTick: -1,
   // 开始输入弹幕那一刻的视频时间；发送时用它，而不是敲完回车时已经播过去的时间
   composeTime: null,
-  // 侧栏里正在回复哪条弹幕；列表会因为别人发弹幕整体重画，草稿和焦点要能接上
+  // 侧栏里正在回复哪一条（'comment:<id>' 或 'annotation:<id>'，全局只开一个）；
+  // 列表会因为别人发弹幕整体重画，草稿和焦点要能接上
   replyOpen: null,
   replyDraft: '',
   replyFocus: false,
@@ -236,6 +237,9 @@ async function openVideo(id) {
   state.replyOpen = null;
   state.replyDraft = '';
   state.annotations = data.annotations;
+  for (const annotation of state.annotations) {
+    if (!Array.isArray(annotation.replies)) annotation.replies = [];
+  }
   applyFps(data.video.fps || 25, data.video.fpsSource || 'default');
   state.draw = null;
   state.lastTime = 0;
@@ -709,16 +713,7 @@ function buildCommentItem(comment) {
     removeComment(comment);
   });
 
-  const replies = Array.isArray(comment.replies) ? comment.replies : [];
-  const replyBtn = document.createElement('button');
-  replyBtn.className = 'item-reply-btn' + (state.replyOpen === comment.id ? ' active' : '');
-  replyBtn.type = 'button';
-  replyBtn.textContent = replies.length ? `回复 ${replies.length}` : '回复';
-  replyBtn.title = '在这条弹幕下补充意见，会和它一起出现';
-  replyBtn.addEventListener('click', (event) => {
-    event.stopPropagation();
-    toggleReply(comment.id);
-  });
+  const replyBtn = buildReplyButton('comment', comment);
 
   head.append(author, time);
   if (comment.done) head.append(doneFlag());
@@ -728,19 +723,47 @@ function buildCommentItem(comment) {
   text.className = 'item-text';
   text.textContent = comment.text;
 
-  item.append(head, text);
-  if (replies.length) item.append(buildReplyList(comment));
-  if (state.replyOpen === comment.id) item.append(buildReplyForm(comment));
+  item.append(head, text, ...buildReplyParts('comment', comment));
   item.addEventListener('click', () => jumpTo(comment.time));
   return item;
 }
 
-/* ── 回复 ─────────────────────────────────────────────────────────── */
+/* ── 回复（弹幕和画笔标注共用） ─────────────────────────────────── */
 
-function buildReplyList(comment) {
+const REPLY_NOUN = { comment: '弹幕', annotation: '画笔标注' };
+
+function replyKey(kind, id) {
+  return `${kind}:${id}`;
+}
+
+function buildReplyButton(kind, target) {
+  const replies = Array.isArray(target.replies) ? target.replies : [];
+  const button = document.createElement('button');
+  button.className = 'item-reply-btn' + (state.replyOpen === replyKey(kind, target.id) ? ' active' : '');
+  button.type = 'button';
+  button.textContent = replies.length ? `回复 ${replies.length}` : '回复';
+  button.title = kind === 'comment'
+    ? '在这条弹幕下补充意见，会和它一起出现'
+    : '在这个画笔标注下补充意见';
+  button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleReply(kind, target.id);
+  });
+  return button;
+}
+
+/** 列表项下方：已有回复 + （如果正在回复这一条）输入框 */
+function buildReplyParts(kind, target) {
+  const parts = [];
+  if (Array.isArray(target.replies) && target.replies.length) parts.push(buildReplyList(kind, target));
+  if (state.replyOpen === replyKey(kind, target.id)) parts.push(buildReplyForm(kind, target));
+  return parts;
+}
+
+function buildReplyList(kind, target) {
   const list = document.createElement('div');
   list.className = 'item-replies';
-  for (const reply of comment.replies) {
+  for (const reply of target.replies) {
     const row = document.createElement('div');
     row.className = 'reply';
     row.style.setProperty('--dm-color', authorColor(reply.author));
@@ -762,7 +785,7 @@ function buildReplyList(comment) {
       del.title = '删除我的这条回复';
       del.addEventListener('click', (event) => {
         event.stopPropagation();
-        removeReply(comment, reply);
+        removeReply(kind, target, reply);
       });
       row.append(del);
     }
@@ -771,7 +794,7 @@ function buildReplyList(comment) {
   return list;
 }
 
-function buildReplyForm(comment) {
+function buildReplyForm(kind, target) {
   const form = document.createElement('form');
   form.className = 'reply-form';
   form.addEventListener('click', (event) => event.stopPropagation());
@@ -781,7 +804,7 @@ function buildReplyForm(comment) {
   input.type = 'text';
   input.maxLength = 500;
   input.autocomplete = 'off';
-  input.placeholder = `回复 ${comment.author || '匿名'}，回车发送`;
+  input.placeholder = `回复 ${target.author || '匿名'}，回车发送`;
   input.value = state.replyDraft;
   input.addEventListener('input', () => {
     state.replyDraft = input.value;
@@ -818,15 +841,15 @@ function buildReplyForm(comment) {
     event.preventDefault();
     const text = input.value.trim();
     if (!text) return;
-    if (!requireName('先写上你的名字，再回复同事的弹幕')) return;
+    if (!requireName(`先写上你的名字，再回复同事的${REPLY_NOUN[kind]}`)) return;
     input.disabled = true;
     send.disabled = true;
     try {
-      const { comment: updated } = await api.addReply(comment.id, { author: authorName(), text });
+      const result = await api.addReply(kind, target.id, { author: authorName(), text });
       state.replyOpen = null;
       state.replyDraft = '';
       state.replyFocus = false;
-      applyCommentUpdate(updated);
+      applyItemUpdate(kind, result[kind]);
     } catch (err) {
       input.disabled = false;
       send.disabled = false;
@@ -847,12 +870,14 @@ function buildReplyForm(comment) {
   return form;
 }
 
-function toggleReply(id) {
-  if (state.replyOpen === id) {
+/** 全局只开一个回复框：打开别的一条时，前一个直接收起 */
+function toggleReply(kind, id) {
+  const key = replyKey(kind, id);
+  if (state.replyOpen === key) {
     closeReply();
     return;
   }
-  state.replyOpen = id;
+  state.replyOpen = key;
   state.replyDraft = '';
   state.replyFocus = true;
   renderSidebar();
@@ -872,25 +897,34 @@ function closeReply() {
   renderSidebar();
 }
 
-async function removeReply(comment, reply) {
+/** 被回复的那一条已经删掉了，回复框跟着关 */
+function dropReplyFor(kind, id) {
+  if (state.replyOpen !== replyKey(kind, id)) return;
+  state.replyOpen = null;
+  state.replyDraft = '';
+  state.replyFocus = false;
+}
+
+async function removeReply(kind, target, reply) {
   if (!window.confirm('删除这条回复？')) return;
   try {
-    const { comment: updated } = await api.deleteReply(comment.id, reply.id, authorName());
-    applyCommentUpdate(updated);
+    const result = await api.deleteReply(kind, target.id, reply.id, authorName());
+    applyItemUpdate(kind, result[kind]);
   } catch (err) {
     toast(err.message, true);
   }
 }
 
-/** 服务端推来的整条弹幕（勾选已改 / 增删回复）合进本地 */
-function applyCommentUpdate(data) {
-  const comment = state.comments.find((c) => c.id === data?.id);
-  if (!comment) return;
-  if (typeof data.done === 'boolean') comment.done = data.done;
-  if (Array.isArray(data.replies)) comment.replies = data.replies;
+/** 服务端推来的整条弹幕 / 画笔标注（勾选已改 / 增删回复）合进本地 */
+function applyItemUpdate(kind, data) {
+  const list = kind === 'comment' ? state.comments : state.annotations;
+  const item = list.find((x) => x.id === data?.id);
+  if (!item) return;
+  if (typeof data.done === 'boolean') item.done = data.done;
+  if (Array.isArray(data.replies)) item.replies = data.replies;
   renderSidebar();
   reportView.refresh();
-  if (dom.video.paused) updateFocus();
+  if (kind === 'comment' && dom.video.paused) updateFocus();
 }
 
 function doneFlag() {
@@ -943,14 +977,14 @@ function buildAnnotationItem(annotation) {
 
   head.append(author, time);
   if (annotation.done) head.append(doneFlag());
-  head.append(del);
+  head.append(buildReplyButton('annotation', annotation), del);
 
   const sub = document.createElement('p');
   sub.className = 'item-sub';
   const frames = Math.max(1, Math.round((annotation.end - annotation.start) * state.fps));
   sub.textContent = `第 ${frames} 帧 · ${timecode(annotation.end)} 结束`;
 
-  body.append(head, sub);
+  body.append(head, sub, ...buildReplyParts('annotation', annotation));
   item.append(thumb, body);
   item.addEventListener('click', () => jumpTo(annotation.start));
   return item;
@@ -968,10 +1002,7 @@ async function removeComment(comment) {
 
 function removeCommentLocal(id) {
   state.comments = state.comments.filter((c) => c.id !== id);
-  if (state.replyOpen === id) {
-    state.replyOpen = null;
-    state.replyDraft = '';
-  }
+  dropReplyFor('comment', id);
   renderSidebar();
   renderMarks();
   updateFocus();
@@ -989,6 +1020,7 @@ async function removeAnnotation(annotation) {
 
 function removeAnnotationLocal(id) {
   state.annotations = state.annotations.filter((a) => a.id !== id);
+  dropReplyFor('annotation', id);
   annView.fit();
   renderSidebar();
   renderMarks();
@@ -1123,6 +1155,7 @@ function showNow(comment) {
 
 function upsertAnnotation(annotation) {
   if (state.annotations.some((a) => a.id === annotation.id)) return;
+  if (!Array.isArray(annotation.replies)) annotation.replies = [];
   state.annotations.push(annotation);
   state.annotations.sort((a, b) => a.start - b.start || a.createdAt - b.createdAt);
   renderSidebar();
@@ -1359,14 +1392,8 @@ function connectEvents(videoId) {
   on('annotation:new', (data) => {
     if (data.annotation?.videoId === state.video?.id) upsertAnnotation(data.annotation);
   });
-  on('comment:updated', (data) => applyCommentUpdate(data.comment));
-  on('annotation:updated', (data) => {
-    const annotation = state.annotations.find((a) => a.id === data.annotation?.id);
-    if (!annotation) return;
-    annotation.done = Boolean(data.annotation.done);
-    renderSidebar();
-    reportView.refresh();
-  });
+  on('comment:updated', (data) => applyItemUpdate('comment', data.comment));
+  on('annotation:updated', (data) => applyItemUpdate('annotation', data.annotation));
   on('annotation:removed', (data) => {
     if (data.videoId === state.video?.id) removeAnnotationLocal(data.annotationId);
   });

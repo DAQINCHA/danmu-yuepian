@@ -791,6 +791,8 @@ h1, h2, p { margin: 0; }
   border: 1px solid var(--line);
 }
 .item-annotation .item-body { min-width: 0; flex: 1 1 auto; }
+/* 画笔标注下面挂了回复 / 回复框时，缩略图顶部对齐，不再上下居中 */
+.item-annotation:has(.item-replies, .reply-form) { align-items: flex-start; }
 
 .item-sub { color: var(--text-faint); font-size: 11.5px; }
 

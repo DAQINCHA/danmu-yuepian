@@ -54,18 +54,19 @@ export function buildMarkdown(data, shots = null) {
     lines.push('');
     lines.push(describe(entry, data.fps));
     lines.push('');
-    const replies = entry.kind === 'comment' && Array.isArray(entry.data.replies) ? entry.data.replies : [];
+    const shot = entry.kind === 'annotation' ? shots?.get(entry.data.id) : null;
+    if (shot) {
+      lines.push(`![起始帧 ${at}](${shot})`);
+      lines.push('');
+    }
+    // 弹幕和画笔标注的回复：放在正文 / 起始帧之后、「已修改」之前
+    const replies = Array.isArray(entry.data.replies) ? entry.data.replies : [];
     if (replies.length) {
       // 每条回复单独一段引用，免得在 Markdown 里糊成一行
       replies.forEach((reply, i) => {
         if (i) lines.push('>');
         lines.push(`> ↳ **${reply.author || '匿名'}**：${reply.text}`);
       });
-      lines.push('');
-    }
-    const shot = entry.kind === 'annotation' ? shots?.get(entry.data.id) : null;
-    if (shot) {
-      lines.push(`![起始帧 ${at}](${shot})`);
       lines.push('');
     }
     lines.push(`- [${entry.data.done ? 'x' : ' '}] 已修改`);
@@ -266,12 +267,10 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
       : `${timecode(data.start)} – ${timecode(data.end)} 的连续帧`;
 
     main.append(head, text);
-    if (entry.kind === 'comment' && Array.isArray(data.replies) && data.replies.length) {
-      main.append(buildReplies(data.replies));
-    }
     node.append(indexEl);
 
     if (entry.kind === 'annotation') main.append(buildShot(data));
+    if (Array.isArray(data.replies) && data.replies.length) main.append(buildReplies(data.replies));
 
     node.append(main);
 
