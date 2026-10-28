@@ -127,17 +127,15 @@ function describe(entry, fps) {
 }
 
 /**
- * overall：整体问题，不带时间码和类型；inGroup：画面分组内，时间码只出现在组标题上。
- * 每条（每个画面）只出现一次时间码。
+ * 表头只有「序号. 作者」，不分组时前面加时间码；不标「弹幕」「画笔」类型。
+ * overall：整体问题，不带时间码；inGroup：画面分组内，时间码只出现在组标题上。
  */
 function pushEntry(lines, entry, index, fps, { level = '##', shot = null, overall = false, inGroup = false } = {}) {
   const at = timecode(entry.time);
-  const kind = entry.kind === 'comment' ? '弹幕' : '画笔';
   const author = entry.data.author || '匿名';
-  let head = `${level} ${index + 1}. ${at} · ${kind} · ${author}`;
-  if (overall) head = `${level} ${index + 1}. ${author}`;
-  else if (inGroup) head = `${level} ${index + 1}. ${kind} · ${author}`;
-  lines.push(head);
+  lines.push(overall || inGroup
+    ? `${level} ${index + 1}. ${author}`
+    : `${level} ${index + 1}. ${at} · ${author}`);
   lines.push('');
   lines.push(describe(entry, fps));
   lines.push('');
@@ -211,7 +209,7 @@ function pdfItem(entry, index, fps, { overall = false, inGroup = false } = {}) {
     index,
     // 整体问题不带时间码和类型；画面分组内时间码只在组标题上
     time: overall || inGroup ? null : timecode(entry.time),
-    kind: overall ? null : entry.kind,
+    kind: entry.kind,
     author,
     color: authorColor(author),
     text: describe(entry, fps),
@@ -613,18 +611,13 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
     timeButton.title = '跳到这一帧';
     timeButton.addEventListener('click', () => onJump(entry.time));
 
-    const type = document.createElement('span');
-    type.className = 'r-type';
-    type.textContent = entry.kind === 'comment' ? '弹幕' : '画笔';
-
     const author = document.createElement('span');
     author.className = 'r-author';
     author.textContent = data.author || '匿名';
 
-    // 整体问题不挂在某一帧上，不显示时间码和类型；画面分组内时间码只在组标题上
-    if (overall) head.append(author);
-    else if (inGroup) head.append(type, author);
-    else head.append(timeButton, type, author);
+    // 不标类型；整体问题不挂在某一帧上、画面分组内时间码只在组标题上，这两种不显示时间码
+    if (overall || inGroup) head.append(author);
+    else head.append(timeButton, author);
 
     const text = document.createElement('p');
     text.className = 'r-text';

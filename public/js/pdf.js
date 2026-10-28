@@ -12,8 +12,8 @@
  *     heading?: string,            // 「整体问题」「画面 1 · 00:12.040 · 3 条」；不分组模式下可省略
  *     image?: string,              // 截帧 data URL
  *     imageCaption?: string,
- *     items: [{ index, time?, kind?, author, color, text, done, replies: [{ author, color, text }] }]
- *     // time 为空：整体问题或画面分组内（时间码只在组标题上）；kind 为空：整体问题
+ *     items: [{ index, time?, kind, author, color, text, done, replies: [{ author, color, text }] }]
+ *     // time 为空：整体问题或画面分组内（时间码只在组标题上）；表头不画「弹幕」「画笔」类型
  *   }],
  *   empty?: string,
  * }
@@ -257,13 +257,6 @@ async function drawItem(pager, item) {
           c.fillStyle = COLORS.time;
           c.fillText(item.time, hx, base);
           hx += c.measureText(item.time).width + 14;
-        }
-        if (item.kind) {
-          setFont(c, 16, 500);
-          c.fillStyle = COLORS.dim;
-          const kind = item.kind === 'annotation' ? '画笔' : '弹幕';
-          c.fillText(kind, hx, base);
-          hx += c.measureText(kind).width + 14;
         }
         setFont(c, 18, 650);
         c.fillStyle = inkColor(item.color);

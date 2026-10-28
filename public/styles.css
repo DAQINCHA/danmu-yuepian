@@ -1109,13 +1109,6 @@ h1, h2, p { margin: 0; }
 }
 .r-time:hover { text-decoration: underline; }
 
-.r-type {
-  padding: 0 5px;
-  border-radius: 4px;
-  background: var(--panel-2);
-  color: var(--text-faint);
-  font-size: 10.5px;
-}
 .r-author { color: var(--r-color, #8ab4ff); font-weight: 650; }
 .r-text { color: #dde2ee; font-size: 13px; line-height: 1.6; word-break: break-word; }
 
@@ -1376,7 +1369,6 @@ body.dragging::after {
   .report-item.done { opacity: 1; }
   .report-item.done .r-text { color: #888; }
   .r-index,
-  .r-type,
   .r-text { color: #111; }
   .r-replies { border-left-color: #ddd; }
   .r-reply-text { color: #333; }
