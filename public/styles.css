@@ -410,6 +410,10 @@ body.author-spotlight .toast { z-index: 100; }
   box-sizing: border-box;
   padding: 28px clamp(20px, 3vw, 40px) 32px;
 }
+/* 项目页是纵向视频列表，不要拉满窗口 */
+.empty.library-view:has(#version-list:not([hidden])) .library-page {
+  max-width: 960px;
+}
 /* 没在看片时侧栏是空的，让首页和项目页用满窗口宽度 */
 .workspace:has(.empty.library-view:not([hidden])) .sidebar { display: none; }
 
