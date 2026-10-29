@@ -178,7 +178,7 @@ function boot() {
 
 function cacheDom() {
   const ids = [
-    'author-field', 'author-input', 'author-veil', 'author-hint', 'presence', 'presence-count', 'library-open', 'project-new', 'upload-open',
+    'author-field', 'author-input', 'author-veil', 'author-hint', 'presence', 'presence-count', 'library-open', 'home-open', 'project-new', 'upload-open',
     'empty-state', 'frame', 'video-wrap', 'video', 'danmaku-layer', 'ann-layer', 'draw-layer', 'paused-badge',
     'draw-toolbar', 'range-in', 'range-out', 'range-summary', 'swatches', 'mark-in', 'mark-out',
     'preview-range', 'draw-undo', 'draw-clear', 'draw-cancel', 'draw-save',
@@ -410,13 +410,16 @@ function applyHash() {
   syncTopbarNav();
 }
 
-/** 首页已经是片库，不再放返回按钮；项目页和看片页不放「新建项目」。 */
+/** 首页不放返回；看片页把「片库」写成「返回项目」，并改成回主页、不放上传。 */
 function syncTopbarNav() {
   const onProject = /^#\/p\/[\w-]+/.test(location.hash);
   const onVideo = /^#\/v\/[\w-]+/.test(location.hash);
   const onHome = !onProject && !onVideo;
   dom.libraryOpen.hidden = onHome;
+  dom.libraryOpen.textContent = onVideo ? '返回项目' : '片库';
+  dom.homeOpen.hidden = !onVideo;
   dom.projectNew.hidden = !onHome;
+  dom.uploadOpen.hidden = onVideo;
 }
 
 function leaveVideo() {
@@ -2203,6 +2206,9 @@ function initModals() {
       location.hash = state.video.projectId ? `#/p/${state.video.projectId}` : '#/p/uncategorized';
       return;
     }
+    location.hash = '#/';
+  });
+  dom.homeOpen.addEventListener('click', () => {
     location.hash = '#/';
   });
   dom.projectNew.addEventListener('click', createProjectPrompt);
