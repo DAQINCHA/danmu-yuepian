@@ -274,6 +274,7 @@ function buildPdfModel(data, images, prefs) {
     title: `审片报告 · ${data.video.title}`,
     footer: `审片报告 · ${data.video.title}`,
     meta: [`生成时间：${new Date().toLocaleString('zh-CN')}`],
+    summary: `意见：共 ${entries.length} 条`,
     sections,
     empty: '（这一版还没有任何意见）',
   };
