@@ -2844,6 +2844,7 @@ function renderVersionList() {
 function versionRow(video, version) {
   const row = document.createElement('div');
   row.className = 'version-row';
+  row.addEventListener('click', () => { location.hash = `#/v/${video.id}`; });
   const cover = document.createElement('img');
   cover.className = 'version-cover';
   mountCover(cover, video.id, video.hasCover);
@@ -2871,10 +2872,7 @@ function versionRow(video, version) {
     relativeTime(video.createdAt),
   ].filter(Boolean).join(' · ');
   if (state.renameId === video.id) main.append(buildRenameForm(video), meta);
-  else {
-    main.append(title, meta);
-    main.addEventListener('click', () => { location.hash = `#/v/${video.id}`; });
-  }
+  else main.append(title, meta);
 
   const move = document.createElement('div');
   move.className = 'version-move';
@@ -2942,6 +2940,7 @@ function versionRow(video, version) {
     }
   });
 
+  move.addEventListener('click', (event) => event.stopPropagation());
   move.append(select);
   if (state.renameId !== video.id) move.append(rename);
   move.append(del);
