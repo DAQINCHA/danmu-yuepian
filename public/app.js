@@ -2769,10 +2769,10 @@ function versionRow(video, version) {
   const move = document.createElement('div');
   move.className = 'version-move';
   const select = document.createElement('select');
-  select.setAttribute('aria-label', '移到其他项目');
+  select.setAttribute('aria-label', '移动');
   const current = document.createElement('option');
   current.value = '';
-  current.textContent = '移到其他项目';
+  current.textContent = '移动';
   select.append(current);
   if (video.projectId) {
     const loose = document.createElement('option');
