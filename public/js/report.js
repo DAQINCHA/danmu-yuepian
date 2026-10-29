@@ -631,7 +631,8 @@ export function createReportView({ getData, onToggleDone, onJump, notify }) {
 
     const text = document.createElement('p');
     text.className = 'r-text';
-    text.textContent = describe(entry, currentFps());
+    // 只去掉正文前后的空行，中间换行仍保留
+    text.textContent = String(describe(entry, currentFps())).replace(/\r\n?/g, '\n').trim();
 
     // 整体问题 / 分组内又不显示名字时表头是空的，干脆不放
     if (head.childNodes.length) main.append(head);

@@ -1274,7 +1274,7 @@ function buildCommentItem(comment) {
   } else {
     text = document.createElement('p');
     text.className = 'item-text';
-    text.textContent = comment.text;
+    text.textContent = String(comment.text ?? '').replace(/\r\n?/g, '\n').trim();
   }
 
   item.append(head, text, ...buildReplyParts('comment', comment));

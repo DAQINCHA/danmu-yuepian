@@ -55,6 +55,15 @@ function inkColor(hex) {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
+/** 去掉正文前后的空行，中间的换行保留 */
+function trimEdgeBlankLines(lines) {
+  let start = 0;
+  let end = lines.length;
+  while (start < end && !String(lines[start] ?? '').trim()) start += 1;
+  while (end > start && !String(lines[end - 1] ?? '').trim()) end -= 1;
+  return lines.slice(start, end);
+}
+
 /** 中文按字断行；连续的英文 / 数字尽量整词换行，单词比一行还长时再按字断 */
 function wrapText(ctx, text, width) {
   const lines = [];
@@ -180,8 +189,18 @@ async function drawItem(pager, item) {
   const indexW = 44;
   const textW = innerW - indexW;
 
+  const hasMeta = Boolean(item.time || item.author || item.extra);
+  // 只有编号时，正文跟编号同一行，避免表头空出一行再缩进
+  const x0 = MARGIN_X + ITEM.padX;
+  const tx = x0 + indexW;
+  const indexLabel = String(item.index + 1).padStart(2, '0');
+  setFont(ctx, 17, 500, MONO);
+  const leadX = x0 + ctx.measureText(indexLabel).width + 12;
+  const right = MARGIN_X + CONTENT_W - ITEM.padX;
+  const leadWidth = Math.max(80, right - leadX);
+  const body = String(item.text ?? '').replace(/\r\n?/g, '\n').trim();
   setFont(ctx, ITEM.text);
-  const textLines = wrapText(ctx, item.text, textW);
+  const textLines = trimEdgeBlankLines(wrapText(ctx, body, hasMeta ? textW : leadWidth));
   setFont(ctx, ITEM.reply);
   const replyBlocks = (item.replies || []).map((reply) => {
     // author 为 null = 报告设成不显示名字
@@ -193,9 +212,15 @@ async function drawItem(pager, item) {
     return { reply, label, labelW, lines };
   });
 
-  // 待画的行：第一行是表头，之后正文、回复；每行自带高度
-  const rows = [{ type: 'head', h: ITEM.head + ITEM.headGap }];
-  for (const line of textLines) rows.push({ type: 'text', h: ITEM.textLine, line });
+  // 有时间码或署名时，第一行是表头，正文紧接着；否则编号和第一行正文同一行
+  const rows = [];
+  if (!hasMeta && textLines.length) {
+    rows.push({ type: 'lead', h: ITEM.textLine, line: textLines[0] });
+    for (const line of textLines.slice(1)) rows.push({ type: 'text', h: ITEM.textLine, line, x: leadX });
+  } else {
+    rows.push({ type: 'head', h: ITEM.head + 4 });
+    for (const line of textLines) rows.push({ type: 'text', h: ITEM.textLine, line });
+  }
   if (replyBlocks.length) rows.push({ type: 'space', h: 6 });
   for (const block of replyBlocks) {
     block.lines.forEach((line, i) => rows.push({ type: 'reply', h: ITEM.replyLine, line, block, first: i === 0 }));
@@ -204,9 +229,6 @@ async function drawItem(pager, item) {
   // 表头 + 至少两行正文放在一起，别把署名孤零零留在页尾
   const keep = ITEM.padY + rows.slice(0, 3).reduce((s, r) => s + r.h, 0);
   await pager.ensure(keep);
-
-  const x0 = MARGIN_X + ITEM.padX;
-  const tx = x0 + indexW;
 
   const drawBox = (c, top, bottom) => {
     c.save();
@@ -246,11 +268,11 @@ async function drawItem(pager, item) {
     drawBox(c, top, bottom);
     for (; i < j; i += 1) {
       const row = rows[i];
-      if (row.type === 'head') {
-        const base = y + ITEM.head - 4;
+      if (row.type === 'head' || row.type === 'lead') {
+        const base = y + (row.type === 'lead' ? ITEM.textLine - 9 : ITEM.head - 4);
         setFont(c, 17, 500, MONO);
         c.fillStyle = COLORS.faint;
-        c.fillText(String(item.index + 1).padStart(2, '0'), x0, base);
+        c.fillText(indexLabel, x0, base);
         let hx = tx;
         if (item.time) {
           setFont(c, 18, 600, MONO);
@@ -269,14 +291,24 @@ async function drawItem(pager, item) {
           c.fillStyle = COLORS.faint;
           c.fillText(item.extra, hx, base);
         }
+        if (row.type === 'lead') {
+          setFont(c, ITEM.text);
+          c.fillStyle = item.done ? COLORS.faint : COLORS.text;
+          c.fillText(row.line, leadX, base);
+          if (item.done && row.line) {
+            const w = c.measureText(row.line).width;
+            c.fillRect(leadX, base - 7, w, 1.5);
+          }
+        }
       } else if (row.type === 'text') {
         setFont(c, ITEM.text);
         c.fillStyle = item.done ? COLORS.faint : COLORS.text;
         const base = y + ITEM.textLine - 9;
-        c.fillText(row.line, tx, base);
+        const textX = row.x || tx;
+        c.fillText(row.line, textX, base);
         if (item.done && row.line) {
           const w = c.measureText(row.line).width;
-          c.fillRect(tx, base - 7, w, 1.5);
+          c.fillRect(textX, base - 7, w, 1.5);
         }
       } else if (row.type === 'reply') {
         const base = y + ITEM.replyLine - 8;
