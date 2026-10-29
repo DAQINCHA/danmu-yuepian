@@ -1311,6 +1311,7 @@ body.author-spotlight .toast { z-index: 100; }
 .field input:focus { border-color: var(--accent); }
 
 .upload-progress { margin-top: 14px; }
+#upload-start { width: 100%; height: 38px; margin-top: 16px; }
 .bar { height: 5px; border-radius: 999px; background: #232935; overflow: hidden; }
 .bar-fill { width: 0; height: 100%; border-radius: 999px; background: var(--accent); transition: width 0.2s; }
 .upload-progress p { margin-top: 7px; color: var(--text-dim); font-size: 11.5px; }

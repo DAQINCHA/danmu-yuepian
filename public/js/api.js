@@ -42,9 +42,22 @@ export const api = {
 /**
  * 上传走 XHR：需要 upload 进度事件，fetch 目前给不了。
  * 文件名等信息放自定义头，body 直接是 File 本体，服务端原样落盘。
+ * signal 用来在关掉弹窗时中止；服务端收到中断不会入库。
  */
-export function uploadVideo(file, meta, onProgress) {
+export function uploadVideo(file, meta, onProgress, signal) {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      fn(value);
+    };
+    const abortError = () => Object.assign(new Error('上传已取消'), { name: 'AbortError' });
+    if (signal?.aborted) {
+      reject(abortError());
+      return;
+    }
+
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/videos');
     xhr.setRequestHeader('X-Filename', encodeURIComponent(file.name));
@@ -54,6 +67,8 @@ export function uploadVideo(file, meta, onProgress) {
     xhr.setRequestHeader('X-Fps', String(meta.fps || 25));
     if (meta.newProjectName) xhr.setRequestHeader('X-New-Project-Name', encodeURIComponent(meta.newProjectName));
     else if (meta.projectId) xhr.setRequestHeader('X-Project-Id', encodeURIComponent(meta.projectId));
+
+    if (signal) signal.addEventListener('abort', () => xhr.abort(), { once: true });
 
     xhr.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) onProgress?.(event.loaded / event.total);
@@ -66,11 +81,11 @@ export function uploadVideo(file, meta, onProgress) {
       } catch {
         payload = {};
       }
-      if (xhr.status >= 200 && xhr.status < 300) resolve(payload);
-      else reject(new Error(payload.error || `上传失败 (${xhr.status})`));
+      if (xhr.status >= 200 && xhr.status < 300) finish(resolve, payload);
+      else finish(reject, new Error(payload.error || `上传失败 (${xhr.status})`));
     });
-    xhr.addEventListener('error', () => reject(new Error('上传中断，检查网络或服务是否还在运行')));
-    xhr.addEventListener('abort', () => reject(new Error('上传已取消')));
+    xhr.addEventListener('error', () => finish(reject, new Error('上传中断，检查网络或服务是否还在运行')));
+    xhr.addEventListener('abort', () => finish(reject, abortError()));
 
     xhr.send(file);
   });

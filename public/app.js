@@ -59,7 +59,6 @@ const state = {
   editOpen: null,
   editDraft: '',
   editFocus: false,
-  uploading: false,
   pendingFile: null,
 };
 
@@ -78,6 +77,10 @@ const edgeToEdgeQuery = window.matchMedia('(max-width: 860px) and (orientation: 
 const mobileListQuery = window.matchMedia('(max-width: 860px)');
 
 let composerExpanded = false;
+/** 后台上传任务。片名不在开传时读取，点「上传并审片」才落定。 */
+let uploadJob = null;
+let uploadEpoch = 0;
+let uploadConfirming = false;
 
 boot();
 
@@ -220,6 +223,7 @@ function initAuthor() {
     input.addEventListener('change', () => {
       setAuthor(input.value, input === dom.authorInput ? 'topbar' : 'upload');
       renderSidebar();
+      maybeBeginUpload();
     });
   }
 
@@ -2220,19 +2224,27 @@ function initModals() {
   dom.uploadNewProject.addEventListener('input', () => {
     updateUploadButton();
     syncUploadTitleCopy();
+    if (!dom.uploadNewProject.value.trim()) maybeBeginUpload();
   });
   dom.uploadProjectSelect.addEventListener('change', () => {
     if (dom.uploadProjectSelect.value) dom.uploadNewProject.value = '';
     updateUploadButton();
     syncUploadTitleCopy();
+    maybeBeginUpload();
   });
 
   for (const button of document.querySelectorAll('[data-close-modal]')) {
-    button.addEventListener('click', () => button.closest('.modal').hidden = true);
+    button.addEventListener('click', () => {
+      const modal = button.closest('.modal');
+      if (modal === dom.uploadModal) dismissUpload();
+      else modal.hidden = true;
+    });
   }
   for (const modal of document.querySelectorAll('.modal')) {
     modal.addEventListener('click', (event) => {
-      if (event.target === modal) modal.hidden = true;
+      if (event.target !== modal) return;
+      if (modal === dom.uploadModal) dismissUpload();
+      else modal.hidden = true;
     });
   }
 
@@ -2241,7 +2253,7 @@ function initModals() {
     stageFile(dom.fileInput.files?.[0]);
     dom.fileInput.value = '';
   });
-  dom.uploadStart.addEventListener('click', startUpload);
+  dom.uploadStart.addEventListener('click', confirmUpload);
   dom.reportOpen.addEventListener('click', () => reportView.open());
 
   for (const tab of dom.tabs.querySelectorAll('.tab')) {
@@ -2263,17 +2275,21 @@ function openModal(modal) {
 }
 
 function openUpload() {
+  if (!dom.uploadModal.hidden) return;
+  discardUploadJob({ deleteVideo: true });
   state.pendingFile = null;
+  dom.titleInput.value = '';
   dom.uploadPending.hidden = true;
   dom.uploadProgress.hidden = true;
   dom.barFill.style.width = '0%';
   dom.uploadStatus.textContent = '';
   dom.uploadAuthor.value = state.author;
   dom.uploadNewProject.value = '';
+  if (dom.uploadStart) dom.uploadStart.disabled = false;
   fillUploadProjectSelect();
   syncUploadProjectFields();
   syncUploadTitleCopy();
-  updateUploadButton();
+  syncUploadLock();
   openModal(dom.uploadModal);
   if (!state.author) setTimeout(() => dom.uploadAuthor.focus(), 60);
 }
@@ -2285,13 +2301,86 @@ function uploadTargetChosen() {
 }
 
 function updateUploadButton() {
-  if (!dom.uploadStart) return;
-  const ready = Boolean(state.author && state.pendingFile && uploadTargetChosen());
-  dom.uploadStart.disabled = !ready;
+  syncUploadLock();
+  if (!dom.uploadStart || uploadConfirming) return;
+  dom.uploadStart.disabled = false;
 }
 
-async function stageFile(file) {
-  if (!file || state.uploading) return;
+function syncUploadLock() {
+  const lock = Boolean(uploadJob && (uploadJob.status === 'uploading' || uploadJob.status === 'done'));
+  if (dom.uploadProjectSelect) dom.uploadProjectSelect.disabled = lock;
+  if (dom.uploadNewProject) dom.uploadNewProject.disabled = lock;
+  if (dom.uploadAuthor) dom.uploadAuthor.disabled = lock;
+}
+
+function resetUploadUi() {
+  state.pendingFile = null;
+  if (dom.titleInput) dom.titleInput.value = '';
+  if (dom.uploadPending) dom.uploadPending.hidden = true;
+  if (dom.uploadProgress) dom.uploadProgress.hidden = true;
+  if (dom.barFill) dom.barFill.style.width = '0%';
+  if (dom.uploadStatus) dom.uploadStatus.textContent = '';
+  syncUploadLock();
+}
+
+/** 换文件或重开弹窗时丢掉上一次还没确认的上传。已入库的删掉，避免留下半套片子。 */
+function discardUploadJob({ deleteVideo = false } = {}) {
+  const job = uploadJob;
+  uploadJob = null;
+  uploadEpoch += 1;
+  uploadConfirming = false;
+  if (dom.uploadStart) dom.uploadStart.disabled = false;
+  syncUploadLock();
+  if (!job) return;
+  if (job.status === 'uploading') {
+    job.aborted = true;
+    job.controller.abort();
+    return;
+  }
+  if (deleteVideo && job.status === 'done' && job.video) {
+    api.deleteVideo(job.video.id).catch(() => {});
+  }
+}
+
+/**
+ * 关掉弹窗：
+ * 还在传就中止，服务端不会入库；
+ * 已经传完则把片子留在项目里（标题框有字就改成这个片名），不跳转。
+ */
+function dismissUpload() {
+  if (!dom.uploadModal || dom.uploadModal.hidden) return;
+  const job = uploadJob;
+  const title = dom.titleInput.value.trim().slice(0, 80);
+  dom.uploadModal.hidden = true;
+  uploadJob = null;
+  uploadEpoch += 1;
+  uploadConfirming = false;
+  state.pendingFile = null;
+  if (dom.uploadStart) dom.uploadStart.disabled = false;
+  resetUploadUi();
+  if (!job) return;
+  if (job.status === 'uploading') {
+    job.aborted = true;
+    job.controller.abort();
+    toast('已取消上传');
+    return;
+  }
+  if (job.status === 'done' && job.video) void keepUploadedVideo(job.video, title);
+}
+
+async function keepUploadedVideo(video, title) {
+  try {
+    if (title && title !== video.title) await api.patchVideo(video.id, { title });
+    await refreshVideos();
+    toast('视频已留在项目里');
+  } catch (err) {
+    toast(err.message, true);
+    refreshVideos().catch(() => {});
+  }
+}
+
+function stageFile(file) {
+  if (!file) return;
 
   const looksVideo = /^video\//.test(file.type) || /\.(mp4|m4v|webm|mov|ogv|mkv)$/i.test(file.name);
   if (!looksVideo) {
@@ -2299,76 +2388,157 @@ async function stageFile(file) {
     return;
   }
 
+  discardUploadJob({ deleteVideo: true });
   state.pendingFile = file;
   dom.pendingName.textContent = file.name;
   dom.pendingSize.textContent = fileSize(file.size);
   dom.uploadPending.hidden = false;
   dom.uploadProgress.hidden = true;
-  updateUploadButton();
-
-  if (state.author && uploadContext().mode === 'fixed') {
-    startUpload();
-  } else if (!state.author) {
-    // 没有署名就停在这里，等填完名字再点开始
-    focusAuthor(true);
-    toast('先写上你的名字，再点「开始上传」');
-  }
+  dom.barFill.style.width = '0%';
+  dom.uploadStatus.textContent = '';
+  maybeBeginUpload();
 }
 
-async function startUpload() {
-  const file = state.pendingFile;
-  if (!file || state.uploading) return;
-  if (!requireName('上传前必须写上你的名字', true)) return;
-  if (!uploadTargetChosen()) {
-    toast('选个项目再上传');
-    return;
-  }
+/** 名字和去向都齐了才在后台开传。新项目名还在输入时不自动开传，免得每敲一个字建一次。 */
+function canBackgroundUpload() {
+  if (uploadContext().mode === 'fixed') return true;
+  if (dom.uploadNewProject.value.trim()) return false;
+  return Boolean(dom.uploadProjectSelect.value);
+}
 
-  state.uploading = true;
-  state.pendingFile = null;
-  dom.uploadStart.disabled = true;
+function maybeBeginUpload() {
+  if (uploadJob || !state.pendingFile || !state.author) return false;
+  if (!canBackgroundUpload()) return false;
+  beginUpload();
+  return true;
+}
+
+function uploadAbortError() {
+  return Object.assign(new Error('上传已取消'), { name: 'AbortError' });
+}
+
+/** 先把文件传上去，标题留空，服务端用文件名兜底。最终片名等用户点按钮。 */
+function beginUpload() {
+  const file = state.pendingFile;
+  if (!file || !state.author) return null;
+  const uploader = state.author;
+  const target = uploadPayload();
+  const controller = new AbortController();
+  const job = {
+    status: 'uploading',
+    file,
+    video: null,
+    error: null,
+    aborted: false,
+    controller,
+    promise: null,
+  };
+  uploadJob = job;
+  dom.uploadPending.hidden = false;
   dom.uploadProgress.hidden = false;
   dom.barFill.style.width = '0%';
   dom.uploadStatus.textContent = '读取视频信息…';
+  syncUploadLock();
 
-  const duration = await probeDuration(file);
-  if (!duration) dom.uploadStatus.textContent = '浏览器读不出时长，仍然可以上传';
-
-  try {
-    const target = uploadPayload();
+  job.promise = (async () => {
+    const duration = await probeDuration(file);
+    if (job.aborted) throw uploadAbortError();
+    if (!duration && uploadJob === job) dom.uploadStatus.textContent = '浏览器读不出时长，仍然可以上传';
     const data = await uploadVideo(
       file,
       {
-        title: dom.titleInput.value.trim(),
-        uploader: state.author,
+        title: '',
+        uploader,
         duration,
         fps: state.fps,
         projectId: target.projectId,
         newProjectName: target.newProjectName,
       },
       (progress) => {
+        if (uploadJob !== job) return;
         const percent = Math.round(progress * 100);
         dom.barFill.style.width = `${percent}%`;
         dom.uploadStatus.textContent = `上传中 ${percent}% · ${fileSize(file.size)}`;
       },
+      controller.signal,
     );
+    job.status = 'done';
+    job.video = data.video;
+    if (uploadJob === job && !uploadConfirming) {
+      dom.barFill.style.width = '100%';
+      dom.uploadStatus.textContent = '传完了，确认片名后点「上传并审片」';
+    }
+    return data;
+  })();
 
-    dom.barFill.style.width = '100%';
-    dom.uploadStatus.textContent = '上传完成';
+  job.promise.catch((err) => {
+    if (job.aborted || err?.name === 'AbortError') {
+      job.status = 'aborted';
+      return;
+    }
+    job.status = 'error';
+    job.error = err;
+    if (uploadJob === job) {
+      dom.uploadStatus.textContent = err.message || '上传失败';
+      if (!uploadConfirming) toast(err.message || '上传失败', true);
+      syncUploadLock();
+    }
+  });
+
+  return job;
+}
+
+async function applyDesiredTitle(video, title = dom.titleInput.value.trim().slice(0, 80)) {
+  if (!title || title === video.title) return video;
+  const data = await api.patchVideo(video.id, { title });
+  return data.video;
+}
+
+async function confirmUpload() {
+  if (uploadConfirming) return;
+  if (!requireName('上传前必须写上你的名字', true)) return;
+  if (!uploadTargetChosen()) {
+    toast('选个项目再上传');
+    return;
+  }
+  if (!state.pendingFile && !(uploadJob && uploadJob.file)) {
+    toast('先选择一个视频');
+    return;
+  }
+
+  uploadConfirming = true;
+  dom.uploadStart.disabled = true;
+  const epoch = uploadEpoch;
+  try {
+    let job = uploadJob;
+    if (!job || job.status === 'error' || job.status === 'aborted') job = beginUpload();
+    if (!job) throw new Error('先选择一个视频');
+    await job.promise;
+    if (epoch !== uploadEpoch || uploadJob !== job) return;
+    if (job.status !== 'done' || !job.video) throw job.error || new Error('上传失败');
+    const video = await applyDesiredTitle(job.video);
+    if (epoch !== uploadEpoch || uploadJob !== job) return;
+    uploadJob = null;
+    state.pendingFile = null;
     dom.uploadModal.hidden = true;
-    dom.uploadPending.hidden = true;
-    dom.titleInput.value = '';
+    resetUploadUi();
     await refreshVideos();
-    location.hash = `#/v/${data.video.id}`;
+    if (epoch !== uploadEpoch) return;
+    location.hash = `#/v/${video.id}`;
     applyHash();
     toast('上传好了，把地址发给同事就能一起看');
   } catch (err) {
-    dom.uploadStatus.textContent = err.message;
-    dom.uploadPending.hidden = true;
-    toast(err.message, true);
+    if (epoch !== uploadEpoch) return;
+    if (err?.name === 'AbortError') return;
+    dom.uploadProgress.hidden = false;
+    dom.uploadStatus.textContent = err.message || '上传失败';
+    toast(err.message || '上传失败', true);
   } finally {
-    state.uploading = false;
-    updateUploadButton();
+    if (epoch === uploadEpoch) {
+      uploadConfirming = false;
+      dom.uploadStart.disabled = false;
+      syncUploadLock();
+    }
   }
 }
 
@@ -2422,7 +2592,7 @@ function syncUploadProjectFields() {
   dom.uploadProject.hidden = !ask;
 }
 
-/** 放进某个项目时，标题框引导填写这一版改了什么；未分类仍用中性的「片名」。空标题仍由服务端用文件名兜底。 */
+/** 放进某个项目时，标题框引导填写这一版改了什么；未分类仍用中性的「片名」。空着点「上传并审片」时沿用文件名。 */
 function syncUploadTitleCopy() {
   const target = uploadPayload();
   const intoProject = Boolean(target.projectId || target.newProjectName);
@@ -3331,7 +3501,10 @@ function initKeyboard() {
     if (event.key === 'Escape') {
       // 自定义确认框在捕获阶段已经 preventDefault；输入法选词时对话框还开着，Esc 只交给输入法
       if (event.defaultPrevented || (dom.askModal && !dom.askModal.hidden)) return;
-      for (const modal of document.querySelectorAll('.modal')) modal.hidden = true;
+      if (dom.uploadModal && !dom.uploadModal.hidden) dismissUpload();
+      for (const modal of document.querySelectorAll('.modal')) {
+        if (modal !== dom.uploadModal) modal.hidden = true;
+      }
       if (state.draw) exitDrawMode();
       if (typing) active.blur();
       return;
