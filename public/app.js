@@ -2250,11 +2250,15 @@ function openUpload() {
   if (!state.author) setTimeout(() => dom.uploadAuthor.focus(), 60);
 }
 
+/** 首页上传必须选已有项目、未分类，或填一个新项目名。项目页已定好去向，不再拦。 */
+function uploadTargetChosen() {
+  if (uploadContext().mode !== 'ask') return true;
+  return Boolean(dom.uploadProjectSelect.value || dom.uploadNewProject.value.trim());
+}
+
 function updateUploadButton() {
   if (!dom.uploadStart) return;
-  const ask = uploadContext().mode === 'ask';
-  const chosen = !ask || Boolean(dom.uploadProjectSelect.value || dom.uploadNewProject.value.trim());
-  const ready = Boolean(state.author && state.pendingFile && chosen);
+  const ready = Boolean(state.author && state.pendingFile && uploadTargetChosen());
   dom.uploadStart.disabled = !ready;
 }
 
@@ -2287,6 +2291,10 @@ async function startUpload() {
   const file = state.pendingFile;
   if (!file || state.uploading) return;
   if (!requireName('上传前必须写上你的名字', true)) return;
+  if (!uploadTargetChosen()) {
+    toast('选个项目再上传');
+    return;
+  }
 
   state.uploading = true;
   state.pendingFile = null;
