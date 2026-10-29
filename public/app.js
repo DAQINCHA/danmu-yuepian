@@ -190,7 +190,7 @@ function cacheDom() {
     'video-title', 'video-meta', 'tabs', 'list', 'count-all', 'count-comment', 'count-annotation',
     'report-open',
     'library-modal', 'library-grid', 'library-page', 'library-crumb', 'project-grid', 'version-list',
-    'project-rename', 'project-delete', 'empty-card', 'intro-card', 'intro-close', 'upload-open-intro',
+    'project-rename', 'project-delete', 'empty-card', 'intro-card', 'intro-close',
     'upload-modal', 'dropzone', 'file-input', 'title-label', 'title-input', 'upload-project', 'upload-project-select', 'upload-new-project',
     'ask-modal', 'ask-title', 'ask-field', 'ask-input', 'ask-cancel', 'ask-ok', 'ask-close',
     'upload-author', 'upload-pending', 'pending-name', 'pending-size', 'upload-start',
@@ -2192,7 +2192,6 @@ function initModals() {
   dom.projectDelete.addEventListener('click', deleteCurrentProject);
   dom.uploadOpen.addEventListener('click', openUpload);
   dom.uploadOpenEmpty.addEventListener('click', openUpload);
-  dom.uploadOpenIntro.addEventListener('click', openUpload);
   dom.introClose.addEventListener('click', dismissIntro);
   dom.uploadNewProject.addEventListener('input', () => {
     updateUploadButton();

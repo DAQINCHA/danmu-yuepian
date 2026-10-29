@@ -353,29 +353,57 @@ body.author-spotlight .toast { z-index: 100; }
 
 .hint-line { margin-top: 14px; color: var(--text-faint); font-size: 12px; }
 
-/* 有片子之后的新人介绍：内容和空状态一样，略收紧，可关掉 */
-.intro-card {
-  position: relative;
-  margin: 0 auto 22px;
-  padding-top: 4px;
-}
-.intro-close-row {
+/* 有片子之后的新人介绍：顶栏下的一条细横幅 */
+.intro-banner {
   display: flex;
-  justify-content: flex-end;
-  margin: 0 -4px 2px;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  width: 100%;
+  padding: 6px 8px 6px 16px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.4;
 }
-.intro-card h1 { font-size: 22px; margin-bottom: 8px; }
-.intro-card .lede { margin-bottom: 14px; line-height: 1.65; }
-.intro-card .hint-line { margin-top: 10px; }
-@media (max-width: 620px) {
-  .intro-card h1 { font-size: 20px; }
-  .intro-close { width: 36px; height: 36px; }
+.intro-banner p {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+.intro-banner strong { color: var(--text); font-weight: 650; }
+.intro-close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.intro-close:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
+@media (max-width: 860px) {
+  .intro-banner { align-items: flex-start; padding: 7px 6px 7px 12px; font-size: 12.5px; }
+  .intro-close { width: 32px; height: 32px; }
 }
 
 .empty.library-view {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
   overflow: auto;
   place-items: stretch;
+}
+.empty.library-view .library-page {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 28px 32px 32px;
 }
 
 .library-page { max-width: 1080px; margin: 0 auto; }

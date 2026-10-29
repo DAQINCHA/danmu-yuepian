@@ -46,6 +46,10 @@
   <main class="workspace">
     <section class="stage" id="stage">
       <div class="empty" id="empty-state">
+        <div class="intro-banner" id="intro-card" hidden>
+          <p><strong>审片，不用来回截图</strong> · 上传视频，把链接发给同事，在任意一帧发弹幕、圈重点。</p>
+          <button class="intro-close" id="intro-close" type="button" aria-label="关闭介绍">✕</button>
+        </div>
         <div class="library-page" id="library-page" hidden>
           <header class="library-bar">
             <div class="library-crumb" id="library-crumb"></div>
@@ -54,15 +58,6 @@
               <button class="btn tiny ghost" id="project-delete" type="button" hidden>删除项目</button>
             </div>
           </header>
-          <div class="intro-card empty-card" id="intro-card" hidden>
-            <div class="intro-close-row">
-              <button class="icon-btn intro-close" id="intro-close" type="button" aria-label="关闭介绍">✕</button>
-            </div>
-            <h1>审片，不用来回截图</h1>
-            <p class="lede">上传视频，把链接发给同事，在任意一帧发弹幕、圈重点。</p>
-            <button class="btn primary lg" id="upload-open-intro" type="button">上传影片</button>
-            <p class="hint-line">或将视频拖到这里</p>
-          </div>
           <div class="project-grid" id="project-grid"></div>
           <div class="version-list" id="version-list" hidden></div>
         </div>
