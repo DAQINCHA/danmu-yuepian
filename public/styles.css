@@ -1732,8 +1732,7 @@ body.dragging::after {
   .r-shot img { border-color: #ccc; }
   .r-shot figcaption { color: #666; }
   .r-time { color: #8a6100; }
-  .r-check input { accent-color: #2f9e77; }
-  .r-check span { color: #444; }
+  .r-check { display: none !important; }
 }
 
 /* ── 窄屏 ───────────────────────────────────────────────────────────── */

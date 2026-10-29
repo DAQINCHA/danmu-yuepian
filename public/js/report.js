@@ -229,7 +229,6 @@ function pdfItem(entry, index, fps, { overall = false, inGroup = false, names = 
 function buildPdfModel(data, images, prefs) {
   const entries = collect(data);
   const names = prefs?.names !== false;
-  const done = entries.filter((e) => e.data.done).length;
   const sections = [];
   const overallEntries = entries.filter((e) => e.kind === 'comment' && isOverall(e.data));
   let index = 0;
@@ -275,7 +274,6 @@ function buildPdfModel(data, images, prefs) {
     title: `审片报告 · ${data.video.title}`,
     footer: `审片报告 · ${data.video.title}`,
     meta: [`生成时间：${new Date().toLocaleString('zh-CN')}`],
-    summary: `意见：共 ${entries.length} 条，已改 ${done} 条，待改 ${entries.length - done} 条`,
     sections,
     empty: '（这一版还没有任何意见）',
   };

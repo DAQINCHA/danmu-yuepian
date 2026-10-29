@@ -178,7 +178,6 @@ async function drawItem(pager, item) {
   const { ctx } = pager;
   const innerW = CONTENT_W - ITEM.padX * 2;
   const indexW = 44;
-  const checkW = 90;
   const textW = innerW - indexW;
 
   setFont(ctx, ITEM.text);
@@ -270,21 +269,6 @@ async function drawItem(pager, item) {
           c.fillStyle = COLORS.faint;
           c.fillText(item.extra, hx, base);
         }
-        // 右侧勾选框
-        const bx = MARGIN_X + CONTENT_W - ITEM.padX - checkW;
-        c.strokeStyle = item.done ? COLORS.ok : '#9aa1ad';
-        c.lineWidth = 2;
-        c.strokeRect(bx, base - 16, 18, 18);
-        if (item.done) {
-          c.beginPath();
-          c.moveTo(bx + 4, base - 7);
-          c.lineTo(bx + 8, base - 2);
-          c.lineTo(bx + 15, base - 13);
-          c.stroke();
-        }
-        setFont(c, 16, 500);
-        c.fillStyle = item.done ? COLORS.ok : COLORS.dim;
-        c.fillText(item.done ? '已改' : '待改', bx + 26, base);
       } else if (row.type === 'text') {
         setFont(c, ITEM.text);
         c.fillStyle = item.done ? COLORS.faint : COLORS.text;
@@ -392,7 +376,7 @@ async function drawHeader(pager, model) {
     c.fillText(model.summary, MARGIN_X, y + 26);
     y += 34;
   }
-  // 表头和正文之间只留一条细分隔线（进度已经写在「意见」那一行）
+  // 表头和正文之间只留一条细分隔线
   c.fillStyle = COLORS.line;
   c.fillRect(MARGIN_X, y + 14, CONTENT_W, 1.5);
   pager.y = y + 40;
