@@ -405,11 +405,15 @@ body.author-spotlight .toast { z-index: 100; }
 }
 .empty.library-view .library-page {
   width: 100%;
+  max-width: 2000px;
+  margin: 0 auto;
   box-sizing: border-box;
-  padding: 28px 32px 32px;
+  padding: 28px clamp(20px, 3vw, 40px) 32px;
 }
+/* 没在看片时侧栏是空的，让首页和项目页用满窗口宽度 */
+.workspace:has(.empty.library-view:not([hidden])) .sidebar { display: none; }
 
-.library-page { max-width: 1080px; margin: 0 auto; }
+.library-page { max-width: none; margin: 0 auto; }
 .library-bar {
   display: flex;
   align-items: center;
@@ -444,7 +448,7 @@ body.author-spotlight .toast { z-index: 100; }
 
 .project-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 14px;
 }
 .project-card {
@@ -467,6 +471,7 @@ body.author-spotlight .toast { z-index: 100; }
   width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
+  border-radius: 11px 11px 0 0;
   background: #10141c;
 }
 .project-cover {
@@ -474,9 +479,14 @@ body.author-spotlight .toast { z-index: 100; }
   inset: 0;
   width: 100%;
   height: 100%;
+  border: 0;
+  outline: none;
   object-fit: cover;
   object-position: center;
+  /* 空图的细边框用当前文字色，圆角裁切后会在角上断开 */
+  color: transparent;
 }
+.project-cover:not([src]) { visibility: hidden; }
 .project-add {
   align-items: center;
   justify-content: center;
