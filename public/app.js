@@ -1357,11 +1357,15 @@ function buildEditForm(comment) {
       closeEdit();
       return;
     }
-    // Enter 换行；原来的回车保存改由按钮，或 Ctrl/⌘+Enter
-    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault();
-      form.requestSubmit();
+    if (event.key !== 'Enter') return;
+    // Enter 与 Shift+Enter 都换行，不保存；保存仍是按钮或 Ctrl/⌘+Enter
+    if (event.shiftKey || (!event.ctrlKey && !event.metaKey)) {
+      event.stopPropagation();
+      return;
     }
+    event.preventDefault();
+    event.stopPropagation();
+    form.requestSubmit();
   });
 
   const save = document.createElement('button');
