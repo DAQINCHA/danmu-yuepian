@@ -447,7 +447,7 @@ function leaveVideo() {
   syncAuthorSpotlight();
   reportView?.close();
   dom.videoTitle.textContent = '还没有打开片子';
-  dom.videoMeta.textContent = '上传后从片库里选一支开始审。';
+  dom.videoMeta.textContent = '上传后在项目里选一支开始审。';
   dom.list.replaceChildren(emptyHint('还没有评论。打开一支片，暂停在任意一帧就能发弹幕。'));
   danmaku.clear();
   annView.clear();
@@ -2671,13 +2671,13 @@ function renderCrumb() {
   dom.libraryCrumb.replaceChildren();
   if (state.libraryPage !== 'project') {
     const title = document.createElement('span');
-    title.textContent = '片库';
+    title.textContent = '项目';
     dom.libraryCrumb.append(title);
     return;
   }
   const back = document.createElement('button');
   back.type = 'button';
-  back.textContent = '片库';
+  back.textContent = '项目';
   back.addEventListener('click', () => { location.hash = '#/'; });
   const sep = document.createElement('span');
   sep.className = 'crumb-sep';
@@ -3036,7 +3036,7 @@ async function deleteCurrentProject() {
 
 function renderLibrary() {
   if (!state.videos.length) {
-    dom.libraryGrid.replaceChildren(emptyHint('片库还是空的，先上传一支。'));
+    dom.libraryGrid.replaceChildren(emptyHint('还没有片子，先上传一支。'));
     return;
   }
 
