@@ -178,7 +178,7 @@ function boot() {
 
 function cacheDom() {
   const ids = [
-    'author-field', 'author-input', 'author-veil', 'author-hint', 'presence', 'presence-count', 'library-open', 'project-new', 'upload-open', 'upload-open-empty',
+    'author-field', 'author-input', 'author-veil', 'author-hint', 'presence', 'presence-count', 'library-open', 'project-new', 'upload-open',
     'empty-state', 'frame', 'video-wrap', 'video', 'danmaku-layer', 'ann-layer', 'draw-layer', 'paused-badge',
     'draw-toolbar', 'range-in', 'range-out', 'range-summary', 'swatches', 'mark-in', 'mark-out',
     'preview-range', 'draw-undo', 'draw-clear', 'draw-cancel', 'draw-save',
@@ -190,7 +190,7 @@ function cacheDom() {
     'video-title', 'video-meta', 'tabs', 'list', 'count-all', 'count-comment', 'count-annotation',
     'report-open',
     'library-modal', 'library-grid', 'library-page', 'library-crumb', 'project-grid', 'version-list',
-    'project-rename', 'project-delete', 'empty-card', 'intro-card', 'intro-close',
+    'project-rename', 'project-delete', 'intro-card', 'intro-close',
     'upload-modal', 'dropzone', 'file-input', 'title-label', 'title-input', 'upload-project', 'upload-project-select', 'upload-new-project',
     'ask-modal', 'ask-title', 'ask-field', 'ask-input', 'ask-cancel', 'ask-ok', 'ask-close',
     'upload-author', 'upload-pending', 'pending-name', 'pending-size', 'upload-start',
@@ -455,7 +455,7 @@ function showProjectHome() {
   state.libraryPage = 'home';
   state.libraryProjectId = null;
   dom.empty.hidden = false;
-  dom.empty.classList.toggle('library-view', hasLibraryContent());
+  dom.empty.classList.add('library-view');
   renderLibraryView();
 }
 
@@ -2191,7 +2191,6 @@ function initModals() {
   dom.projectRename.addEventListener('click', renameCurrentProject);
   dom.projectDelete.addEventListener('click', deleteCurrentProject);
   dom.uploadOpen.addEventListener('click', openUpload);
-  dom.uploadOpenEmpty.addEventListener('click', openUpload);
   dom.introClose.addEventListener('click', dismissIntro);
   dom.uploadNewProject.addEventListener('input', () => {
     updateUploadButton();
@@ -2348,13 +2347,15 @@ async function startUpload() {
   }
 }
 
-function hasLibraryContent() {
-  return state.projects.length > 0 || Boolean(state.uncategorized?.videoCount);
-}
-
 let introClosed = false;
 
+function libraryHasVideos() {
+  return state.videos.length > 0;
+}
+
+/** 还没有任何视频时介绍一直在，不看关闭记录。有视频之后才记住关掉。 */
 function introDismissed() {
+  if (!libraryHasVideos()) return false;
   if (introClosed) return true;
   try {
     return localStorage.getItem(STORE.intro) != null;
@@ -2364,6 +2365,7 @@ function introDismissed() {
 }
 
 function dismissIntro() {
+  if (!libraryHasVideos()) return;
   introClosed = true;
   try {
     localStorage.setItem(STORE.intro, '1');
@@ -2626,18 +2628,17 @@ function maybeSavePlayingCover() {
 function renderLibraryView() {
   if (!dom.libraryPage) return;
   const home = state.libraryPage !== 'project';
-  const showCards = home && hasLibraryContent();
   const showProject = !home;
-  dom.libraryPage.hidden = !showCards && !showProject;
-  dom.emptyCard.hidden = !home || hasLibraryContent();
-  dom.empty.classList.toggle('library-view', showCards || showProject);
-  dom.projectGrid.hidden = !showCards;
+  dom.libraryPage.hidden = false;
+  dom.empty.classList.add('library-view');
+  dom.projectGrid.hidden = !home;
   dom.versionList.hidden = !showProject;
   dom.projectRename.hidden = home || !state.libraryProjectId;
   dom.projectDelete.hidden = home || !state.libraryProjectId;
-  if (dom.introCard) dom.introCard.hidden = !showCards || introDismissed();
+  if (dom.introCard) dom.introCard.hidden = !home || introDismissed();
+  if (dom.introClose) dom.introClose.hidden = !libraryHasVideos();
   renderCrumb();
-  if (showCards) renderProjectCards();
+  if (home) renderProjectCards();
   if (showProject) renderVersionList();
 }
 

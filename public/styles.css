@@ -323,7 +323,7 @@ body.author-spotlight .toast { z-index: 100; }
     radial-gradient(120% 90% at 50% 0%, #141922 0%, #0b0d11 70%);
 }
 
-/* ── 空状态 ─────────────────────────────────────────────────────────── */
+/* ── 片库首页 ───────────────────────────────────────────────────────── */
 
 .empty {
   display: grid;
@@ -331,27 +331,6 @@ body.author-spotlight .toast { z-index: 100; }
   flex: 1 1 auto;
   padding: 32px;
 }
-
-.empty-card {
-  max-width: 440px;
-  text-align: center;
-}
-
-.empty-card h1 {
-  font-size: 24px;
-  font-weight: 650;
-  letter-spacing: 0.01em;
-  margin-bottom: 12px;
-}
-
-.empty-card .lede {
-  color: var(--text-dim);
-  font-size: 14px;
-  line-height: 1.75;
-  margin-bottom: 22px;
-}
-
-.hint-line { margin-top: 14px; color: var(--text-faint); font-size: 12px; }
 
 /* 有片子之后的新人介绍：居中悬浮的圆角胶囊 */
 .intro-banner-wrap {
