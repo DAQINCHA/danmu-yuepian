@@ -410,14 +410,15 @@ function applyHash() {
   syncTopbarNav();
 }
 
-/** 首页不放返回；看片页把「片库」写成「返回项目」，并改成回主页、不放上传。 */
+/** 返回主页紧跟署名：项目页和看片页共用；返回项目只在看片页、排在它后面。 */
 function syncTopbarNav() {
   const onProject = /^#\/p\/[\w-]+/.test(location.hash);
   const onVideo = /^#\/v\/[\w-]+/.test(location.hash);
   const onHome = !onProject && !onVideo;
   dom.libraryOpen.hidden = onHome;
-  dom.libraryOpen.textContent = onVideo ? '返回项目' : '片库';
+  dom.libraryOpen.textContent = '返回主页';
   dom.homeOpen.hidden = !onVideo;
+  dom.homeOpen.textContent = '返回项目';
   dom.projectNew.hidden = !onHome;
   dom.uploadOpen.hidden = onVideo;
 }
@@ -2202,13 +2203,13 @@ async function refreshVideos() {
 
 function initModals() {
   dom.libraryOpen.addEventListener('click', () => {
+    location.hash = '#/';
+  });
+  dom.homeOpen.addEventListener('click', () => {
     if (state.video) {
       location.hash = state.video.projectId ? `#/p/${state.video.projectId}` : '#/p/uncategorized';
       return;
     }
-    location.hash = '#/';
-  });
-  dom.homeOpen.addEventListener('click', () => {
     location.hash = '#/';
   });
   dom.projectNew.addEventListener('click', createProjectPrompt);
