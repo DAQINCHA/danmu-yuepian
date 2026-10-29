@@ -138,7 +138,7 @@ function pushEntry(lines, entry, index, fps, { level = '##', shot = null, overal
   // 不显示名字时只剩「序号. 时间码」
   lines.push(`${level} ${head[0]} ${head.slice(1).join(' · ')}`.trimEnd());
   lines.push('');
-  lines.push(describe(entry, fps));
+  lines.push(String(describe(entry, fps)).replace(/\r\n?/g, '\n').split('\n').join('  \n'));
   lines.push('');
   if (shot) {
     lines.push(`![起始帧](${shot})`);

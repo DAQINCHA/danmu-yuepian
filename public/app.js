@@ -1329,15 +1329,20 @@ function buildEditForm(comment) {
   form.className = 'reply-form edit-form';
   form.addEventListener('click', (event) => event.stopPropagation());
 
-  const input = document.createElement('input');
-  input.className = 'reply-input';
-  input.type = 'text';
+  const input = document.createElement('textarea');
+  input.className = 'reply-input edit-box';
+  input.rows = 1;
   input.maxLength = 500;
   input.autocomplete = 'off';
-  input.placeholder = '修改弹幕内容，回车保存';
+  input.placeholder = '修改弹幕内容，Enter 换行';
   input.value = state.editDraft;
+  const fitEditBox = () => {
+    input.style.height = 'auto';
+    input.style.height = `${Math.min(160, Math.max(input.scrollHeight, 34))}px`;
+  };
   input.addEventListener('input', () => {
     state.editDraft = input.value;
+    fitEditBox();
   });
   input.addEventListener('focus', () => {
     state.editFocus = true;
@@ -1346,9 +1351,16 @@ function buildEditForm(comment) {
     state.editFocus = false;
   });
   input.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !event.isComposing) {
+    if (event.isComposing) return;
+    if (event.key === 'Escape') {
       event.stopPropagation();
       closeEdit();
+      return;
+    }
+    // Enter 换行；原来的回车保存改由按钮，或 Ctrl/⌘+Enter
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      form.requestSubmit();
     }
   });
 
@@ -1356,6 +1368,7 @@ function buildEditForm(comment) {
   save.type = 'submit';
   save.className = 'btn primary reply-send';
   save.textContent = '保存';
+  save.title = 'Ctrl 或 ⌘ + Enter';
 
   const cancel = document.createElement('button');
   cancel.type = 'button';
@@ -1394,14 +1407,14 @@ function buildEditForm(comment) {
     }
   });
 
-  if (state.editFocus) {
-    requestAnimationFrame(() => {
-      if (!input.isConnected) return;
-      input.focus();
-      const end = input.value.length;
-      input.setSelectionRange(end, end);
-    });
-  }
+  requestAnimationFrame(() => {
+    if (!input.isConnected) return;
+    fitEditBox();
+    if (!state.editFocus) return;
+    input.focus();
+    const end = input.value.length;
+    input.setSelectionRange(end, end);
+  });
   return form;
 }
 

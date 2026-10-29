@@ -1154,6 +1154,7 @@ body.author-spotlight .toast { z-index: 100; }
   font-size: 13px;
   line-height: 1.55;
   word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .item-annotation { display: flex; gap: 9px; align-items: center; }
@@ -1460,7 +1461,7 @@ body.author-spotlight .toast { z-index: 100; }
 .r-time:hover { text-decoration: underline; }
 
 .r-author { color: var(--r-color, #8ab4ff); font-weight: 650; }
-.r-text { color: #dde2ee; font-size: 13px; line-height: 1.6; word-break: break-word; }
+.r-text { color: #dde2ee; font-size: 13px; line-height: 1.6; word-break: break-word; white-space: pre-wrap; }
 
 .r-shot {
   margin: 7px 0 0;
@@ -1602,7 +1603,18 @@ body.author-spotlight .toast { z-index: 100; }
 .reply-send, .reply-cancel { padding: 4px 10px; font-size: 12px; }
 
 /* 侧栏：修改自己的弹幕 */
-.edit-form { margin-top: 2px; }
+.edit-form { align-items: flex-start; margin-top: 2px; }
+.edit-form .edit-box {
+  display: block;
+  min-height: 34px;
+  max-height: 160px;
+  height: 34px;
+  padding: 6px 8px;
+  line-height: 1.45;
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
 .item-edited { color: var(--text-faint); font-size: 10.5px; }
 
 /* 报告：弹幕下的回复 */
