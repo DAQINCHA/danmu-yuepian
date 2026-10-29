@@ -509,7 +509,43 @@ body.author-spotlight .toast { z-index: 100; }
   border-color: #45d0d2;
   color: #8fe6e7;
 }
-.project-body { padding: 12px 14px 14px; }
+.project-body { position: relative; padding: 12px 14px 14px; }
+.project-copy { min-width: 0; }
+.project-actions {
+  position: absolute;
+  right: 10px;
+  bottom: 12px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.project-card:hover .project-actions,
+.project-card:focus-within .project-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (hover: none) {
+  .project-actions { opacity: 1; pointer-events: auto; }
+  .project-body:has(.project-actions) { padding-right: 86px; }
+}
+.project-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid #2c3540;
+  border-radius: 8px;
+  background: #1f2630;
+  cursor: pointer;
+}
+.project-icon svg { display: block; width: 16px; height: 16px; }
+.project-icon-edit { color: #cfd6dd; }
+.project-icon-delete { color: #e8838a; }
+.project-icon-edit:hover { background: #2a3340; border-color: #3a4554; color: #fff; }
+.project-icon-delete:hover { background: #2a3340; border-color: #3a4554; color: #ffb4b8; }
 .project-name {
   font-size: 15px;
   font-weight: 650;

@@ -2734,9 +2734,38 @@ function projectAddMark() {
   return svg;
 }
 
+function projectIconButton(label, paths, tone) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `project-icon project-icon-${tone}`;
+  button.title = label;
+  button.setAttribute('aria-label', label);
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.6');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  for (const d of paths) {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', d);
+    svg.append(path);
+  }
+  button.append(svg);
+  button.addEventListener('click', (event) => event.stopPropagation());
+  return button;
+}
+
 function projectCard(project) {
-  const card = document.createElement('button');
-  card.type = 'button';
+  const loose = project.id === 'uncategorized';
+  const card = document.createElement(loose ? 'button' : 'div');
+  if (loose) card.type = 'button';
+  else {
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+  }
   card.className = 'project-card';
   const frame = document.createElement('div');
   frame.className = 'project-cover-frame';
@@ -2746,6 +2775,8 @@ function projectCard(project) {
   frame.append(cover);
   const body = document.createElement('div');
   body.className = 'project-body';
+  const copy = document.createElement('div');
+  copy.className = 'project-copy';
   const title = document.createElement('div');
   title.className = 'project-name';
   title.textContent = project.name;
@@ -2753,11 +2784,40 @@ function projectCard(project) {
   meta.className = 'project-meta';
   const when = project.latestAt ? relativeTime(project.latestAt) : '还没有更新';
   meta.textContent = `${project.videoCount || 0} 支 · ${when}`;
-  body.append(title, meta);
+  copy.append(title, meta);
+  body.append(copy);
+  if (!loose) {
+    const actions = document.createElement('div');
+    actions.className = 'project-actions';
+    const edit = projectIconButton('修改项目', [
+      'M12 20h8',
+      'M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z',
+    ], 'edit');
+    edit.addEventListener('click', () => renameProjectBy(project));
+    const del = projectIconButton('删除项目', [
+      'M3 6h18',
+      'M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2',
+      'M5 6l1 14a1 1 0 001 1h10a1 1 0 001-1l1-14',
+      'M10 11v6M14 11v6',
+    ], 'delete');
+    del.addEventListener('click', () => deleteProjectBy(project));
+    actions.append(edit, del);
+    body.append(actions);
+  }
   card.append(frame, body);
-  card.addEventListener('click', () => {
-    location.hash = project.id === 'uncategorized' ? '#/p/uncategorized' : `#/p/${project.id}`;
-  });
+  const open = () => {
+    location.hash = loose ? '#/p/uncategorized' : `#/p/${project.id}`;
+  };
+  card.addEventListener('click', open);
+  if (!loose) {
+    card.addEventListener('keydown', (event) => {
+      if (event.target !== card) return;
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        open();
+      }
+    });
+  }
   return card;
 }
 
@@ -3002,8 +3062,7 @@ async function createProjectPrompt() {
   }
 }
 
-async function renameCurrentProject() {
-  const project = state.projects.find((item) => item.id === state.libraryProjectId);
+async function renameProjectBy(project) {
   if (!project) return;
   const name = await askText('项目新名称', project.name);
   if (name == null) return;
@@ -3020,18 +3079,25 @@ async function renameCurrentProject() {
   }
 }
 
-async function deleteCurrentProject() {
-  const project = state.projects.find((item) => item.id === state.libraryProjectId);
+async function renameCurrentProject() {
+  await renameProjectBy(state.projects.find((item) => item.id === state.libraryProjectId));
+}
+
+async function deleteProjectBy(project, { goHome = false } = {}) {
   if (!project) return;
   const ok = await askConfirm(`删除项目「${project.name}」？\n里面的视频会移回「未分类」，不会被删除。`, { danger: true });
   if (!ok) return;
   try {
     await api.deleteProject(project.id);
     await refreshVideos();
-    location.hash = '#/';
+    if (goHome) location.hash = '#/';
   } catch (err) {
     toast(err.message, true);
   }
+}
+
+async function deleteCurrentProject() {
+  await deleteProjectBy(state.projects.find((item) => item.id === state.libraryProjectId), { goHome: true });
 }
 
 function renderLibrary() {
