@@ -410,12 +410,13 @@ function applyHash() {
   syncTopbarNav();
 }
 
-/** 首页已经是片库，不再放返回按钮；项目页不放「新建项目」。看片时两个都留着。 */
+/** 首页已经是片库，不再放返回按钮；项目页和看片页不放「新建项目」。 */
 function syncTopbarNav() {
   const onProject = /^#\/p\/[\w-]+/.test(location.hash);
-  const onHome = !onProject && !/^#\/v\/[\w-]+/.test(location.hash);
+  const onVideo = /^#\/v\/[\w-]+/.test(location.hash);
+  const onHome = !onProject && !onVideo;
   dom.libraryOpen.hidden = onHome;
-  dom.projectNew.hidden = onProject;
+  dom.projectNew.hidden = !onHome;
 }
 
 function leaveVideo() {
