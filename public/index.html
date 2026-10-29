@@ -270,6 +270,23 @@
     </div>
   </div>
 
+  <!-- 替代 window.prompt / window.confirm -->
+  <div class="modal" id="ask-modal" hidden role="dialog" aria-modal="true" aria-labelledby="ask-title">
+    <div class="modal-box">
+      <header class="modal-head">
+        <h2 id="ask-title"></h2>
+        <button class="icon-btn" id="ask-close" type="button" data-close-modal>✕</button>
+      </header>
+      <form class="field" id="ask-field" hidden>
+        <input id="ask-input" type="text" maxlength="40" autocomplete="off" spellcheck="false" enterkeyhint="done" aria-labelledby="ask-title" />
+      </form>
+      <div class="ask-actions">
+        <button class="btn ghost" id="ask-cancel" type="button">取消</button>
+        <button class="btn primary" id="ask-ok" type="button">确定</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 没署名时盖住整页；署名框在顶栏里单独抬到这层上面 -->
   <div id="author-veil" class="author-veil" hidden></div>
   <!-- 弹簧绕圈，画布 400×260。线尾 (80,205)，箭头尖 (256,114)。换样式只改这两条 d -->

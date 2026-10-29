@@ -125,6 +125,7 @@ function boot() {
   initOverall();
   initDrawToolbar();
   initModals();
+  initAskDialog();
   initDrop();
   initKeyboard();
   initPresence();
@@ -190,6 +191,7 @@ function cacheDom() {
     'library-modal', 'library-grid', 'library-page', 'library-crumb', 'project-grid', 'version-list',
     'project-rename', 'project-delete', 'empty-card',
     'upload-modal', 'dropzone', 'file-input', 'title-label', 'title-input', 'upload-project', 'upload-project-select', 'upload-new-project',
+    'ask-modal', 'ask-title', 'ask-field', 'ask-input', 'ask-cancel', 'ask-ok', 'ask-close',
     'upload-author', 'upload-pending', 'pending-name', 'pending-size', 'upload-start',
     'upload-progress', 'bar-fill', 'upload-status', 'toast',
   ];
@@ -1582,7 +1584,7 @@ function dropReplyFor(kind, id) {
 }
 
 async function removeReply(kind, target, reply) {
-  if (!window.confirm('删除这条回复？')) return;
+  if (!await askConfirm('删除这条回复？', { danger: true })) return;
   try {
     const result = await api.deleteReply(kind, target.id, reply.id, authorName());
     applyItemUpdate(kind, result[kind]);
@@ -1697,7 +1699,7 @@ function buildAnnotationItem(annotation) {
 }
 
 async function removeComment(comment) {
-  if (!window.confirm('删除这条弹幕？')) return;
+  if (!await askConfirm('删除这条弹幕？', { danger: true })) return;
   try {
     await api.deleteComment(comment.id);
     removeCommentLocal(comment.id);
@@ -1720,7 +1722,7 @@ function removeCommentLocal(id) {
 }
 
 async function removeAnnotation(annotation) {
-  if (!window.confirm('删除这个画笔标注？')) return;
+  if (!await askConfirm('删除这个画笔标注？', { danger: true })) return;
   try {
     await api.deleteAnnotation(annotation.id);
     removeAnnotationLocal(annotation.id);
@@ -2816,7 +2818,7 @@ function versionRow(video, version) {
   del.textContent = '删除';
   del.addEventListener('click', async (event) => {
     event.stopPropagation();
-    if (!window.confirm(`删除《${video.title}》及其全部弹幕和标注？文件会被移除。`)) return;
+    if (!await askConfirm(`删除《${video.title}》及其全部弹幕和标注？文件会被移除。`, { danger: true })) return;
     try {
       if (state.renameId === video.id) {
         state.renameId = null;
@@ -2838,8 +2840,103 @@ function versionRow(video, version) {
   return row;
 }
 
+let askSession = null;
+
+function initAskDialog() {
+  dom.askCancel.addEventListener('click', () => cancelAsk());
+  dom.askClose.addEventListener('click', () => cancelAsk());
+  dom.askOk.addEventListener('click', () => submitAsk());
+  dom.askField.addEventListener('submit', (event) => {
+    event.preventDefault();
+    submitAsk();
+  });
+  dom.askModal.addEventListener('click', (event) => {
+    if (event.target === dom.askModal) cancelAsk();
+  });
+  window.addEventListener('keydown', (event) => {
+    if (!askSession || dom.askModal.hidden) return;
+    if (event.key !== 'Escape' && event.key !== 'Enter') return;
+    if (event.isComposing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.key === 'Escape') cancelAsk();
+    else submitAsk();
+  }, true);
+}
+
+/** 文本输入。取消返回 null；空内容不提交，对话框保持打开。 */
+function askText(title, defaultValue = '') {
+  return openAsk({
+    kind: 'text',
+    cancelValue: null,
+    prepare() {
+      dom.askTitle.textContent = title;
+      dom.askField.hidden = false;
+      dom.askInput.value = defaultValue == null ? '' : String(defaultValue);
+      dom.askOk.textContent = '确定';
+      dom.askOk.classList.add('primary');
+      dom.askOk.classList.remove('danger');
+    },
+    focus() {
+      dom.askInput.focus();
+      dom.askInput.select();
+    },
+  });
+}
+
+/** 确认。取消返回 false；danger 时确认按钮用红色。 */
+function askConfirm(message, { danger = false } = {}) {
+  return openAsk({
+    kind: 'confirm',
+    cancelValue: false,
+    prepare() {
+      dom.askTitle.textContent = message;
+      dom.askField.hidden = true;
+      dom.askOk.textContent = danger ? '删除' : '确定';
+      dom.askOk.classList.toggle('primary', !danger);
+      dom.askOk.classList.toggle('danger', danger);
+    },
+    focus() {
+      dom.askOk.focus();
+    },
+  });
+}
+
+function openAsk(session) {
+  if (askSession) cancelAsk();
+  return new Promise((resolve) => {
+    askSession = { resolve, ...session };
+    session.prepare();
+    dom.askModal.hidden = false;
+    setTimeout(session.focus, 30);
+  });
+}
+
+function submitAsk() {
+  if (!askSession) return;
+  if (askSession.kind === 'text') {
+    const value = dom.askInput.value.trim();
+    if (!value) return;
+    settleAsk(value);
+    return;
+  }
+  settleAsk(true);
+}
+
+function cancelAsk() {
+  if (!askSession) return;
+  settleAsk(askSession.cancelValue);
+}
+
+function settleAsk(value) {
+  const resolve = askSession.resolve;
+  askSession = null;
+  dom.askModal.hidden = true;
+  resolve(value);
+}
+
 async function createProjectPrompt() {
-  const name = window.prompt('项目名称');
+  const name = await askText('项目名称');
   if (name == null) return;
   const trimmed = name.trim();
   if (!trimmed) {
@@ -2858,7 +2955,7 @@ async function createProjectPrompt() {
 async function renameCurrentProject() {
   const project = state.projects.find((item) => item.id === state.libraryProjectId);
   if (!project) return;
-  const name = window.prompt('项目新名称', project.name);
+  const name = await askText('项目新名称', project.name);
   if (name == null) return;
   const trimmed = name.trim();
   if (!trimmed) {
@@ -2876,7 +2973,7 @@ async function renameCurrentProject() {
 async function deleteCurrentProject() {
   const project = state.projects.find((item) => item.id === state.libraryProjectId);
   if (!project) return;
-  const ok = window.confirm(`删除项目「${project.name}」？\n里面的视频会移回「未分类」，不会被删除。`);
+  const ok = await askConfirm(`删除项目「${project.name}」？\n里面的视频会移回「未分类」，不会被删除。`, { danger: true });
   if (!ok) return;
   try {
     await api.deleteProject(project.id);
@@ -2934,7 +3031,7 @@ function renderLibrary() {
     del.textContent = '删除';
     del.addEventListener('click', async (event) => {
       event.stopPropagation();
-      if (!window.confirm(`删除《${video.title}》及其全部弹幕和标注？文件会被移除。`)) return;
+      if (!await askConfirm(`删除《${video.title}》及其全部弹幕和标注？文件会被移除。`, { danger: true })) return;
       try {
         await api.deleteVideo(video.id);
         await refreshVideos();
@@ -3117,6 +3214,8 @@ function initKeyboard() {
     const typing = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
 
     if (event.key === 'Escape') {
+      // 自定义确认框在捕获阶段已经 preventDefault；输入法选词时对话框还开着，Esc 只交给输入法
+      if (event.defaultPrevented || (dom.askModal && !dom.askModal.hidden)) return;
       for (const modal of document.querySelectorAll('.modal')) modal.hidden = true;
       if (state.draw) exitDrawMode();
       if (typing) active.blur();

@@ -274,6 +274,8 @@ body.author-spotlight .toast { z-index: 100; }
 .btn.primary:hover { background: #45d0d2; }
 .btn.ghost { background: transparent; }
 .btn.ghost:hover { background: var(--panel); }
+.btn.danger { background: var(--warn); border-color: transparent; color: #2a0907; font-weight: 600; }
+.btn.danger:hover { background: #ff857a; }
 .btn.tiny { height: 26px; padding: 0 9px; font-size: 12px; }
 .btn.lg { height: 38px; padding: 0 20px; font-size: 14px; }
 .btn.active { background: var(--accent-soft); border-color: #1f7f86; color: #8fe6e7; }
@@ -1145,6 +1147,28 @@ body.author-spotlight .toast { z-index: 100; }
   margin-bottom: 14px;
 }
 .modal-head h2 { font-size: 15px; font-weight: 650; }
+
+#ask-modal { z-index: 55; }
+#ask-modal .modal-head { align-items: flex-start; }
+#ask-modal .modal-head h2 {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+#ask-modal .modal-head .icon-btn { flex: none; }
+.ask-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+@media (max-width: 620px) {
+  #ask-modal { padding: 16px; }
+  #ask-modal .ask-actions .btn { flex: 1 1 auto; height: 38px; }
+}
 
 .dropzone {
   display: grid;
