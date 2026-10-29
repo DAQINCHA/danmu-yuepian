@@ -353,6 +353,25 @@ body.author-spotlight .toast { z-index: 100; }
 
 .hint-line { margin-top: 14px; color: var(--text-faint); font-size: 12px; }
 
+/* 有片子之后的新人介绍：内容和空状态一样，略收紧，可关掉 */
+.intro-card {
+  position: relative;
+  margin: 0 auto 22px;
+  padding-top: 4px;
+}
+.intro-close-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 -4px 2px;
+}
+.intro-card h1 { font-size: 22px; margin-bottom: 8px; }
+.intro-card .lede { margin-bottom: 14px; line-height: 1.65; }
+.intro-card .hint-line { margin-top: 10px; }
+@media (max-width: 620px) {
+  .intro-card h1 { font-size: 20px; }
+  .intro-close { width: 36px; height: 36px; }
+}
+
 .empty.library-view {
   display: block;
   overflow: auto;

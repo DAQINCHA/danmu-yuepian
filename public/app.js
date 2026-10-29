@@ -11,6 +11,7 @@ const DRAW_COLORS = ['#ff5a4d', '#ffd166', '#4ec9a0', '#8ab4ff'];
 const STORE = {
   author: 'danmu:author',
   danmaku: 'danmu:danmaku',
+  intro: 'danmu:intro',
 };
 
 // 和服务端 config.maxAnnotationSpan 保持一致
@@ -189,7 +190,7 @@ function cacheDom() {
     'video-title', 'video-meta', 'tabs', 'list', 'count-all', 'count-comment', 'count-annotation',
     'report-open',
     'library-modal', 'library-grid', 'library-page', 'library-crumb', 'project-grid', 'version-list',
-    'project-rename', 'project-delete', 'empty-card',
+    'project-rename', 'project-delete', 'empty-card', 'intro-card', 'intro-close', 'upload-open-intro',
     'upload-modal', 'dropzone', 'file-input', 'title-label', 'title-input', 'upload-project', 'upload-project-select', 'upload-new-project',
     'ask-modal', 'ask-title', 'ask-field', 'ask-input', 'ask-cancel', 'ask-ok', 'ask-close',
     'upload-author', 'upload-pending', 'pending-name', 'pending-size', 'upload-start',
@@ -2191,6 +2192,8 @@ function initModals() {
   dom.projectDelete.addEventListener('click', deleteCurrentProject);
   dom.uploadOpen.addEventListener('click', openUpload);
   dom.uploadOpenEmpty.addEventListener('click', openUpload);
+  dom.uploadOpenIntro.addEventListener('click', openUpload);
+  dom.introClose.addEventListener('click', dismissIntro);
   dom.uploadNewProject.addEventListener('input', () => {
     updateUploadButton();
     syncUploadTitleCopy();
@@ -2348,6 +2351,27 @@ async function startUpload() {
 
 function hasLibraryContent() {
   return state.projects.length > 0 || Boolean(state.uncategorized?.videoCount);
+}
+
+let introClosed = false;
+
+function introDismissed() {
+  if (introClosed) return true;
+  try {
+    return localStorage.getItem(STORE.intro) != null;
+  } catch {
+    return false;
+  }
+}
+
+function dismissIntro() {
+  introClosed = true;
+  try {
+    localStorage.setItem(STORE.intro, '1');
+  } catch {
+    /* 写不进去也先在这次会话里关掉 */
+  }
+  if (dom.introCard) dom.introCard.hidden = true;
 }
 
 /** 首页要先选项目；已经在某个项目里（或正在看这个项目的片子）就直接传进去 */
@@ -2612,6 +2636,7 @@ function renderLibraryView() {
   dom.versionList.hidden = !showProject;
   dom.projectRename.hidden = home || !state.libraryProjectId;
   dom.projectDelete.hidden = home || !state.libraryProjectId;
+  if (dom.introCard) dom.introCard.hidden = !showCards || introDismissed();
   renderCrumb();
   if (showCards) renderProjectCards();
   if (showProject) renderVersionList();
