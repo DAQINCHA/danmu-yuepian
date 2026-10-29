@@ -502,14 +502,19 @@ body.author-spotlight .toast { z-index: 100; }
 .version-row.renaming { border-color: #1f7f86; }
 .version-row .rename-form { margin: 0 0 4px; }
 .version-move select {
+  /* 宽度贴着「移动到...」。左右同宽的内边距把系统箭头让在右边，文字仍落在框的正中 */
+  width: 8.8em;
+  max-width: 8.8em;
   height: 30px;
-  max-width: 160px;
+  padding: 0 1.7em;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--bg-soft);
   color: inherit;
   font: inherit;
   font-size: 12px;
+  text-align: center;
+  text-align-last: center;
 }
 
 #upload-project select,
@@ -1687,7 +1692,7 @@ body.dragging::after {
   .project-grid { grid-template-columns: 1fr; }
   .version-row { flex-wrap: wrap; }
   .version-move { width: 100%; }
-  .version-move select { flex: 1 1 auto; max-width: none; }
+  .version-move select { flex: 0 0 auto; width: 8.8em; max-width: 8.8em; }
   body { overflow: auto; }
   .workspace { flex-direction: column; }
   .sidebar {
