@@ -57,8 +57,6 @@ url="http://127.0.0.1:${port}"
 
 export HOST=0.0.0.0
 export PORT="$port"
-# OG 预览图固定走公网 https（Cloudflare Tunnel），不再跟随请求 Host
-export PUBLIC_ORIGIN=https://danmu.daqincha.cool
 export DATA_DIR="$data_dir"
 export GROUP_NAME="$group_name"
 
