@@ -6,6 +6,8 @@ chcp 936 >nul 2>nul
 cd /d "%~dp0" || exit /b 1
 
 set "PORT=5280"
+rem OG preview fixed to public https via Cloudflare Tunnel
+set "PUBLIC_ORIGIN=https://danmu.daqincha.cool"
 rem 数据目录（相对项目根目录）和组名；组名显示在页面标题和左上角
 set "DATA_DIR=data/brand"
 set "GROUP_NAME=品牌组"
