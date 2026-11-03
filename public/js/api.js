@@ -17,6 +17,8 @@ export const api = {
   listProjects: () => request('GET', '/api/projects'),
   createProject: (name) => request('POST', '/api/projects', { name }),
   renameProject: (id, name) => request('PATCH', `/api/projects/${id}`, { name }),
+  // videoId 为 null 时取消定稿
+  setProjectFinal: (id, videoId) => request('PATCH', `/api/projects/${id}`, { finalVideoId: videoId || null }),
   deleteProject: (id) => request('DELETE', `/api/projects/${id}`),
   getVideo: (id) => request('GET', `/api/videos/${id}`),
   patchVideo: (id, patch) => request('PATCH', `/api/videos/${id}`, patch),

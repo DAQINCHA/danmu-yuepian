@@ -599,6 +599,22 @@ body.author-spotlight .toast { z-index: 100; }
   font-size: 12px;
   font-weight: 700;
 }
+/* 定稿：金色系，和青色的版本徽章区分开 */
+.final-badge {
+  flex: none;
+  padding: 1px 7px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(240, 179, 92, 0.16);
+  color: #f0b35c;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.final-badge:hover { background: rgba(240, 179, 92, 0.3); }
+.version-row.is-final { border-color: rgba(240, 179, 92, 0.55); }
+.final-tag { color: #f0b35c; font-weight: 600; }
 .version-meta { margin-top: 3px; color: var(--text-dim); font-size: 12px; }
 .version-move { flex: none; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; cursor: default; }
 .version-row .rename-input { cursor: text; }

@@ -2157,6 +2157,8 @@ function connectEvents(videoId) {
       location.hash = '#/';
     }
   });
+  // 项目变化：改名 / 删除 / 有人定稿或取消定稿，几秒内同步到所有人
+  on('projects:changed', () => refreshVideos());
 
   es.addEventListener('error', () => {
     // EventSource 自带重连，这里只做提示
@@ -2954,6 +2956,15 @@ function projectCard(project) {
   meta.className = 'project-meta';
   const when = project.latestAt ? relativeTime(project.latestAt) : '还没有更新';
   meta.textContent = `${project.videoCount || 0} 支 · ${when}`;
+  // 定过稿的项目一眼可见；封面（coverVideoId）服务端已经换成了最终版
+  if (project.finalVideoId) {
+    const tag = document.createElement('span');
+    tag.className = 'final-tag';
+    const ver = versionOf(videosIn(project.id)).get(project.finalVideoId);
+    tag.textContent = `已定稿 ${ver ? `v${ver}` : ''}`.trim();
+    tag.title = '这一版是成片';
+    meta.prepend(tag, ' · ');
+  }
   copy.append(title, meta);
   body.append(copy);
   if (!loose) {
@@ -3000,9 +3011,11 @@ function renderVersionList() {
     return;
   }
   const versions = versionOf(list);
+  const project = projectId ? state.projects.find((item) => item.id === projectId) : null;
+  const finalId = project?.finalVideoId || null;
   const rows = [...list]
     .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id))
-    .map((video) => versionRow(video, versions.get(video.id)));
+    .map((video) => versionRow(video, versions.get(video.id), finalId));
   dom.versionList.replaceChildren(...rows);
   const input = dom.versionList.querySelector('.rename-input');
   if (input) {
@@ -3011,9 +3024,11 @@ function renderVersionList() {
   }
 }
 
-function versionRow(video, version) {
+function versionRow(video, version, finalId) {
+  const isFinal = Boolean(finalId) && finalId === video.id;
   const row = document.createElement('div');
   row.className = 'version-row';
+  if (isFinal) row.classList.add('is-final');
   row.addEventListener('click', () => { location.hash = `#/v/${video.id}`; });
   const cover = document.createElement('img');
   cover.className = 'version-cover';
@@ -3029,6 +3044,25 @@ function versionRow(video, version) {
     badge.className = 'ver-badge';
     badge.textContent = `v${version}`;
     title.append(badge);
+  }
+  // 定稿的那版挂金色徽章，点徽章取消定稿
+  if (isFinal) {
+    const finalBadge = document.createElement('button');
+    finalBadge.type = 'button';
+    finalBadge.className = 'final-badge';
+    finalBadge.textContent = '★ 最终版';
+    finalBadge.title = '点击取消定稿';
+    finalBadge.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      try {
+        await api.setProjectFinal(state.libraryProjectId, null);
+        await refreshVideos();
+        toast('已取消定稿');
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+    title.append(finalBadge);
   }
   const name = document.createElement('span');
   name.textContent = video.title;
@@ -3077,6 +3111,26 @@ function versionRow(video, version) {
       select.value = '';
     }
   });
+
+  // 定稿按钮只出现在真项目里；未分类没有归属，定稿没有意义
+  if (state.libraryProjectId && !isFinal) {
+    const markFinal = document.createElement('button');
+    markFinal.className = 'btn tiny ghost';
+    markFinal.type = 'button';
+    markFinal.textContent = '设为最终版';
+    markFinal.title = '把这一版定为成片，首页卡片会跟着更新';
+    markFinal.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      try {
+        await api.setProjectFinal(state.libraryProjectId, video.id);
+        await refreshVideos();
+        toast('已设为最终版');
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+    move.append(markFinal);
+  }
 
   const rename = document.createElement('button');
   rename.className = 'btn tiny ghost';
