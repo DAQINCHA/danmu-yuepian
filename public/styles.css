@@ -581,8 +581,9 @@ body.author-spotlight .toast { z-index: 100; }
   line-height: 1;
   pointer-events: none;
 }
-.project-lock-badge svg { display: block; }
-.project-name-lock { margin-left: 5px; color: var(--text-faint); vertical-align: -1px; }
+/* 锁统一用品牌色，和项目页那个锁图标对上；「已加锁」文字仍留白色保证可读 */
+.project-lock-badge svg { display: block; color: var(--accent); }
+.project-name-lock { margin-left: 5px; color: var(--accent); vertical-align: -1px; }
 
 /* 项目页面包屑上的「已加锁」 */
 .lock-chip {
