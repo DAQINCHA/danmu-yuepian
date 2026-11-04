@@ -3015,7 +3015,7 @@ function renderCrumb() {
   if (project?.hasPassword) {
     const chip = document.createElement('span');
     chip.className = 'lock-chip';
-    chip.append(lockGlyph(12), '已加锁');
+    chip.append(lockGlyph(12), '已设密');
     dom.libraryCrumb.append(chip);
   }
 }
@@ -3100,11 +3100,11 @@ function unlockGlyph(size = 12, strokeWidth = 2) {
   return padlock(size, strokeWidth, 'M12 10V7a4 4 0 017.4-2.1');
 }
 
-/** 上过锁的项目都挂这个胶囊；金色 = 还没解锁，青色 = 你这台已经解锁了 */
+/** 设过密码的项目都挂这个胶囊；金色「已设密」= 还没解锁，青色「已解锁」= 你这台已经解开 */
 function lockBadge(locked) {
   const badge = document.createElement('span');
   badge.className = 'project-lock-badge';
-  badge.append(lockIcon(locked, 11), '已加锁');
+  badge.append(lockIcon(locked, 11), locked ? '已设密' : '已解锁');
   return badge;
 }
 
@@ -3756,7 +3756,7 @@ async function createProjectPrompt() {
   if (!created) return;
   await refreshVideos();
   if (created.id) go(`/p/${created.id}`);
-  if (created.hasPassword) toast('项目已加锁，忘了密码就去服务器的 project-locks.json 看');
+  if (created.hasPassword) toast('项目已设密，忘了密码就去服务器的 project-locks.json 看');
 }
 
 async function editProjectBy(project) {
@@ -3782,7 +3782,7 @@ async function changeProjectPassword(project) {
   const saved = await openProjectForm({ mode: 'password', project });
   if (!saved) return;
   await refreshVideos();
-  toast(project.hasPassword ? '密码已更新' : '已加锁');
+  toast(project.hasPassword ? '密码已更新' : '已设密');
 }
 
 async function deleteProjectBy(project, { goHome = false } = {}) {

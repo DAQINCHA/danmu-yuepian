@@ -583,12 +583,12 @@ body.author-spotlight .toast { z-index: 100; }
 }
 .project-lock-badge svg { display: block; }
 /* 锁的颜色只表达「你这台有没有解锁」：金色 = 还没解锁，青色 = 已经解锁。
-   「已加锁」文字仍是白色，保证在任何封面上都读得清 */
+   「已设密 / 已解锁」文字仍是白色，保证在任何封面上都读得清 */
 .lock-gold { color: #f0b35c; }
 .lock-accent { color: var(--accent); }
 .project-name-lock { margin-left: 5px; vertical-align: -1px; }
 
-/* 项目页面包屑上的「已加锁」 */
+/* 项目页面包屑上的「已设密」 */
 .lock-chip {
   display: inline-flex;
   align-items: center;
