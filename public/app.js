@@ -3338,7 +3338,7 @@ function versionRow(video, version, finalId) {
   });
 
   const del = document.createElement('button');
-  del.className = 'btn tiny ghost';
+  del.className = 'btn tiny ghost danger-text';
   del.type = 'button';
   del.textContent = '删除';
   del.addEventListener('click', async (event) => {

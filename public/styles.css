@@ -285,6 +285,9 @@ body.author-spotlight .toast { z-index: 100; }
 /* 定稿：和「最终版」徽章同一个金黄 */
 .btn.final { color: #f0b35c; }
 .btn.final:hover { background: rgba(240, 179, 92, 0.14); border-color: rgba(240, 179, 92, 0.45); color: #ffd08a; }
+/* 删除：和卡片上的删除图标同一个红，比 .btn.danger 的实心红轻 */
+.btn.danger-text { color: #e8838a; }
+.btn.danger-text:hover { background: rgba(255, 107, 94, 0.12); border-color: rgba(255, 107, 94, 0.35); color: #ffb4b8; }
 .btn[disabled] { opacity: 0.45; pointer-events: none; }
 
 .icon-btn {
