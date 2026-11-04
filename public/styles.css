@@ -671,6 +671,21 @@ body.author-spotlight .toast { z-index: 100; }
 .final-tag { color: #f0b35c; font-weight: 600; }
 .version-meta { margin-top: 3px; color: var(--text-dim); font-size: 12px; }
 .version-move { flex: none; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; cursor: default; }
+/* 版本行上的「设为最终版」：悬浮到这一行才出现（和项目卡片的动作按钮同一套做法）。
+   用 opacity 不用 display，按钮位置一直占着，悬浮时不会挤动旁边那几个按钮。 */
+.version-row .final-hover {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.version-row:hover .final-hover,
+.version-row:focus-within .final-hover {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (hover: none) {
+  .version-row .final-hover { opacity: 1; pointer-events: auto; }
+}
 .version-row .rename-input { cursor: text; }
 .version-row.renaming { border-color: #1f7f86; }
 .version-row .rename-form { margin: 0 0 4px; }

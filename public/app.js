@@ -3354,6 +3354,9 @@ function versionRow(video, version, finalId) {
     finalButton.className = 'btn tiny ghost final';
     finalButton.type = 'button';
     finalButton.textContent = isFinal ? '取消最终版' : '设为最终版';
+    // 「设为最终版」只在鼠标悬浮到这一行时出现（窄屏 / 触屏一直显示）；
+    // 「取消最终版」是撤销入口，一直摆在明面上
+    if (!isFinal) finalButton.classList.add('final-hover');
     finalButton.title = isFinal
       ? '取消后这一版就只是普通版本'
       : '把这一版定为成片，首页卡片会跟着更新';
