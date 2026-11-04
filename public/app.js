@@ -205,7 +205,7 @@ function cacheDom() {
     'video-title', 'video-meta', 'tabs', 'list', 'count-all', 'count-comment', 'count-annotation',
     'report-open',
     'library-modal', 'library-grid', 'library-page', 'library-crumb', 'project-grid', 'version-list',
-    'project-rename', 'project-delete', 'project-password', 'intro-card', 'intro-close',
+    'library-actions', 'intro-card', 'intro-close',
     'upload-modal', 'dropzone', 'file-input', 'title-label', 'title-input', 'upload-project', 'upload-project-select', 'upload-new-project',
     'upload-new-lock', 'upload-new-password', 'upload-new-random',
     'lock-modal', 'lock-title', 'lock-input', 'lock-hint', 'lock-error', 'lock-cancel', 'lock-ok', 'lock-close',
@@ -2314,9 +2314,6 @@ function initModals() {
     go('/');
   });
   dom.projectNew.addEventListener('click', createProjectPrompt);
-  dom.projectRename.addEventListener('click', renameCurrentProject);
-  dom.projectPassword.addEventListener('click', changeProjectPassword);
-  dom.projectDelete.addEventListener('click', deleteCurrentProject);
   dom.uploadOpen.addEventListener('click', openUpload);
   dom.introClose.addEventListener('click', dismissIntro);
   dom.uploadNewProject.addEventListener('input', () => {
@@ -2965,15 +2962,34 @@ function renderLibraryView() {
   dom.projectGrid.hidden = !home;
   dom.versionList.hidden = !showProject;
   const project = state.libraryProjectId ? projectById(state.libraryProjectId) : null;
-  dom.projectRename.hidden = home || !project;
-  dom.projectDelete.hidden = home || !project;
-  dom.projectPassword.hidden = home || !project;
-  dom.projectPassword.textContent = project?.hasPassword ? '修改密码' : '设置密码';
+  renderProjectActions(home ? null : project);
   if (dom.introCard) dom.introCard.hidden = !home || introDismissed();
   if (dom.introClose) dom.introClose.hidden = !libraryHasVideos();
   renderCrumb();
   if (home) renderProjectCards();
   if (showProject) renderVersionList();
+}
+
+/** 项目页右上角三个小图标：锁 / 笔 / 垃圾桶，和首页卡片同一套图标和颜色 */
+function renderProjectActions(project) {
+  if (!project) {
+    dom.libraryActions.replaceChildren();
+    return;
+  }
+  const password = projectIconButton(
+    project.hasPassword ? '修改密码' : '设置密码',
+    'lock',
+    () => lockGlyph(16, 1.6),
+  );
+  password.addEventListener('click', () => changeProjectPassword(project));
+
+  const edit = projectIconButton('修改项目', 'edit', ICON_PATHS.edit);
+  edit.addEventListener('click', () => editProjectBy(project));
+
+  const del = projectIconButton('删除项目', 'delete', ICON_PATHS.delete);
+  del.addEventListener('click', () => deleteProjectBy(project, { goHome: true }));
+
+  dom.libraryActions.replaceChildren(password, edit, del);
 }
 
 function renderCrumb() {
@@ -3050,7 +3066,7 @@ function projectAddMark() {
 }
 
 /** 一把小锁：项目卡片、面包屑上都用它 */
-function lockGlyph(size = 12) {
+function lockGlyph(size = 12, strokeWidth = 2) {
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
@@ -3058,7 +3074,7 @@ function lockGlyph(size = 12) {
   svg.setAttribute('height', String(size));
   svg.setAttribute('fill', 'none');
   svg.setAttribute('stroke', 'currentColor');
-  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-width', String(strokeWidth));
   svg.setAttribute('stroke-linecap', 'round');
   svg.setAttribute('stroke-linejoin', 'round');
   svg.setAttribute('aria-hidden', 'true');
@@ -3081,12 +3097,21 @@ function lockBadge() {
   return badge;
 }
 
-function projectIconButton(label, paths, tone) {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = `project-icon project-icon-${tone}`;
-  button.title = label;
-  button.setAttribute('aria-label', label);
+// 首页卡片和项目页共用同一套图标：笔、垃圾桶（锁用下面的 lockGlyph）
+const ICON_PATHS = {
+  edit: [
+    'M12 20h8',
+    'M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z',
+  ],
+  delete: [
+    'M3 6h18',
+    'M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2',
+    'M5 6l1 14a1 1 0 001 1h10a1 1 0 001-1l1-14',
+    'M10 11v6M14 11v6',
+  ],
+};
+
+function iconSvg(paths) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('fill', 'none');
@@ -3100,7 +3125,17 @@ function projectIconButton(label, paths, tone) {
     path.setAttribute('d', d);
     svg.append(path);
   }
-  button.append(svg);
+  return svg;
+}
+
+/** 小图标按钮。icon 传 path 数组，或者一个返回 svg 的函数（锁是两条形状） */
+function projectIconButton(label, tone, icon) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `project-icon project-icon-${tone}`;
+  button.title = label;
+  button.setAttribute('aria-label', label);
+  button.append(typeof icon === 'function' ? icon() : iconSvg(icon));
   button.addEventListener('click', (event) => event.stopPropagation());
   return button;
 }
@@ -3156,19 +3191,11 @@ function projectCard(project) {
     actions.className = 'project-actions';
     // 锁着的项目在门口不能改名：改名是进项目之后的事
     if (!project.locked) {
-      const edit = projectIconButton('修改项目', [
-        'M12 20h8',
-        'M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z',
-      ], 'edit');
+      const edit = projectIconButton('修改项目', 'edit', ICON_PATHS.edit);
       edit.addEventListener('click', () => editProjectBy(project));
       actions.append(edit);
     }
-    const del = projectIconButton('删除项目', [
-      'M3 6h18',
-      'M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2',
-      'M5 6l1 14a1 1 0 001 1h10a1 1 0 001-1l1-14',
-      'M10 11v6M14 11v6',
-    ], 'delete');
+    const del = projectIconButton('删除项目', 'delete', ICON_PATHS.delete);
     del.addEventListener('click', () => deleteProjectBy(project));
     actions.append(del);
     body.append(actions);
@@ -3732,12 +3759,7 @@ async function editProjectBy(project) {
   }
 }
 
-async function renameCurrentProject() {
-  await editProjectBy(projectById(state.libraryProjectId));
-}
-
-async function changeProjectPassword() {
-  const project = projectById(state.libraryProjectId);
+async function changeProjectPassword(project) {
   if (!project) return;
   const saved = await openProjectForm({ mode: 'password', project });
   if (!saved) return;
@@ -3779,9 +3801,6 @@ async function deleteProjectBy(project, { goHome = false } = {}) {
   toast('项目已删除，片子回到未分类');
 }
 
-async function deleteCurrentProject() {
-  await deleteProjectBy(projectById(state.libraryProjectId), { goHome: true });
-}
 
 function renderLibrary() {
   if (!state.videos.length) {
