@@ -32,7 +32,7 @@ DATA_DIR=data/short PORT=5281 GROUP_NAME=短视频组 node server.js
 
 - `DATA_DIR`：数据目录，相对路径按项目根目录算；不设就是 `data/`。
 - `PORT`：端口，默认 5280。
-- `GROUP_NAME`：组名，显示在页面标题和左上角「弹幕阅片 · 组名」；不设就只显示「弹幕阅片」。
+- `GROUP_NAME`：组名，显示在页面标题、分享卡片标题和左上角「弹幕阅片 · 组名」；不设就用项目文件夹名（如部署目录叫 `danmu2`，卡片就是「弹幕阅片 · danmu2」）。
 - `UNLOCK_DAYS`：项目密码解锁后免密多少天，默认 7。
 - `PUBLIC_ORIGIN`：分享预览图用的站点根地址。不设就按当前请求的 Host 自动拼；反代把 Host 传错时再设，见下文。
 
@@ -46,7 +46,7 @@ DATA_DIR=data/short PORT=5281 GROUP_NAME=短视频组 node server.js
 
 ## 分享预览（OG 图）与更换域名
 
-把首页链接发到微信、飞书时，对方看到的预览图是 `public/assets/og.png`（1200×630）。
+把首页链接发到微信、飞书时，对方看到的预览图是 `public/assets/og.png`（1200×630），标题是「弹幕阅片 · 组名」（没设 `GROUP_NAME` 就是项目文件夹名）。标题和 `og:title` 由服务端在 `index.html` 里就地替换，和 `og:image` 同一套做法，所以不跑 JS 的爬虫也能读到。
 
 `og:image` 不写死域名。打开页面时，服务端按这一次请求拼出绝对地址再写进 HTML：有 `X-Forwarded-Host` 就用它（多个时取第一个），否则用 `Host`；协议看 `X-Forwarded-Proto`，没有就按连接本身（本机直连一般是 `http`）。视频页是 `/#/v/<id>` 这种哈希路由，井号后面的部分爬虫不会单独来取，读到的仍是首页 HTML，所以只给首页配这张图即可。
 

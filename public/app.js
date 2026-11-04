@@ -84,21 +84,20 @@ let uploadConfirming = false;
 
 boot();
 
-/** 多组部署：服务端 GROUP_NAME 不为空时，标题和左上角显示「弹幕阅片 · 品牌组」 */
-function applyGroupName() {
-  api.getConfig().then(({ groupName }) => {
-    if (!groupName) return;
-    const name = `弹幕阅片 · ${groupName}`;
-    document.title = name;
+/** 多组 / 多部署：服务端算好「弹幕阅片 · 品牌组」或「弹幕阅片 · danmu2」，这里同步到标签栏和左上角 */
+function applySiteTitle() {
+  api.getConfig().then(({ title }) => {
+    if (!title) return;
+    document.title = title;
     const brand = document.getElementById('brand-name');
-    if (brand) brand.textContent = name;
+    if (brand) brand.textContent = title;
   }).catch(() => {
     /* 拿不到就保持默认名字 */
   });
 }
 
 function boot() {
-  applyGroupName();
+  applySiteTitle();
   cacheDom();
   danmaku = createDanmaku(dom.danmakuLayer, {
     colorOf: (c) => authorColor(c.author),
