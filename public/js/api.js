@@ -31,7 +31,6 @@ export const api = {
   // password 传空字符串 = 取消密码；已经上锁时要带 currentPassword
   setProjectPassword: (id, patch) => request('POST', `/api/projects/${id}/password`, patch),
   unlockProject: (id, password) => request('POST', `/api/projects/${id}/unlock`, { password }),
-  lockProject: (id) => request('POST', `/api/projects/${id}/lock`, {}),
   deleteProject: (id, password) => request('DELETE', `/api/projects/${id}`, password ? { password } : undefined),
   getVideo: (id) => request('GET', `/api/videos/${id}`),
   patchVideo: (id, patch) => request('PATCH', `/api/videos/${id}`, patch),

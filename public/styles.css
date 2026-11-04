@@ -279,6 +279,12 @@ body.author-spotlight .toast { z-index: 100; }
 .btn.tiny { height: 26px; padding: 0 9px; font-size: 12px; }
 .btn.lg { height: 38px; padding: 0 20px; font-size: 14px; }
 .btn.active { background: var(--accent-soft); border-color: #1f7f86; color: #8fe6e7; }
+/* 项目页「设置密码 / 修改密码」：文字用品牌色 */
+.btn.accent { color: var(--accent); }
+.btn.accent:hover { color: #8fe6e7; border-color: #1f7f86; }
+/* 定稿：和「最终版」徽章同一个金黄 */
+.btn.final { color: #f0b35c; }
+.btn.final:hover { background: rgba(240, 179, 92, 0.14); border-color: rgba(240, 179, 92, 0.45); color: #ffd08a; }
 .btn[disabled] { opacity: 0.45; pointer-events: none; }
 
 .icon-btn {

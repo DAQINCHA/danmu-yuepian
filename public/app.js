@@ -205,13 +205,13 @@ function cacheDom() {
     'video-title', 'video-meta', 'tabs', 'list', 'count-all', 'count-comment', 'count-annotation',
     'report-open',
     'library-modal', 'library-grid', 'library-page', 'library-crumb', 'project-grid', 'version-list',
-    'project-rename', 'project-delete', 'project-password', 'project-lock', 'intro-card', 'intro-close',
+    'project-rename', 'project-delete', 'project-password', 'intro-card', 'intro-close',
     'upload-modal', 'dropzone', 'file-input', 'title-label', 'title-input', 'upload-project', 'upload-project-select', 'upload-new-project',
     'upload-new-lock', 'upload-new-password', 'upload-new-random',
     'lock-modal', 'lock-title', 'lock-input', 'lock-hint', 'lock-error', 'lock-cancel', 'lock-ok', 'lock-close',
-    'project-form-modal', 'pf-title', 'pf-name', 'pf-current-field', 'pf-current',
+    'project-form-modal', 'pf-title', 'pf-name-field', 'pf-name', 'pf-current-field', 'pf-current',
     'pf-password', 'pf-random', 'pf-hint', 'pf-error', 'pf-remove', 'pf-cancel', 'pf-ok', 'pf-close',
-    'ask-modal', 'ask-title', 'ask-secret-field', 'ask-secret', 'ask-secret-label',
+    'ask-modal', 'ask-title', 'ask-field', 'ask-input', 'ask-secret-field', 'ask-secret', 'ask-secret-label',
     'ask-error', 'ask-cancel', 'ask-ok', 'ask-close',
     'upload-author', 'upload-pending', 'pending-name', 'pending-size', 'upload-start',
     'upload-progress', 'bar-fill', 'upload-status', 'toast',
@@ -2316,7 +2316,6 @@ function initModals() {
   dom.projectNew.addEventListener('click', createProjectPrompt);
   dom.projectRename.addEventListener('click', renameCurrentProject);
   dom.projectPassword.addEventListener('click', changeProjectPassword);
-  dom.projectLock.addEventListener('click', lockCurrentProject);
   dom.projectDelete.addEventListener('click', deleteCurrentProject);
   dom.uploadOpen.addEventListener('click', openUpload);
   dom.introClose.addEventListener('click', dismissIntro);
@@ -2970,7 +2969,6 @@ function renderLibraryView() {
   dom.projectDelete.hidden = home || !project;
   dom.projectPassword.hidden = home || !project;
   dom.projectPassword.textContent = project?.hasPassword ? '修改密码' : '设置密码';
-  dom.projectLock.hidden = home || !project?.hasPassword || Boolean(project?.locked);
   if (dom.introCard) dom.introCard.hidden = !home || introDismissed();
   if (dom.introClose) dom.introClose.hidden = !libraryHasVideos();
   renderCrumb();
@@ -3304,24 +3302,27 @@ function versionRow(video, version, finalId) {
     }
   });
 
-  // 定稿按钮只出现在真项目里；未分类没有归属，定稿没有意义
-  if (state.libraryProjectId && !isFinal) {
-    const markFinal = document.createElement('button');
-    markFinal.className = 'btn tiny ghost';
-    markFinal.type = 'button';
-    markFinal.textContent = '设为最终版';
-    markFinal.title = '把这一版定为成片，首页卡片会跟着更新';
-    markFinal.addEventListener('click', async (event) => {
+  // 定稿按钮只出现在真项目里；未分类没有归属，定稿没有意义。
+  // 已经是最终版时同一个位置变成「取消最终版」，不用再去找徽章
+  if (state.libraryProjectId) {
+    const finalButton = document.createElement('button');
+    finalButton.className = 'btn tiny ghost final';
+    finalButton.type = 'button';
+    finalButton.textContent = isFinal ? '取消最终版' : '设为最终版';
+    finalButton.title = isFinal
+      ? '取消后这一版就只是普通版本'
+      : '把这一版定为成片，首页卡片会跟着更新';
+    finalButton.addEventListener('click', async (event) => {
       event.stopPropagation();
       try {
-        await api.setProjectFinal(state.libraryProjectId, video.id);
+        await api.setProjectFinal(state.libraryProjectId, isFinal ? null : video.id);
         await refreshVideos();
-        toast('已设为最终版');
+        toast(isFinal ? '已取消最终版' : '已设为最终版');
       } catch (err) {
         toast(err.message, true);
       }
     });
-    move.append(markFinal);
+    move.append(finalButton);
   }
 
   const rename = document.createElement('button');
@@ -3416,6 +3417,10 @@ function initAskDialog() {
   dom.askCancel.addEventListener('click', () => cancelAsk());
   dom.askClose.addEventListener('click', () => cancelAsk());
   dom.askOk.addEventListener('click', () => submitAsk());
+  dom.askField.addEventListener('submit', (event) => {
+    event.preventDefault();
+    submitAsk();
+  });
   dom.askModal.addEventListener('click', (event) => {
     if (event.target === dom.askModal) cancelAsk();
   });
@@ -3430,6 +3435,26 @@ function initAskDialog() {
   }, true);
 }
 
+/** 单行文本。取消返回 null；空内容不提交，对话框保持打开。 */
+function askText(title, defaultValue = '') {
+  return openAsk({
+    kind: 'text',
+    cancelValue: null,
+    prepare() {
+      dom.askTitle.textContent = title;
+      dom.askField.hidden = false;
+      dom.askInput.value = defaultValue == null ? '' : String(defaultValue);
+      dom.askOk.textContent = '确定';
+      dom.askOk.classList.add('primary');
+      dom.askOk.classList.remove('danger');
+    },
+    focus() {
+      dom.askInput.focus();
+      dom.askInput.select();
+    },
+  });
+}
+
 /** 确认。取消返回 false；danger 时确认按钮用红色。 */
 function askConfirm(message, { danger = false } = {}) {
   return openAsk({
@@ -3437,6 +3462,7 @@ function askConfirm(message, { danger = false } = {}) {
     cancelValue: false,
     prepare() {
       dom.askTitle.textContent = message;
+      dom.askField.hidden = true;
       dom.askOk.textContent = danger ? '删除' : '确定';
       dom.askOk.classList.toggle('primary', !danger);
       dom.askOk.classList.toggle('danger', danger);
@@ -3451,6 +3477,7 @@ function openAsk(session) {
   if (askSession) cancelAsk();
   return new Promise((resolve) => {
     askSession = { resolve, ...session };
+    dom.askField.hidden = true;
     dom.askSecretField.hidden = true;
     dom.askError.hidden = true;
     session.prepare();
@@ -3461,6 +3488,12 @@ function openAsk(session) {
 
 function submitAsk() {
   if (!askSession) return;
+  if (askSession.kind === 'text') {
+    const value = dom.askInput.value.trim();
+    if (!value) return;
+    settleAsk(value);
+    return;
+  }
   // 密码不 trim、不收空格，原样提交
   if (askSession.kind === 'secret') {
     const value = dom.askSecret.value;
@@ -3588,23 +3621,29 @@ async function submitLock() {
 
 let projectFormSession = null;
 
+/**
+ * mode = 'create'：名称 + 密码 + 提示语（新建项目）
+ * mode = 'password'：只有密码相关（设置 / 修改密码）；改名走「修改项目」那个单行框
+ */
 function openProjectForm({ mode = 'create', project = null } = {}) {
   if (projectFormSession) settleProjectForm(null);
   return new Promise((resolve) => {
     projectFormSession = { resolve, mode, project };
     const hasPassword = Boolean(project?.hasPassword);
-    dom.pfTitle.textContent = mode === 'edit' ? '修改项目' : '新建项目';
-    dom.pfName.value = project?.name || '';
-    dom.pfCurrentField.hidden = !hasPassword;
+    const create = mode === 'create';
+    dom.pfTitle.textContent = create ? '新建项目' : (hasPassword ? '修改密码' : '设置密码');
+    dom.pfNameField.hidden = !create;
+    dom.pfName.value = create ? '' : project?.name || '';
+    dom.pfCurrentField.hidden = create || !hasPassword;
     dom.pfCurrent.value = '';
     dom.pfPassword.value = '';
     dom.pfPassword.type = 'password';
-    dom.pfHint.value = project?.hint || '';
-    dom.pfRemove.hidden = !hasPassword;
+    dom.pfHint.value = create ? '' : project?.hint || '';
+    dom.pfRemove.hidden = create || !hasPassword;
     dom.pfError.hidden = true;
     dom.pfOk.disabled = false;
     dom.projectFormModal.hidden = false;
-    setTimeout(() => dom.pfName.focus(), 40);
+    setTimeout(() => (create ? dom.pfName : dom.pfPassword).focus(), 40);
   });
 }
 
@@ -3624,41 +3663,40 @@ function projectFormError(message) {
 async function submitProjectForm({ remove = false } = {}) {
   const session = projectFormSession;
   if (!session) return;
-  const name = dom.pfName.value.trim();
-  if (!name) return projectFormError('项目名称不能为空');
+  const create = session.mode === 'create';
+  const hasPassword = Boolean(session.project?.hasPassword);
+
+  const name = create ? dom.pfName.value.trim() : session.project.name;
+  if (create && !name) return projectFormError('项目名称不能为空');
 
   const password = remove ? '' : dom.pfPassword.value;
   if (password && (password.length < 4 || password.length > 64)) {
     return projectFormError('密码要 4–64 位');
   }
-  const hint = dom.pfHint.value.trim();
-  const currentPassword = dom.pfCurrent.value;
-  const hasPassword = Boolean(session.project?.hasPassword);
-  const hintChanged = hasPassword && hint !== (session.project?.hint || '');
-  const lockChanged = remove || Boolean(password) || hintChanged;
-  if (lockChanged && hasPassword && !currentPassword) {
+  // 改密码的面板里留空点保存没意义：要么填新密码，要么点「取消密码」
+  if (!create && !password && !remove) {
+    return projectFormError('请输入新密码，或点「取消密码」');
+  }
+  if (hasPassword && !dom.pfCurrent.value) {
     return projectFormError('请输入当前密码');
   }
 
+  const hint = dom.pfHint.value.trim();
   dom.pfOk.disabled = true;
   dom.pfError.hidden = true;
   try {
-    if (session.mode === 'create') {
+    if (create) {
       const lock = password ? { password, hint, setBy: state.author } : null;
       const data = await api.createProject(name, lock);
       settleProjectForm(data.project);
       return;
     }
-    const project = session.project;
-    if (name !== project.name) await api.renameProject(project.id, name);
-    if (lockChanged) {
-      await api.setProjectPassword(project.id, {
-        currentPassword,
-        password,
-        hint: password ? hint : '',
-        setBy: state.author,
-      });
-    }
+    await api.setProjectPassword(session.project.id, {
+      currentPassword: dom.pfCurrent.value,
+      password,
+      hint: password ? hint : '',
+      setBy: state.author,
+    });
     settleProjectForm(true);
   } catch (err) {
     dom.pfOk.disabled = false;
@@ -3678,9 +3716,20 @@ async function createProjectPrompt() {
 
 async function editProjectBy(project) {
   if (!project) return;
-  const saved = await openProjectForm({ mode: 'edit', project });
-  if (!saved) return;
-  await refreshVideos();
+  const name = await askText('修改项目', project.name);
+  if (name == null) return;
+  const trimmed = name.trim();
+  if (!trimmed) {
+    toast('项目名称不能为空', true);
+    return;
+  }
+  if (trimmed === project.name) return;
+  try {
+    await api.renameProject(project.id, trimmed.slice(0, 40));
+    await refreshVideos();
+  } catch (err) {
+    toast(err.message, true);
+  }
 }
 
 async function renameCurrentProject() {
@@ -3688,21 +3737,12 @@ async function renameCurrentProject() {
 }
 
 async function changeProjectPassword() {
-  await editProjectBy(projectById(state.libraryProjectId));
-}
-
-/** 上锁：清掉这台浏览器的通行证，下次进来要重新输密码 */
-async function lockCurrentProject() {
   const project = projectById(state.libraryProjectId);
   if (!project) return;
-  try {
-    await api.lockProject(project.id);
-    await refreshVideos();
-    go('/');
-    toast('已上锁，下次进来要输密码');
-  } catch (err) {
-    toast(err.message, true);
-  }
+  const saved = await openProjectForm({ mode: 'password', project });
+  if (!saved) return;
+  await refreshVideos();
+  toast(project.hasPassword ? '密码已更新' : '已加锁');
 }
 
 async function deleteProjectBy(project, { goHome = false } = {}) {
