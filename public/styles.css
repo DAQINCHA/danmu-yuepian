@@ -555,6 +555,48 @@ body.author-spotlight .toast { z-index: 100; }
 }
 .project-meta { margin-top: 4px; color: var(--text-dim); font-size: 12px; }
 
+/* 锁着的项目：卡片本体不虚化、不变灰（要靠封面认项目），只在封面角上挂一把锁 */
+.project-card.is-locked:hover { border-color: #f0b35c; }
+.project-lock-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 4px 6px;
+  border-radius: 999px;
+  background: rgba(11, 13, 17, 0.62);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  pointer-events: none;
+}
+.project-lock-badge svg { display: block; }
+.project-name-lock { margin-left: 5px; color: var(--text-faint); vertical-align: -1px; }
+
+/* 项目页面包屑上的「已加锁」 */
+.lock-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 6px;
+  border: 1px solid rgba(240, 179, 92, 0.35);
+  border-radius: 999px;
+  background: rgba(240, 179, 92, 0.12);
+  color: #f0b35c;
+  font-size: 11px;
+  font-weight: 600;
+}
+.lock-chip svg { display: block; }
+
+.lock-hint { margin-top: 10px; color: var(--text-faint); font-size: 12px; }
+.lock-error { margin-top: 10px; color: var(--warn); font-size: 12px; }
+.pf-password-row { display: flex; gap: 8px; }
+.pf-password-row input { flex: 1 1 auto; min-width: 0; }
+.pf-password-row .btn { flex: none; height: 36px; }
+
 .version-list { display: flex; flex-direction: column; gap: 10px; }
 .version-row {
   display: flex;

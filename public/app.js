@@ -129,6 +129,7 @@ function boot() {
   initOverall();
   initDrawToolbar();
   initModals();
+  initLockDialogs();
   initAskDialog();
   initDrop();
   initKeyboard();
@@ -193,9 +194,14 @@ function cacheDom() {
     'video-title', 'video-meta', 'tabs', 'list', 'count-all', 'count-comment', 'count-annotation',
     'report-open',
     'library-modal', 'library-grid', 'library-page', 'library-crumb', 'project-grid', 'version-list',
-    'project-rename', 'project-delete', 'intro-card', 'intro-close',
+    'project-rename', 'project-delete', 'project-password', 'project-lock', 'intro-card', 'intro-close',
     'upload-modal', 'dropzone', 'file-input', 'title-label', 'title-input', 'upload-project', 'upload-project-select', 'upload-new-project',
-    'ask-modal', 'ask-title', 'ask-field', 'ask-input', 'ask-cancel', 'ask-ok', 'ask-close',
+    'upload-new-lock', 'upload-new-password', 'upload-new-random',
+    'lock-modal', 'lock-title', 'lock-input', 'lock-hint', 'lock-error', 'lock-cancel', 'lock-ok', 'lock-close',
+    'project-form-modal', 'pf-title', 'pf-name', 'pf-current-field', 'pf-current',
+    'pf-password', 'pf-random', 'pf-hint', 'pf-error', 'pf-remove', 'pf-cancel', 'pf-ok', 'pf-close',
+    'ask-modal', 'ask-title', 'ask-secret-field', 'ask-secret', 'ask-secret-label',
+    'ask-error', 'ask-cancel', 'ask-ok', 'ask-close',
     'upload-author', 'upload-pending', 'pending-name', 'pending-size', 'upload-start',
     'upload-progress', 'bar-fill', 'upload-status', 'toast',
   ];
@@ -468,14 +474,34 @@ function showProjectHome() {
   renderLibraryView();
 }
 
-function showProjectPage(id) {
-  state.libraryPage = 'project';
-  state.libraryProjectId = id === 'uncategorized' ? null : id;
-  if (id !== 'uncategorized' && !state.projects.some((project) => project.id === id)) {
-    toast('这个项目不存在', true);
-    location.hash = '#/';
-    return;
+async function showProjectPage(id) {
+  const hash = location.hash;
+  const projectId = id === 'uncategorized' ? null : id;
+  if (projectId) {
+    let project = projectById(projectId);
+    // 分享链接直接进来时列表可能还没拉过
+    if (!project) {
+      await refreshVideos();
+      project = projectById(projectId);
+    }
+    if (!project) {
+      toast('这个项目不存在', true);
+      location.hash = '#/';
+      return;
+    }
+    if (project.locked) {
+      const ok = await askProjectPassword(project);
+      if (location.hash !== hash) return;
+      if (!ok) {
+        location.hash = '#/';
+        return;
+      }
+      await refreshVideos();
+      if (location.hash !== hash) return;
+    }
   }
+  state.libraryPage = 'project';
+  state.libraryProjectId = projectId;
   dom.empty.hidden = false;
   dom.empty.classList.add('library-view');
   renderLibraryView();
@@ -489,6 +515,20 @@ async function openVideo(id) {
   try {
     data = await api.getVideo(id);
   } catch (err) {
+    // 分享链接打开锁着的片子：先弹密码框，解开再重来一次
+    if (err.locked && err.projectId) {
+      const hash = location.hash;
+      const project = projectById(err.projectId)
+        || { id: err.projectId, name: err.projectName || '', hint: err.hint || '' };
+      const ok = await askProjectPassword(project);
+      // 等密码期间已经跳到别处了，就别再往回拽
+      if (location.hash !== hash) return;
+      if (ok) {
+        await refreshVideos();
+        if (location.hash !== hash) return;
+        return openVideo(id);
+      }
+    }
     toast(err.message, true);
     location.hash = '#/';
     return;
@@ -2220,22 +2260,30 @@ function initModals() {
   });
   dom.projectNew.addEventListener('click', createProjectPrompt);
   dom.projectRename.addEventListener('click', renameCurrentProject);
+  dom.projectPassword.addEventListener('click', changeProjectPassword);
+  dom.projectLock.addEventListener('click', lockCurrentProject);
   dom.projectDelete.addEventListener('click', deleteCurrentProject);
   dom.uploadOpen.addEventListener('click', openUpload);
   dom.introClose.addEventListener('click', dismissIntro);
   dom.uploadNewProject.addEventListener('input', () => {
     updateUploadButton();
     syncUploadTitleCopy();
+    syncUploadNewLock();
     if (!dom.uploadNewProject.value.trim()) maybeBeginUpload();
   });
   dom.uploadProjectSelect.addEventListener('change', () => {
     if (dom.uploadProjectSelect.value) dom.uploadNewProject.value = '';
     updateUploadButton();
     syncUploadTitleCopy();
+    syncUploadNewLock();
     maybeBeginUpload();
   });
+  dom.uploadNewRandom.addEventListener('click', () => fillRandomPassword(dom.uploadNewPassword));
 
+  // 解锁框和项目表单自己管 Promise，别让通用关闭逻辑把框藏了却不 resolve
+  const managed = (modal) => modal === dom.lockModal || modal === dom.projectFormModal;
   for (const button of document.querySelectorAll('[data-close-modal]')) {
+    if (managed(button.closest('.modal'))) continue;
     button.addEventListener('click', () => {
       const modal = button.closest('.modal');
       if (modal === dom.uploadModal) dismissUpload();
@@ -2243,6 +2291,7 @@ function initModals() {
     });
   }
   for (const modal of document.querySelectorAll('.modal')) {
+    if (managed(modal)) continue;
     modal.addEventListener('click', (event) => {
       if (event.target !== modal) return;
       if (modal === dom.uploadModal) dismissUpload();
@@ -2312,6 +2361,8 @@ function syncUploadLock() {
   const lock = Boolean(uploadJob && (uploadJob.status === 'uploading' || uploadJob.status === 'done'));
   if (dom.uploadProjectSelect) dom.uploadProjectSelect.disabled = lock;
   if (dom.uploadNewProject) dom.uploadNewProject.disabled = lock;
+  if (dom.uploadNewPassword) dom.uploadNewPassword.disabled = lock;
+  if (dom.uploadNewRandom) dom.uploadNewRandom.disabled = lock;
   if (dom.uploadAuthor) dom.uploadAuthor.disabled = lock;
 }
 
@@ -2507,6 +2558,13 @@ async function confirmUpload() {
     toast('先选择一个视频');
     return;
   }
+  // 新建项目时顺手设的密码，先验一遍再开传，别等传完 4GB 才发现不合格
+  const newProjectName = uploadContext().mode === 'ask' ? dom.uploadNewProject.value.trim() : '';
+  const newLockPassword = newProjectName ? dom.uploadNewPassword.value : '';
+  if (newLockPassword && (newLockPassword.length < 4 || newLockPassword.length > 64)) {
+    toast('密码要 4–64 位', true);
+    return;
+  }
 
   uploadConfirming = true;
   dom.uploadStart.disabled = true;
@@ -2520,6 +2578,14 @@ async function confirmUpload() {
     if (job.status !== 'done' || !job.video) throw job.error || new Error('上传失败');
     const video = await applyDesiredTitle(job.video);
     if (epoch !== uploadEpoch || uploadJob !== job) return;
+    // 新项目 + 填了密码：传完顺手加上锁（服务端会同时发一张通行证给当前浏览器）
+    if (newLockPassword && video.projectId) {
+      await api.setProjectPassword(video.projectId, {
+        password: newLockPassword,
+        hint: '',
+        setBy: state.author,
+      });
+    }
     uploadJob = null;
     state.pendingFile = null;
     dom.uploadModal.hidden = true;
@@ -2592,6 +2658,19 @@ function uploadPayload() {
 function syncUploadProjectFields() {
   const ask = uploadContext().mode === 'ask';
   dom.uploadProject.hidden = !ask;
+  syncUploadNewLock();
+}
+
+/** 只有「在首页输入一个新项目名」时才需要问密码；进项目之后上传沿用项目原来的锁 */
+function syncUploadNewLock() {
+  const ask = uploadContext().mode === 'ask';
+  const fresh = Boolean(dom.uploadNewProject.value.trim());
+  const show = ask && fresh;
+  dom.uploadNewLock.hidden = !show;
+  if (!show) {
+    dom.uploadNewPassword.value = '';
+    dom.uploadNewPassword.type = 'password';
+  }
 }
 
 /** 放进某个项目时，标题框引导填写这一版改了什么；未分类仍用中性的「片名」。空着点「上传并审片」时沿用文件名。 */
@@ -2616,6 +2695,8 @@ function fillUploadProjectSelect() {
   loose.textContent = '未分类';
   select.append(loose);
   for (const project of state.projects) {
+    // 锁着的项目不列：要传进去，先进项目再从项目页传
+    if (project.locked) continue;
     const option = document.createElement('option');
     option.value = project.id;
     option.textContent = project.name;
@@ -2830,8 +2911,12 @@ function renderLibraryView() {
   dom.empty.classList.add('library-view');
   dom.projectGrid.hidden = !home;
   dom.versionList.hidden = !showProject;
-  dom.projectRename.hidden = home || !state.libraryProjectId;
-  dom.projectDelete.hidden = home || !state.libraryProjectId;
+  const project = state.libraryProjectId ? projectById(state.libraryProjectId) : null;
+  dom.projectRename.hidden = home || !project;
+  dom.projectDelete.hidden = home || !project;
+  dom.projectPassword.hidden = home || !project;
+  dom.projectPassword.textContent = project?.hasPassword ? '修改密码' : '设置密码';
+  dom.projectLock.hidden = home || !project?.hasPassword || Boolean(project?.locked);
   if (dom.introCard) dom.introCard.hidden = !home || introDismissed();
   if (dom.introClose) dom.introClose.hidden = !libraryHasVideos();
   renderCrumb();
@@ -2856,9 +2941,15 @@ function renderCrumb() {
   sep.textContent = '›';
   const name = document.createElement('span');
   name.className = 'crumb-name';
-  const project = state.projects.find((item) => item.id === state.libraryProjectId);
+  const project = projectById(state.libraryProjectId);
   name.textContent = project ? project.name : '未分类';
   dom.libraryCrumb.append(back, sep, name);
+  if (project?.hasPassword) {
+    const chip = document.createElement('span');
+    chip.className = 'lock-chip';
+    chip.append(lockGlyph(12), '已加锁');
+    dom.libraryCrumb.append(chip);
+  }
 }
 
 function renderProjectCards() {
@@ -2906,6 +2997,38 @@ function projectAddMark() {
   return svg;
 }
 
+/** 一把小锁：项目卡片、面包屑上都用它 */
+function lockGlyph(size = 12) {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  const body = document.createElementNS(ns, 'rect');
+  body.setAttribute('x', '4');
+  body.setAttribute('y', '10');
+  body.setAttribute('width', '16');
+  body.setAttribute('height', '10');
+  body.setAttribute('rx', '2.5');
+  const shackle = document.createElementNS(ns, 'path');
+  shackle.setAttribute('d', 'M8 10V7a4 4 0 018 0v3');
+  svg.append(body, shackle);
+  return svg;
+}
+
+function lockBadge() {
+  const badge = document.createElement('span');
+  badge.className = 'project-lock-badge';
+  badge.append(lockGlyph(11), '已加锁');
+  return badge;
+}
+
 function projectIconButton(label, paths, tone) {
   const button = document.createElement('button');
   button.type = 'button';
@@ -2939,12 +3062,16 @@ function projectCard(project) {
     card.setAttribute('role', 'button');
   }
   card.className = 'project-card';
+  // 锁着的卡片不虚化、不变灰：要靠封面认项目，只是多一把锁
+  if (project.locked) card.classList.add('is-locked');
   const frame = document.createElement('div');
   frame.className = 'project-cover-frame';
   const cover = document.createElement('img');
   cover.className = 'project-cover';
-  mountCover(cover, project.coverVideoId, project.hasCover);
+  // 锁着又还没封面的，别去截帧（视频文件要通行证），先空着
+  if (!project.locked || project.hasCover) mountCover(cover, project.coverVideoId, project.hasCover);
   frame.append(cover);
+  if (project.locked) frame.append(lockBadge());
   const body = document.createElement('div');
   body.className = 'project-body';
   const copy = document.createElement('div');
@@ -2952,6 +3079,11 @@ function projectCard(project) {
   const title = document.createElement('div');
   title.className = 'project-name';
   title.textContent = project.name;
+  if (project.locked) {
+    const glyph = lockGlyph(12);
+    glyph.classList.add('project-name-lock');
+    title.append(glyph);
+  }
   const meta = document.createElement('div');
   meta.className = 'project-meta';
   const when = project.latestAt ? relativeTime(project.latestAt) : '还没有更新';
@@ -2970,11 +3102,15 @@ function projectCard(project) {
   if (!loose) {
     const actions = document.createElement('div');
     actions.className = 'project-actions';
-    const edit = projectIconButton('修改项目', [
-      'M12 20h8',
-      'M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z',
-    ], 'edit');
-    edit.addEventListener('click', () => renameProjectBy(project));
+    // 锁着的项目在门口不能改名：改名是进项目之后的事
+    if (!project.locked) {
+      const edit = projectIconButton('修改项目', [
+        'M12 20h8',
+        'M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z',
+      ], 'edit');
+      edit.addEventListener('click', () => editProjectBy(project));
+      actions.append(edit);
+    }
     const del = projectIconButton('删除项目', [
       'M3 6h18',
       'M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2',
@@ -2982,7 +3118,7 @@ function projectCard(project) {
       'M10 11v6M14 11v6',
     ], 'delete');
     del.addEventListener('click', () => deleteProjectBy(project));
-    actions.append(edit, del);
+    actions.append(del);
     body.append(actions);
   }
   card.append(frame, body);
@@ -3094,6 +3230,8 @@ function versionRow(video, version, finalId) {
   }
   for (const project of state.projects) {
     if (project.id === video.projectId) continue;
+    // 锁着的项目移不进去（没通行证），干脆不列
+    if (project.locked) continue;
     const option = document.createElement('option');
     option.value = project.id;
     option.textContent = project.name;
@@ -3175,14 +3313,55 @@ function versionRow(video, version, finalId) {
 
 let askSession = null;
 
+function initLockDialogs() {
+  dom.lockOk.addEventListener('click', submitLock);
+  dom.lockCancel.addEventListener('click', () => settleLock(false));
+  dom.lockClose.addEventListener('click', () => settleLock(false));
+  dom.lockModal.addEventListener('click', (event) => {
+    if (event.target === dom.lockModal) settleLock(false);
+  });
+  dom.lockInput.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' || event.isComposing) return;
+    event.preventDefault();
+    submitLock();
+  });
+
+  dom.pfOk.addEventListener('click', () => submitProjectForm());
+  dom.pfRemove.addEventListener('click', () => submitProjectForm({ remove: true }));
+  dom.pfCancel.addEventListener('click', () => settleProjectForm(null));
+  dom.pfClose.addEventListener('click', () => settleProjectForm(null));
+  dom.pfRandom.addEventListener('click', () => fillRandomPassword(dom.pfPassword));
+  dom.projectFormModal.addEventListener('click', (event) => {
+    if (event.target === dom.projectFormModal) settleProjectForm(null);
+  });
+  for (const input of [dom.pfName, dom.pfCurrent, dom.pfPassword, dom.pfHint]) {
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || event.isComposing) return;
+      event.preventDefault();
+      submitProjectForm();
+    });
+  }
+
+  window.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (!dom.lockModal.hidden) {
+      event.preventDefault();
+      event.stopPropagation();
+      settleLock(false);
+      return;
+    }
+    if (!dom.projectFormModal.hidden) {
+      event.preventDefault();
+      event.stopPropagation();
+      settleProjectForm(null);
+    }
+  }, true);
+}
+
 function initAskDialog() {
   dom.askCancel.addEventListener('click', () => cancelAsk());
   dom.askClose.addEventListener('click', () => cancelAsk());
   dom.askOk.addEventListener('click', () => submitAsk());
-  dom.askField.addEventListener('submit', (event) => {
-    event.preventDefault();
-    submitAsk();
-  });
   dom.askModal.addEventListener('click', (event) => {
     if (event.target === dom.askModal) cancelAsk();
   });
@@ -3197,26 +3376,6 @@ function initAskDialog() {
   }, true);
 }
 
-/** 文本输入。取消返回 null；空内容不提交，对话框保持打开。 */
-function askText(title, defaultValue = '') {
-  return openAsk({
-    kind: 'text',
-    cancelValue: null,
-    prepare() {
-      dom.askTitle.textContent = title;
-      dom.askField.hidden = false;
-      dom.askInput.value = defaultValue == null ? '' : String(defaultValue);
-      dom.askOk.textContent = '确定';
-      dom.askOk.classList.add('primary');
-      dom.askOk.classList.remove('danger');
-    },
-    focus() {
-      dom.askInput.focus();
-      dom.askInput.select();
-    },
-  });
-}
-
 /** 确认。取消返回 false；danger 时确认按钮用红色。 */
 function askConfirm(message, { danger = false } = {}) {
   return openAsk({
@@ -3224,7 +3383,6 @@ function askConfirm(message, { danger = false } = {}) {
     cancelValue: false,
     prepare() {
       dom.askTitle.textContent = message;
-      dom.askField.hidden = true;
       dom.askOk.textContent = danger ? '删除' : '确定';
       dom.askOk.classList.toggle('primary', !danger);
       dom.askOk.classList.toggle('danger', danger);
@@ -3239,6 +3397,8 @@ function openAsk(session) {
   if (askSession) cancelAsk();
   return new Promise((resolve) => {
     askSession = { resolve, ...session };
+    dom.askSecretField.hidden = true;
+    dom.askError.hidden = true;
     session.prepare();
     dom.askModal.hidden = false;
     setTimeout(session.focus, 30);
@@ -3247,8 +3407,9 @@ function openAsk(session) {
 
 function submitAsk() {
   if (!askSession) return;
-  if (askSession.kind === 'text') {
-    const value = dom.askInput.value.trim();
+  // 密码不 trim、不收空格，原样提交
+  if (askSession.kind === 'secret') {
+    const value = dom.askSecret.value;
     if (!value) return;
     settleAsk(value);
     return;
@@ -3268,59 +3429,264 @@ function settleAsk(value) {
   resolve(value);
 }
 
-async function createProjectPrompt() {
-  const name = await askText('项目名称');
-  if (name == null) return;
-  const trimmed = name.trim();
-  if (!trimmed) {
-    toast('项目名称不能为空', true);
-    return;
+/** 要密码的确认框：取消返回 null，确定返回输入的密码 */
+function askSecret(title, { danger = false, okLabel = '确定', error = '', label = '项目密码' } = {}) {
+  return openAsk({
+    kind: 'secret',
+    cancelValue: null,
+    prepare() {
+      dom.askTitle.textContent = title;
+      dom.askSecretField.hidden = false;
+      dom.askSecretLabel.textContent = label;
+      dom.askSecret.value = '';
+      dom.askOk.textContent = okLabel;
+      dom.askOk.classList.toggle('primary', !danger);
+      dom.askOk.classList.toggle('danger', danger);
+      dom.askError.hidden = !error;
+      dom.askError.textContent = error;
+    },
+    focus() {
+      dom.askSecret.focus();
+    },
+  });
+}
+
+/* ── 项目密码 ─────────────────────────────────────────────────────── */
+
+// 随机密码用无歧义字符：没有 0/o/1/i/l，口头念、手抄都不容易错
+const PASSWORD_ALPHABET = '23456789abcdefghjkmnpqrstuvwxyz';
+
+function randomPassword(length = 4) {
+  const out = [];
+  if (globalThis.crypto?.getRandomValues) {
+    const bytes = new Uint8Array(length);
+    crypto.getRandomValues(bytes);
+    for (const byte of bytes) out.push(PASSWORD_ALPHABET[byte % PASSWORD_ALPHABET.length]);
+  } else {
+    for (let i = 0; i < length; i += 1) {
+      out.push(PASSWORD_ALPHABET[Math.floor(Math.random() * PASSWORD_ALPHABET.length)]);
+    }
   }
+  return out.join('');
+}
+
+/** 随机生成的密码当场要能看见，不然没法记；手动输入时仍然是掩码 */
+function fillRandomPassword(input) {
+  if (!input) return;
+  input.value = randomPassword(4);
+  input.type = 'text';
+  input.focus();
+  input.setSelectionRange(0, input.value.length);
+}
+
+function projectById(id) {
+  return state.projects.find((project) => project.id === id) || null;
+}
+
+/* 解锁框：进锁着的项目、打开锁着的片子时弹 */
+
+let lockSession = null;
+
+function askProjectPassword(project) {
+  if (lockSession) settleLock(false);
+  return new Promise((resolve) => {
+    lockSession = { resolve, projectId: project.id };
+    dom.lockTitle.textContent = project.name ? `🔒 ${project.name}` : '🔒 这个项目需要密码';
+    const hint = project.hint || '';
+    dom.lockHint.hidden = !hint;
+    dom.lockHint.textContent = hint ? `提示：${hint}` : '';
+    dom.lockError.hidden = true;
+    dom.lockInput.value = '';
+    dom.lockOk.disabled = false;
+    dom.lockModal.hidden = false;
+    setTimeout(() => dom.lockInput.focus(), 40);
+  });
+}
+
+function settleLock(value) {
+  if (!lockSession) return;
+  const resolve = lockSession.resolve;
+  lockSession = null;
+  dom.lockModal.hidden = true;
+  resolve(value);
+}
+
+async function submitLock() {
+  if (!lockSession) return;
+  const password = dom.lockInput.value;
+  if (!password) return;
+  dom.lockOk.disabled = true;
+  dom.lockError.hidden = true;
   try {
-    const data = await api.createProject(trimmed.slice(0, 40));
-    await refreshVideos();
-    location.hash = `#/p/${data.project.id}`;
+    await api.unlockProject(lockSession.projectId, password);
+    settleLock(true);
   } catch (err) {
-    toast(err.message, true);
+    dom.lockOk.disabled = false;
+    dom.lockError.hidden = false;
+    dom.lockError.textContent = err.remaining === undefined
+      ? err.message
+      : `${err.message}，还可以试 ${Math.max(0, err.remaining)} 次`;
+    dom.lockInput.select();
   }
 }
 
-async function renameProjectBy(project) {
-  if (!project) return;
-  const name = await askText('项目新名称', project.name);
-  if (name == null) return;
-  const trimmed = name.trim();
-  if (!trimmed) {
-    toast('项目名称不能为空', true);
-    return;
+/* 新建 / 修改项目：名称 + 密码 + 提示语共用一个框 */
+
+let projectFormSession = null;
+
+function openProjectForm({ mode = 'create', project = null } = {}) {
+  if (projectFormSession) settleProjectForm(null);
+  return new Promise((resolve) => {
+    projectFormSession = { resolve, mode, project };
+    const hasPassword = Boolean(project?.hasPassword);
+    dom.pfTitle.textContent = mode === 'edit' ? '修改项目' : '新建项目';
+    dom.pfName.value = project?.name || '';
+    dom.pfCurrentField.hidden = !hasPassword;
+    dom.pfCurrent.value = '';
+    dom.pfPassword.value = '';
+    dom.pfPassword.type = 'password';
+    dom.pfHint.value = project?.hint || '';
+    dom.pfRemove.hidden = !hasPassword;
+    dom.pfError.hidden = true;
+    dom.pfOk.disabled = false;
+    dom.projectFormModal.hidden = false;
+    setTimeout(() => dom.pfName.focus(), 40);
+  });
+}
+
+function settleProjectForm(value) {
+  if (!projectFormSession) return;
+  const resolve = projectFormSession.resolve;
+  projectFormSession = null;
+  dom.projectFormModal.hidden = true;
+  resolve(value);
+}
+
+function projectFormError(message) {
+  dom.pfError.hidden = false;
+  dom.pfError.textContent = message;
+}
+
+async function submitProjectForm({ remove = false } = {}) {
+  const session = projectFormSession;
+  if (!session) return;
+  const name = dom.pfName.value.trim();
+  if (!name) return projectFormError('项目名称不能为空');
+
+  const password = remove ? '' : dom.pfPassword.value;
+  if (password && (password.length < 4 || password.length > 64)) {
+    return projectFormError('密码要 4–64 位');
   }
+  const hint = dom.pfHint.value.trim();
+  const currentPassword = dom.pfCurrent.value;
+  const hasPassword = Boolean(session.project?.hasPassword);
+  const hintChanged = hasPassword && hint !== (session.project?.hint || '');
+  const lockChanged = remove || Boolean(password) || hintChanged;
+  if (lockChanged && hasPassword && !currentPassword) {
+    return projectFormError('请输入当前密码');
+  }
+
+  dom.pfOk.disabled = true;
+  dom.pfError.hidden = true;
   try {
-    await api.renameProject(project.id, trimmed.slice(0, 40));
-    await refreshVideos();
+    if (session.mode === 'create') {
+      const lock = password ? { password, hint, setBy: state.author } : null;
+      const data = await api.createProject(name, lock);
+      settleProjectForm(data.project);
+      return;
+    }
+    const project = session.project;
+    if (name !== project.name) await api.renameProject(project.id, name);
+    if (lockChanged) {
+      await api.setProjectPassword(project.id, {
+        currentPassword,
+        password,
+        hint: password ? hint : '',
+        setBy: state.author,
+      });
+    }
+    settleProjectForm(true);
   } catch (err) {
-    toast(err.message, true);
+    dom.pfOk.disabled = false;
+    projectFormError(err.remaining === undefined
+      ? err.message
+      : `${err.message}，还可以试 ${Math.max(0, err.remaining)} 次`);
   }
+}
+
+async function createProjectPrompt() {
+  const created = await openProjectForm({ mode: 'create' });
+  if (!created) return;
+  await refreshVideos();
+  if (created.id) location.hash = `#/p/${created.id}`;
+  if (created.hasPassword) toast('项目已加锁，忘了密码就去服务器的 project-locks.json 看');
+}
+
+async function editProjectBy(project) {
+  if (!project) return;
+  const saved = await openProjectForm({ mode: 'edit', project });
+  if (!saved) return;
+  await refreshVideos();
 }
 
 async function renameCurrentProject() {
-  await renameProjectBy(state.projects.find((item) => item.id === state.libraryProjectId));
+  await editProjectBy(projectById(state.libraryProjectId));
+}
+
+async function changeProjectPassword() {
+  await editProjectBy(projectById(state.libraryProjectId));
+}
+
+/** 上锁：清掉这台浏览器的通行证，下次进来要重新输密码 */
+async function lockCurrentProject() {
+  const project = projectById(state.libraryProjectId);
+  if (!project) return;
+  try {
+    await api.lockProject(project.id);
+    await refreshVideos();
+    location.hash = '#/';
+    toast('已上锁，下次进来要输密码');
+  } catch (err) {
+    toast(err.message, true);
+  }
 }
 
 async function deleteProjectBy(project, { goHome = false } = {}) {
   if (!project) return;
-  const ok = await askConfirm(`删除项目「${project.name}」？\n里面的视频会移回「未分类」，不会被删除。`, { danger: true });
-  if (!ok) return;
-  try {
-    await api.deleteProject(project.id);
-    await refreshVideos();
-    if (goHome) location.hash = '#/';
-  } catch (err) {
-    toast(err.message, true);
+  const message = `删除项目「${project.name}」？\n里面的视频会移回「未分类」，不会被删除。`;
+  if (!project.hasPassword) {
+    if (!(await askConfirm(message, { danger: true }))) return;
+    try {
+      await api.deleteProject(project.id);
+    } catch (err) {
+      toast(err.message, true);
+      return;
+    }
+  } else {
+    // 删除会把片子退回未分类（等于解锁），所以就算刚进来也要再输一次密码
+    let error = '';
+    for (;;) {
+      const password = await askSecret(message, { danger: true, okLabel: '删除', error });
+      if (password == null) return;
+      try {
+        await api.deleteProject(project.id, password);
+        break;
+      } catch (err) {
+        if (err.remaining === undefined) {
+          toast(err.message, true);
+          return;
+        }
+        error = `${err.message}，还可以试 ${Math.max(0, err.remaining)} 次`;
+      }
+    }
   }
+  await refreshVideos();
+  if (goHome) location.hash = '#/';
+  toast('项目已删除，片子回到未分类');
 }
 
 async function deleteCurrentProject() {
-  await deleteProjectBy(state.projects.find((item) => item.id === state.libraryProjectId), { goHome: true });
+  await deleteProjectBy(projectById(state.libraryProjectId), { goHome: true });
 }
 
 function renderLibrary() {

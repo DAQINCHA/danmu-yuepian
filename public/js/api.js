@@ -7,7 +7,16 @@ async function request(method, url, body) {
   const res = await fetch(url, options);
   const text = await res.text();
   const data = text ? JSON.parse(text) : {};
-  if (!res.ok) throw new Error(data.error || `请求失败 (${res.status})`);
+  if (!res.ok) {
+    const error = new Error(data.error || `请求失败 (${res.status})`);
+    // 项目上锁：带上足够的上下文，前端好弹解锁框而不是一句红字
+    if (data.locked) error.locked = true;
+    if (data.projectId) error.projectId = data.projectId;
+    if (data.projectName) error.projectName = data.projectName;
+    if (data.hint) error.hint = data.hint;
+    if (data.remaining !== undefined) error.remaining = data.remaining;
+    throw error;
+  }
   return data;
 }
 
@@ -15,11 +24,15 @@ export const api = {
   getConfig: () => request('GET', '/api/config'),
   listVideos: () => request('GET', '/api/videos'),
   listProjects: () => request('GET', '/api/projects'),
-  createProject: (name) => request('POST', '/api/projects', { name }),
+  createProject: (name, lock) => request('POST', '/api/projects', lock ? { name, ...lock } : { name }),
   renameProject: (id, name) => request('PATCH', `/api/projects/${id}`, { name }),
   // videoId 为 null 时取消定稿
   setProjectFinal: (id, videoId) => request('PATCH', `/api/projects/${id}`, { finalVideoId: videoId || null }),
-  deleteProject: (id) => request('DELETE', `/api/projects/${id}`),
+  // password 传空字符串 = 取消密码；已经上锁时要带 currentPassword
+  setProjectPassword: (id, patch) => request('POST', `/api/projects/${id}/password`, patch),
+  unlockProject: (id, password) => request('POST', `/api/projects/${id}/unlock`, { password }),
+  lockProject: (id) => request('POST', `/api/projects/${id}/lock`, {}),
+  deleteProject: (id, password) => request('DELETE', `/api/projects/${id}`, password ? { password } : undefined),
   getVideo: (id) => request('GET', `/api/videos/${id}`),
   patchVideo: (id, patch) => request('PATCH', `/api/videos/${id}`, patch),
   moveVideo: (id, projectId) => request('PATCH', `/api/videos/${id}`, { projectId: projectId || null }),
