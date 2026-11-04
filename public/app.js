@@ -3023,7 +3023,11 @@ function renderCrumb() {
 function renderProjectCards() {
   releaseCovers(dom.projectGrid);
   const cards = [];
-  const projects = [...state.projects].sort((a, b) => (b.latestAt || 0) - (a.latestAt || 0));
+  // 已定稿的整体排在没定稿的后面（成片归档了，不再抢最前面）；两组内部还是按最近更新排
+  const projects = [...state.projects].sort((a, b) => {
+    const done = (a.finalVideoId ? 1 : 0) - (b.finalVideoId ? 1 : 0);
+    return done || (b.latestAt || 0) - (a.latestAt || 0);
+  });
   for (const project of projects) cards.push(projectCard(project));
   if (state.uncategorized?.videoCount) {
     cards.push(projectCard({
