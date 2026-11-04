@@ -3065,8 +3065,8 @@ function projectAddMark() {
   return svg;
 }
 
-/** 一把小锁：项目卡片、面包屑上都用它 */
-function lockGlyph(size = 12, strokeWidth = 2) {
+/** 锁的锁体。开锁和闭锁只差锁梁那一条线，风格因此是一致的 */
+function padlock(size, strokeWidth, shacklePath) {
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
@@ -3085,16 +3085,34 @@ function lockGlyph(size = 12, strokeWidth = 2) {
   body.setAttribute('height', '10');
   body.setAttribute('rx', '2.5');
   const shackle = document.createElementNS(ns, 'path');
-  shackle.setAttribute('d', 'M8 10V7a4 4 0 018 0v3');
+  shackle.setAttribute('d', shacklePath);
   svg.append(body, shackle);
   return svg;
 }
 
-function lockBadge() {
+/** 闭锁：项目上了锁，这台浏览器还没通行证 */
+function lockGlyph(size = 12, strokeWidth = 2) {
+  return padlock(size, strokeWidth, 'M8 10V7a4 4 0 018 0v3');
+}
+
+/** 开锁：项目上了锁，但这台浏览器已经解锁过（锁梁从中间往上挑） */
+function unlockGlyph(size = 12, strokeWidth = 2) {
+  return padlock(size, strokeWidth, 'M12 10V7a4 4 0 017.4-2.1');
+}
+
+/** 上过锁的项目都挂这个胶囊；金色 = 还没解锁，青色 = 你这台已经解锁了 */
+function lockBadge(locked) {
   const badge = document.createElement('span');
   badge.className = 'project-lock-badge';
-  badge.append(lockGlyph(11), '已加锁');
+  badge.append(lockIcon(locked, 11), '已加锁');
   return badge;
+}
+
+/** 按锁定状态挑一支锁，并上对应的颜色 */
+function lockIcon(locked, size, strokeWidth = 2) {
+  const glyph = locked ? lockGlyph(size, strokeWidth) : unlockGlyph(size, strokeWidth);
+  glyph.classList.add(locked ? 'lock-gold' : 'lock-accent');
+  return glyph;
 }
 
 // 首页卡片和项目页共用同一套图标：笔、垃圾桶（锁用下面的 lockGlyph）
@@ -3150,7 +3168,7 @@ function projectCard(project) {
   }
   card.className = 'project-card';
   // 锁着的卡片不虚化、不变灰：要靠封面认项目，只是多一把锁
-  if (project.locked) card.classList.add('is-locked');
+  if (project.hasPassword) card.classList.add('is-locked');
   const frame = document.createElement('div');
   frame.className = 'project-cover-frame';
   const cover = document.createElement('img');
@@ -3158,7 +3176,7 @@ function projectCard(project) {
   // 锁着又还没封面的，别去截帧（视频文件要通行证），先空着
   if (!project.locked || project.hasCover) mountCover(cover, project.coverVideoId, project.hasCover);
   frame.append(cover);
-  if (project.locked) frame.append(lockBadge());
+  if (project.hasPassword) frame.append(lockBadge(Boolean(project.locked)));
   const body = document.createElement('div');
   body.className = 'project-body';
   const copy = document.createElement('div');
@@ -3166,8 +3184,8 @@ function projectCard(project) {
   const title = document.createElement('div');
   title.className = 'project-name';
   title.textContent = project.name;
-  if (project.locked) {
-    const glyph = lockGlyph(12);
+  if (project.hasPassword) {
+    const glyph = lockIcon(Boolean(project.locked), 12);
     glyph.classList.add('project-name-lock');
     title.append(glyph);
   }

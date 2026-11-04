@@ -550,10 +550,10 @@ body.author-spotlight .toast { z-index: 100; }
 .project-icon svg { display: block; width: 16px; height: 16px; }
 .project-icon-edit { color: #cfd6dd; }
 .project-icon-delete { color: #e8838a; }
-.project-icon-lock { color: var(--accent); }
+.project-icon-lock { color: #f0b35c; }
 .project-icon-edit:hover { background: #2a3340; border-color: #3a4554; color: #fff; }
 .project-icon-delete:hover { background: #2a3340; border-color: #3a4554; color: #ffb4b8; }
-.project-icon-lock:hover { background: #2a3340; border-color: #1f7f86; color: #8fe6e7; }
+.project-icon-lock:hover { background: #2a3340; border-color: rgba(240, 179, 92, 0.45); color: #ffd08a; }
 .project-name {
   font-size: 15px;
   font-weight: 650;
@@ -581,9 +581,12 @@ body.author-spotlight .toast { z-index: 100; }
   line-height: 1;
   pointer-events: none;
 }
-/* 锁统一用品牌色，和项目页那个锁图标对上；「已加锁」文字仍留白色保证可读 */
-.project-lock-badge svg { display: block; color: var(--accent); }
-.project-name-lock { margin-left: 5px; color: var(--accent); vertical-align: -1px; }
+.project-lock-badge svg { display: block; }
+/* 锁的颜色只表达「你这台有没有解锁」：金色 = 还没解锁，青色 = 已经解锁。
+   「已加锁」文字仍是白色，保证在任何封面上都读得清 */
+.lock-gold { color: #f0b35c; }
+.lock-accent { color: var(--accent); }
+.project-name-lock { margin-left: 5px; vertical-align: -1px; }
 
 /* 项目页面包屑上的「已加锁」 */
 .lock-chip {
