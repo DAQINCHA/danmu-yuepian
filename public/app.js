@@ -84,16 +84,26 @@ let uploadConfirming = false;
 
 boot();
 
+/** 站点名（「弹幕阅片 · 组名 / 文件夹名」），项目页会临时换成「弹幕阅片 · 项目名」 */
+let siteTitle = '弹幕阅片';
+
 /** 多组 / 多部署：服务端算好「弹幕阅片 · 品牌组」或「弹幕阅片 · danmu2」，这里同步到标签栏和左上角 */
 function applySiteTitle() {
   api.getConfig().then(({ title }) => {
     if (!title) return;
-    document.title = title;
+    siteTitle = title;
+    // 项目页 / 看片页的标题由各自页面设，晚到的站点名别抢回去
+    if (currentRoute() === '/') document.title = title;
     const brand = document.getElementById('brand-name');
     if (brand) brand.textContent = title;
   }).catch(() => {
     /* 拿不到就保持默认名字 */
   });
+}
+
+/** 标签栏标题：传项目名就写项目名，不传就用站点名 */
+function setDocumentTitle(projectName) {
+  document.title = projectName ? `弹幕阅片 · ${projectName}` : siteTitle;
 }
 
 function boot() {
@@ -169,14 +179,16 @@ function boot() {
   });
   mobileListQuery.addEventListener?.('change', syncMobileListFilter);
   syncMobileListFilter();
-  window.addEventListener('hashchange', applyHash);
+  window.addEventListener('popstate', renderRoute);
+  // 老井号链接（页面里的 href="#/"）走这条路，renderRoute 会把它换成正经路径
+  window.addEventListener('hashchange', renderRoute);
   syncTopbarNav();
   syncComposerCollapse();
   // 没署名就先压暗，首页和带片地址都一样，不必等列表回来
   syncAuthorSpotlight({ focus: !state.author });
 
   requestAnimationFrame(tick);
-  refreshVideos().finally(applyHash);
+  refreshVideos().finally(renderRoute);
 }
 
 function cacheDom() {
@@ -405,15 +417,41 @@ function focusAuthor(preferUpload = false) {
 
 /* ── 路由 ─────────────────────────────────────────────────────────── */
 
-function applyHash() {
-  const videoMatch = /^#\/v\/([\w-]+)/.exec(location.hash);
+/** 当前路由，统一成 /、/p/<id>、/v/<id>；老的井号链接 /#/p/<id> 也认 */
+function currentRoute() {
+  const legacy = /^#\/(p|v)\/([\w-]+)/.exec(location.hash);
+  if (legacy) return `/${legacy[1]}/${legacy[2]}`;
+  const pathname = location.pathname.replace(/\/+$/, '');
+  return pathname || '/';
+}
+
+/** 跳转：地址写进路径而不是井号，分享出去服务端才读得到是哪个项目 */
+function go(route) {
+  if (currentRoute() === route) {
+    renderRoute();
+    return;
+  }
+  history.pushState(null, '', route);
+  renderRoute();
+}
+
+/** 老的井号链接（页面里的 href="#/" 也算）换成正经路径，省得复制出去的地址又变回井号 */
+function adoptLegacyHash() {
+  if (!/^#(\/.*)?$/.test(location.hash)) return;
+  history.replaceState(null, '', currentRoute());
+}
+
+function renderRoute() {
+  adoptLegacyHash();
+  const route = currentRoute();
+  const videoMatch = /^\/v\/([\w-]+)/.exec(route);
   if (videoMatch) {
     openVideo(videoMatch[1]);
     syncTopbarNav();
     return;
   }
   leaveVideo();
-  const projectMatch = /^#\/p\/([\w-]+)/.exec(location.hash);
+  const projectMatch = /^\/p\/([\w-]+)/.exec(route);
   if (projectMatch) showProjectPage(projectMatch[1]);
   else showProjectHome();
   syncTopbarNav();
@@ -421,8 +459,9 @@ function applyHash() {
 
 /** 返回主页紧跟署名：项目页和看片页共用；返回项目只在看片页、排在它后面。 */
 function syncTopbarNav() {
-  const onProject = /^#\/p\/[\w-]+/.test(location.hash);
-  const onVideo = /^#\/v\/[\w-]+/.test(location.hash);
+  const route = currentRoute();
+  const onProject = /^\/p\/[\w-]+/.test(route);
+  const onVideo = /^\/v\/[\w-]+/.test(route);
   const onHome = !onProject && !onVideo;
   dom.libraryOpen.hidden = onHome;
   dom.libraryOpen.textContent = '返回主页';
@@ -468,14 +507,16 @@ function leaveVideo() {
 function showProjectHome() {
   state.libraryPage = 'home';
   state.libraryProjectId = null;
+  setDocumentTitle('');
   dom.empty.hidden = false;
   dom.empty.classList.add('library-view');
   renderLibraryView();
 }
 
 async function showProjectPage(id) {
-  const hash = location.hash;
+  const here = location.href;
   const projectId = id === 'uncategorized' ? null : id;
+  let pageName = '';
   if (projectId) {
     let project = projectById(projectId);
     // 分享链接直接进来时列表可能还没拉过
@@ -485,22 +526,24 @@ async function showProjectPage(id) {
     }
     if (!project) {
       toast('这个项目不存在', true);
-      location.hash = '#/';
+      go('/');
       return;
     }
+    pageName = project.name || '';
     if (project.locked) {
       const ok = await askProjectPassword(project);
-      if (location.hash !== hash) return;
+      if (location.href !== here) return;
       if (!ok) {
-        location.hash = '#/';
+        go('/');
         return;
       }
       await refreshVideos();
-      if (location.hash !== hash) return;
+      if (location.href !== here) return;
     }
   }
   state.libraryPage = 'project';
   state.libraryProjectId = projectId;
+  setDocumentTitle(pageName);
   dom.empty.hidden = false;
   dom.empty.classList.add('library-view');
   renderLibraryView();
@@ -508,6 +551,7 @@ async function showProjectPage(id) {
 
 async function openVideo(id) {
   if (state.video?.id === id) return;
+  setDocumentTitle('');
   // 片子还在加载时先压暗，直接打开链接不会先闪一屏
   if (!state.author) syncAuthorSpotlight({ focus: true });
   let data;
@@ -516,24 +560,26 @@ async function openVideo(id) {
   } catch (err) {
     // 分享链接打开锁着的片子：先弹密码框，解开再重来一次
     if (err.locked && err.projectId) {
-      const hash = location.hash;
+      const here = location.href;
       const project = projectById(err.projectId)
         || { id: err.projectId, name: err.projectName || '', hint: err.hint || '' };
       const ok = await askProjectPassword(project);
       // 等密码期间已经跳到别处了，就别再往回拽
-      if (location.hash !== hash) return;
+      if (location.href !== here) return;
       if (ok) {
         await refreshVideos();
-        if (location.hash !== hash) return;
+        if (location.href !== here) return;
         return openVideo(id);
       }
     }
     toast(err.message, true);
-    location.hash = '#/';
+    go('/');
     return;
   }
 
   state.video = data.video;
+  // 看片页的标签栏也写所属项目名，跟分享卡片一致；不报片名
+  setDocumentTitle(projectById(data.video.projectId)?.name || '');
   state.comments = data.comments;
   for (const comment of state.comments) {
     if (!Array.isArray(comment.replies)) comment.replies = [];
@@ -2193,7 +2239,7 @@ function connectEvents(videoId) {
     refreshVideos();
     if (state.video?.id === data.videoId) {
       toast('这支片被上传者删掉了');
-      location.hash = '#/';
+      go('/');
     }
   });
   // 项目变化：改名 / 删除 / 有人定稿或取消定稿，几秒内同步到所有人
@@ -2224,7 +2270,11 @@ function applyVideoUpdate(video) {
   if (!state.video) renderLibraryView();
   if (state.video?.id === video.id) {
     if (video.title) state.video.title = video.title;
-    if (Object.prototype.hasOwnProperty.call(video, 'projectId')) state.video.projectId = video.projectId || null;
+    if (Object.prototype.hasOwnProperty.call(video, 'projectId')) {
+      state.video.projectId = video.projectId || null;
+      // 被移到别的项目了，标签栏跟着换
+      setDocumentTitle(projectById(state.video.projectId)?.name || '');
+    }
     renderHeader();
     reportView.refresh();
   }
@@ -2247,15 +2297,21 @@ async function refreshVideos() {
 }
 
 function initModals() {
+  // 左上角品牌回到主页：走 SPA 跳转，按住 ⌘ / Ctrl 点还是开新标签
+  document.querySelector('.brand')?.addEventListener('click', (event) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    event.preventDefault();
+    go('/');
+  });
   dom.libraryOpen.addEventListener('click', () => {
-    location.hash = '#/';
+    go('/');
   });
   dom.homeOpen.addEventListener('click', () => {
     if (state.video) {
-      location.hash = state.video.projectId ? `#/p/${state.video.projectId}` : '#/p/uncategorized';
+      go(state.video.projectId ? `/p/${state.video.projectId}` : '/p/uncategorized');
       return;
     }
-    location.hash = '#/';
+    go('/');
   });
   dom.projectNew.addEventListener('click', createProjectPrompt);
   dom.projectRename.addEventListener('click', renameCurrentProject);
@@ -2591,8 +2647,7 @@ async function confirmUpload() {
     resetUploadUi();
     await refreshVideos();
     if (epoch !== uploadEpoch) return;
-    location.hash = `#/v/${video.id}`;
-    applyHash();
+    go(`/v/${video.id}`);
     toast('上传好了，把地址发给同事就能一起看');
   } catch (err) {
     if (epoch !== uploadEpoch) return;
@@ -2934,7 +2989,7 @@ function renderCrumb() {
   const back = document.createElement('button');
   back.type = 'button';
   back.textContent = '项目';
-  back.addEventListener('click', () => { location.hash = '#/'; });
+  back.addEventListener('click', () => { go('/'); });
   const sep = document.createElement('span');
   sep.className = 'crumb-sep';
   sep.textContent = '›';
@@ -3122,7 +3177,7 @@ function projectCard(project) {
   }
   card.append(frame, body);
   const open = () => {
-    location.hash = loose ? '#/p/uncategorized' : `#/p/${project.id}`;
+    go(loose ? '/p/uncategorized' : `/p/${project.id}`);
   };
   card.addEventListener('click', open);
   if (!loose) {
@@ -3164,7 +3219,7 @@ function versionRow(video, version, finalId) {
   const row = document.createElement('div');
   row.className = 'version-row';
   if (isFinal) row.classList.add('is-final');
-  row.addEventListener('click', () => { location.hash = `#/v/${video.id}`; });
+  row.addEventListener('click', () => { go(`/v/${video.id}`); });
   const cover = document.createElement('img');
   cover.className = 'version-cover';
   mountCover(cover, video.id, video.hasCover);
@@ -3295,7 +3350,7 @@ function versionRow(video, version, finalId) {
       }
       await api.deleteVideo(video.id);
       await refreshVideos();
-      if (state.video?.id === video.id) location.hash = '#/';
+      if (state.video?.id === video.id) go('/');
     } catch (err) {
       toast(err.message, true);
     }
@@ -3617,7 +3672,7 @@ async function createProjectPrompt() {
   const created = await openProjectForm({ mode: 'create' });
   if (!created) return;
   await refreshVideos();
-  if (created.id) location.hash = `#/p/${created.id}`;
+  if (created.id) go(`/p/${created.id}`);
   if (created.hasPassword) toast('项目已加锁，忘了密码就去服务器的 project-locks.json 看');
 }
 
@@ -3643,7 +3698,7 @@ async function lockCurrentProject() {
   try {
     await api.lockProject(project.id);
     await refreshVideos();
-    location.hash = '#/';
+    go('/');
     toast('已上锁，下次进来要输密码');
   } catch (err) {
     toast(err.message, true);
@@ -3680,7 +3735,7 @@ async function deleteProjectBy(project, { goHome = false } = {}) {
     }
   }
   await refreshVideos();
-  if (goHome) location.hash = '#/';
+  if (goHome) go('/');
   toast('项目已删除，片子回到未分类');
 }
 
@@ -3740,7 +3795,7 @@ function renderLibrary() {
         await api.deleteVideo(video.id);
         await refreshVideos();
         renderLibrary();
-        if (state.video?.id === video.id) location.hash = '#/';
+        if (state.video?.id === video.id) go('/');
       } catch (err) {
         toast(err.message, true);
       }
@@ -3756,8 +3811,7 @@ function renderLibrary() {
     card.addEventListener('click', () => {
       if (state.renameId === video.id) return;
       dom.libraryModal.hidden = true;
-      location.hash = `#/v/${video.id}`;
-      applyHash();
+      go(`/v/${video.id}`);
     });
     return card;
   });

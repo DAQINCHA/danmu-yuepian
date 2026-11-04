@@ -2,6 +2,8 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
+  <!-- 项目页地址是 /p/<id>，不是井号路由；资源路径按站点根解析，换到哪一层都指得对 -->
+  <base href="/" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>{{SITE_TITLE}}</title>
   <meta name="description" content="局域网内的视频审片工具：任意一帧发弹幕，圈出任意连续帧。" />
@@ -21,7 +23,7 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="#/" title="回到项目">
+    <a class="brand" href="/" title="回到项目">
       <img class="brand-mark" src="./assets/favicon.svg" alt="弹幕阅片" width="30" height="30" />
       <span class="brand-text">
         <strong id="brand-name">弹幕阅片</strong>
