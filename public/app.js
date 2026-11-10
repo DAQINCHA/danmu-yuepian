@@ -842,12 +842,12 @@ function toggleMute() {
   dom.video.muted = !dom.video.muted;
 }
 
-/** 按钮字样与高亮跟着实际静音状态走；偏好已在 volumechange 里存好 */
+/** 图标与提示跟着实际静音状态走（声波换成斜线、整颗调暗）；偏好已在 volumechange 里存好 */
 function syncMuteButton() {
   const muted = dom.video.muted;
-  dom.muteBtn.textContent = muted ? '静' : '音';
-  dom.muteBtn.classList.toggle('active', muted);
+  dom.muteBtn.classList.toggle('muted', muted);
   dom.muteBtn.title = muted ? '取消静音 (M)' : '静音 (M)';
+  dom.muteBtn.setAttribute('aria-label', muted ? '取消静音' : '静音');
 }
 
 function stepFrame(direction) {

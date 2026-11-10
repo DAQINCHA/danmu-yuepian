@@ -108,7 +108,16 @@
 
       <div class="transport" id="transport" hidden>
         <button class="icon-btn" id="play-btn" type="button" title="播放 / 暂停 (空格)">▶</button>
-        <button class="icon-btn" id="mute-btn" type="button" title="静音 (M)">音</button>
+        <button class="icon-btn" id="mute-btn" type="button" title="静音 (M)" aria-label="静音">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path class="solid" d="M8.4 3.1 5.4 5.5H3.1v5h2.3l3 2.4z" />
+            <g class="mute-waves">
+              <path d="M10.3 6.1a2.7 2.7 0 0 1 0 3.8" />
+              <path d="M12 4.3a5.3 5.3 0 0 1 0 7.4" />
+            </g>
+            <path class="mute-slash" d="M2.9 2.9 13.1 13.1" />
+          </svg>
+        </button>
         <span class="mono tc" id="tc-now">00:00.000</span>
         <div class="timeline" id="timeline" role="slider" aria-label="播放进度" tabindex="0">
           <div class="timeline-rail">

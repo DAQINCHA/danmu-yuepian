@@ -301,7 +301,15 @@ body.author-spotlight .toast { z-index: 100; }
   cursor: pointer;
 }
 .icon-btn:hover { background: var(--panel-2); }
-.icon-btn.active { background: var(--accent-soft); border-color: #1f7f86; color: #8fe6e7; }
+/* 图标按钮里的内联 SVG：统一粗细与颜色，跟着按钮文字色走 */
+.icon-btn svg { width: 15px; height: 15px; display: block; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.icon-btn svg .solid { fill: currentColor; stroke: none; }
+
+/* 静音键：没静音是喇叭 + 声波，静音是喇叭 + 斜线，并调暗表示关掉 */
+#mute-btn .mute-slash { display: none; }
+#mute-btn.muted { color: var(--text-faint); }
+#mute-btn.muted .mute-waves { display: none; }
+#mute-btn.muted .mute-slash { display: inline; }
 
 /* ── 布局 ───────────────────────────────────────────────────────────── */
 
