@@ -11,6 +11,7 @@ const DRAW_COLORS = ['#ff5a4d', '#ffd166', '#4ec9a0', '#8ab4ff'];
 const STORE = {
   author: 'danmu:author',
   danmaku: 'danmu:danmaku',
+  mute: 'danmu:mute',
   intro: 'danmu:intro',
 };
 
@@ -23,6 +24,8 @@ const state = {
   // default = 还没识别过的猜测值；auto = 从视频里量出来的；manual = 用户手改过
   fpsSource: 'default',
   danmakuOn: localStorage.getItem(STORE.danmaku) !== 'off',
+  // 静音是个人偏好，记在本机；每个视频都沿用，不写到服务端
+  muted: localStorage.getItem(STORE.mute) === 'on',
   videos: [],
   projects: [],
   uncategorized: null,
@@ -197,7 +200,7 @@ function cacheDom() {
     'empty-state', 'frame', 'video-wrap', 'video', 'danmaku-layer', 'ann-layer', 'draw-layer', 'paused-badge',
     'draw-toolbar', 'range-in', 'range-out', 'range-summary', 'swatches', 'mark-in', 'mark-out',
     'preview-range', 'draw-undo', 'draw-clear', 'draw-cancel', 'draw-save',
-    'play-btn', 'tc-now', 'timeline', 'timeline-fill', 'timeline-marks', 'timeline-head', 'tc-total',
+    'play-btn', 'mute-btn', 'tc-now', 'timeline', 'timeline-fill', 'timeline-marks', 'timeline-head', 'tc-total',
     'transport', 'step-back', 'step-fwd', 'draw-toggle', 'fps-input', 'fps-badge', 'fps-field',
     'danmaku-toggle', 'snap-btn', 'fullscreen-btn',
     'composer', 'composer-time', 'composer-input', 'composer-reveal', 'composer-collapse',
@@ -834,6 +837,19 @@ function togglePlay() {
   else dom.video.pause();
 }
 
+function toggleMute() {
+  if (!state.video) return;
+  dom.video.muted = !dom.video.muted;
+}
+
+/** 按钮字样与高亮跟着实际静音状态走；偏好已在 volumechange 里存好 */
+function syncMuteButton() {
+  const muted = dom.video.muted;
+  dom.muteBtn.textContent = muted ? '静' : '音';
+  dom.muteBtn.classList.toggle('active', muted);
+  dom.muteBtn.title = muted ? '取消静音 (M)' : '静音 (M)';
+}
+
 function stepFrame(direction) {
   if (!state.video) return;
   dom.video.pause();
@@ -843,6 +859,17 @@ function stepFrame(direction) {
 
 function initTransport() {
   dom.playBtn.addEventListener('click', togglePlay);
+
+  // 静音状态以 <video> 的 muted 为准：点按钮、按 M、系统层面变化都汇到 volumechange 一处
+  dom.video.muted = state.muted;
+  syncMuteButton();
+  dom.muteBtn.addEventListener('click', toggleMute);
+  dom.video.addEventListener('volumechange', () => {
+    state.muted = dom.video.muted;
+    localStorage.setItem(STORE.mute, state.muted ? 'on' : 'off');
+    syncMuteButton();
+  });
+
   dom.video.addEventListener('click', togglePlay);
   dom.stepBack.addEventListener('click', () => stepFrame(-1));
   dom.stepFwd.addEventListener('click', () => stepFrame(1));
@@ -4104,6 +4131,10 @@ function initKeyboard() {
       case 'f':
       case 'F':
         dom.fullscreenBtn.click();
+        break;
+      case 'm':
+      case 'M':
+        toggleMute();
         break;
       case 's':
       case 'S':

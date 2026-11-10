@@ -301,6 +301,7 @@ body.author-spotlight .toast { z-index: 100; }
   cursor: pointer;
 }
 .icon-btn:hover { background: var(--panel-2); }
+.icon-btn.active { background: var(--accent-soft); border-color: #1f7f86; color: #8fe6e7; }
 
 /* ── 布局 ───────────────────────────────────────────────────────────── */
 
