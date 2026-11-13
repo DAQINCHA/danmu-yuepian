@@ -1,5 +1,5 @@
 const MAX_LANES = 12; // 只上下叠、不左右并排，车道上限放宽，实际由画面上方 70% 的高度决定
-const TOP = 36; // 给左上角的「已暂停」角标和截图时间戳水印留出位置
+const TOP = 36; // 相对视频画面顶部：给左上角的「已暂停」角标和截图时间戳水印留出位置
 const SIDE = 12;
 const LANE_GAP = 6; // 车道之间的竖向留白
 const MAX_REPLY_LINES = 3; // 弹幕上最多带几条回复，再多就显示「还有 N 条」
@@ -50,8 +50,15 @@ function replyRows(comment, classes, colorOf) {
 export function createDanmaku(layer, options = {}) {
   const colorOf = options.colorOf || (() => '#8ab4ff');
   const isMine = options.isMine || (() => false);
-  /** node -> { id, lane, span, born } —— span = 占几条车道 */
+  // 车道从画面顶往下数。弹幕层铺满整个阅片窗口时，层顶到画面顶还差一段距离，
+  // 由调用方按当前位置把这段偏移传进来，保证弹幕不会压住画面左上角的角标和水印
+  const extraInset = typeof options.topInset === 'function' ? options.topInset : () => 0;
+  const still = Boolean(options.still); // 截图用的临时重排：不走动画，排完直接读
+  const laneTop = () => TOP + Math.max(0, extraInset() || 0);
+  /** node -> { id, lane, span, born, comment } —— span = 占几条车道 */
   const live = new Map();
+  /** 暂停时贴在画面下方、还没在车道上露过面的评论 */
+  let focusComments = [];
   let enabled = true;
 
   const focus = document.createElement('div');
@@ -69,7 +76,7 @@ export function createDanmaku(layer, options = {}) {
     // 用行高而不是首行实际高度：长弹幕换行后首行会变高，不能把车道一起撑高
     const single = Math.ceil((parseFloat(style.lineHeight) || 40) + pad);
     const laneHeight = Math.max(24, single) + LANE_GAP;
-    const fit = Math.floor((height * 0.7 - TOP) / laneHeight);
+    const fit = Math.floor((height * 0.7 - laneTop()) / laneHeight);
     const count = Math.max(2, Math.min(MAX_LANES, fit));
     const span = Math.min(count, Math.max(1, Math.ceil((node.offsetHeight + LANE_GAP) / laneHeight)));
     return { laneHeight, count, span };
@@ -109,14 +116,14 @@ export function createDanmaku(layer, options = {}) {
     const entries = [...live].sort((a, b) => a[1].lane - b[1].lane || a[1].born - b[1].born);
     let bottom = -Infinity;
     for (const [node, info] of entries) {
-      const ideal = TOP + info.lane * info.laneHeight;
+      const ideal = laneTop() + info.lane * info.laneHeight;
       const top = Math.max(ideal, bottom + LANE_GAP);
       node.style.top = `${top}px`;
       bottom = top + node.offsetHeight;
     }
   }
 
-  if (typeof ResizeObserver === 'function') {
+  if (!still && typeof ResizeObserver === 'function') {
     let queued = false;
     new ResizeObserver(() => {
       if (queued) return;
@@ -176,7 +183,13 @@ export function createDanmaku(layer, options = {}) {
     const node = build(comment);
     const replyCount = Math.min(MAX_REPLY_LINES, Array.isArray(comment.replies) ? comment.replies.length : 0);
     const duration = Math.min(12, Math.max(4, 3.2 + (comment.text || '').length * 0.06) + replyCount * 1.2);
-    node.style.animationDuration = `${duration.toFixed(1)}s`;
+    if (still) {
+      // 临时重排不要动画：排完立刻读，不能卡在淡入的 opacity: 0
+      node.style.animation = 'none';
+      node.style.opacity = '1';
+    } else {
+      node.style.animationDuration = `${duration.toFixed(1)}s`;
+    }
     node.style.left = '0px';
     node.style.top = '0px';
     layer.appendChild(node);
@@ -185,10 +198,10 @@ export function createDanmaku(layer, options = {}) {
     if (span > 1 || node.offsetHeight > laneHeight * 1.2) node.classList.add('is-wrapped');
     const lane = place(count, span);
     node.style.left = `${SIDE}px`;
-    live.set(node, { id: comment.id, lane, span, born: performance.now(), laneHeight });
+    live.set(node, { id: comment.id, lane, span, born: performance.now(), laneHeight, comment });
     relayout();
 
-    node.addEventListener('animationend', () => retire(node));
+    if (!still) node.addEventListener('animationend', () => retire(node));
   }
 
   /** 收掉某一条在场的气泡（回复变了要重画时用） */
@@ -202,10 +215,21 @@ export function createDanmaku(layer, options = {}) {
     return ids;
   }
 
+  /** 当前在场的弹幕（按出现先后） */
+  function liveComments() {
+    return [...live.values()].sort((a, b) => a.born - b.born).map((info) => info.comment);
+  }
+
+  /** 当前屏幕上看得见的全部弹幕：车道里的 + 暂停时下方列出的（两者不重复） */
+  function visibleComments() {
+    return [...liveComments(), ...focusComments];
+  }
+
   function showFocus(comments) {
     // 已经在上方车道里定住的就不在下方重复列了
     const shown = liveIds();
     const list = enabled ? comments.filter((c) => !shown.has(c.id)).slice(-5) : [];
+    focusComments = list;
     if (!list.length) {
       focus.replaceChildren();
       focus.hidden = true;
@@ -299,6 +323,7 @@ export function createDanmaku(layer, options = {}) {
     showFocus,
     clear,
     clearLive,
+    visibleComments,
     snapshot,
     get enabled() {
       return enabled;
@@ -313,4 +338,25 @@ export function createDanmaku(layer, options = {}) {
       layer.classList.toggle('paused', Boolean(paused));
     },
   };
+}
+
+/**
+ * 截图用：把当前在场的一批弹幕按容器的真实尺寸重新排一遍，返回绘制指令。
+ * 屏幕上的弹幕铺满整个阅片窗口，截图要的是「完整放在画面内」的一份，
+ * 于是换一个和画面等大的临时层、用同一套车道算法重排，同步完成、不留 DOM。
+ */
+export function layoutDanmaku(host, comments, options = {}) {
+  if (!host || !comments.length) return [];
+  const layer = document.createElement('div');
+  layer.className = 'danmaku-layer';
+  // visibility:hidden 仍然参与布局（能量出尺寸），又不会被看见
+  layer.style.cssText = 'position:absolute;inset:0;overflow:hidden;pointer-events:none;visibility:hidden;';
+  host.appendChild(layer);
+  try {
+    const engine = createDanmaku(layer, { ...options, still: true });
+    for (const comment of comments) engine.pop(comment);
+    return engine.snapshot();
+  } finally {
+    layer.remove();
+  }
 }

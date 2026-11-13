@@ -1,6 +1,6 @@
 import { api, uploadVideo, probeDuration } from './js/api.js';
 import { timecode, clockTime, fileSize, relativeTime, authorColor, setAuthorRoster } from './js/format.js';
-import { createDanmaku } from './js/danmaku.js';
+import { createDanmaku, layoutDanmaku } from './js/danmaku.js';
 import { createAnnotationView, createDrawPad, drawStrokes } from './js/annotations.js';
 import { createReportView } from './js/report.js';
 import { detectFrameRate } from './js/fps.js';
@@ -115,6 +115,8 @@ function boot() {
   danmaku = createDanmaku(dom.danmakuLayer, {
     colorOf: (c) => authorColor(c.author),
     isMine: (c) => c.author === authorName(),
+    // 弹幕层铺满整个阅片窗口，车道要从视频画面顶往下数，别压住画面左上角的「已暂停」角标
+    topInset: () => dom.videoWrap.getBoundingClientRect().top - dom.danmakuLayer.getBoundingClientRect().top,
   });
   danmaku.setEnabled(state.danmakuOn);
   annView = createAnnotationView(dom.annLayer);
@@ -1098,7 +1100,13 @@ async function captureCurrentFrame() {
   }
 
   const scale = width / (dom.videoWrap.clientWidth || width);
-  drawOverlayBoxes(ctx, danmaku.snapshot(), scale);
+  // 屏幕上的弹幕铺满整个阅片窗口，截图要的是完整落在画面里的一份：
+  // 用同一批弹幕按画面的真实尺寸重排，再按视频分辨率放大画上去
+  const boxes = layoutDanmaku(dom.videoWrap, danmaku.visibleComments(), {
+    colorOf: (c) => authorColor(c.author),
+    isMine: (c) => c.author === authorName(),
+  });
+  drawOverlayBoxes(ctx, boxes, scale);
 
   const visible = state.annotations.filter((a) => t >= a.start - 0.03 && t < a.end);
   if (visible.length) {

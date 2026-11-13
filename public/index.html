@@ -68,11 +68,12 @@
       <div class="frame" id="frame" hidden>
         <div class="video-wrap" id="video-wrap">
           <video id="video" playsinline preload="metadata"></video>
-          <div class="danmaku-layer" id="danmaku-layer"></div>
           <canvas class="paint-layer" id="ann-layer"></canvas>
           <canvas class="paint-layer draw-layer" id="draw-layer"></canvas>
           <div class="paused-badge" id="paused-badge" hidden>已暂停 · 可说弹幕</div>
         </div>
+        <!-- 弹幕铺满整个阅片窗口（不只画面），竖屏时两边的留白也能用上 -->
+        <div class="danmaku-layer" id="danmaku-layer"></div>
       </div>
 
       <div class="toolbar draw-toolbar" id="draw-toolbar" hidden>
