@@ -32,6 +32,8 @@ const state = {
   // home = 项目卡片；project = 某个项目或未分类
   libraryPage: 'home',
   libraryProjectId: null,
+  // 首页顶栏的项目搜索词；卡片会因为刷新重画，命中/压暗状态靠它恢复
+  projectSearch: '',
   // 片库里正在改名的视频 id 和输入草稿（SSE 刷新列表时保留）
   renameId: null,
   renameDraft: '',
@@ -137,6 +139,7 @@ function boot() {
   });
 
   initAuthor();
+  initProjectSearch();
   initTransport();
   initTimeline();
   initComposer();
@@ -199,6 +202,7 @@ function boot() {
 function cacheDom() {
   const ids = [
     'author-field', 'author-input', 'author-veil', 'author-hint', 'presence', 'presence-count', 'library-open', 'home-open', 'project-new', 'upload-open',
+    'project-search-field', 'project-search', 'project-search-clear',
     'empty-state', 'frame', 'video-wrap', 'video', 'danmaku-layer', 'ann-layer', 'draw-layer', 'paused-badge',
     'draw-toolbar', 'range-in', 'range-out', 'range-summary', 'swatches', 'mark-in', 'mark-out',
     'preview-range', 'draw-undo', 'draw-clear', 'draw-cancel', 'draw-save',
@@ -473,6 +477,8 @@ function syncTopbarNav() {
   dom.homeOpen.hidden = !onVideo;
   dom.homeOpen.textContent = '返回项目';
   dom.projectNew.hidden = !onHome;
+  // 搜索只针对首页的项目卡片，进项目或看片就收起来，免得以为能搜片子
+  dom.projectSearchField.hidden = !onHome;
   dom.uploadOpen.hidden = onVideo;
 }
 
@@ -2988,6 +2994,54 @@ function maybeSavePlayingCover() {
   coverJobs.set(meta.id, job);
 }
 
+/** 首页顶栏的项目搜索：只打标签开关卡片样式，列表不重画，输入框焦点不会丢 */
+function initProjectSearch() {
+  if (!dom.projectSearch) return;
+  dom.projectSearch.value = state.projectSearch;
+  dom.projectSearch.addEventListener('input', () => {
+    state.projectSearch = dom.projectSearch.value;
+    applyProjectSearch();
+  });
+  dom.projectSearch.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      // 没有关键词时把 Esc 让给全局（关弹窗、收起输入），有关键词就只清搜索
+      if (!state.projectSearch) return;
+      event.preventDefault();
+      event.stopPropagation();
+      clearProjectSearch();
+      return;
+    }
+    // 顶栏搜索不是表单，回车别触发任何提交
+    if (event.key === 'Enter') event.preventDefault();
+  });
+  dom.projectSearchClear?.addEventListener('click', () => {
+    clearProjectSearch();
+    dom.projectSearch.focus();
+  });
+}
+
+function clearProjectSearch() {
+  state.projectSearch = '';
+  dom.projectSearch.value = '';
+  applyProjectSearch();
+}
+
+/**
+ * 按 state.projectSearch 给首页卡片打「命中 / 压暗」标：
+ * 项目名包含关键词（不分大小写）高亮，其余压暗但仍可点击；「新建项目」那张也算落选。
+ */
+function applyProjectSearch() {
+  if (!dom.projectGrid) return;
+  const query = state.projectSearch.trim().toLowerCase();
+  for (const card of dom.projectGrid.children) {
+    const name = card.dataset.projectName || '';
+    const hit = Boolean(query) && name.toLowerCase().includes(query);
+    card.classList.toggle('search-hit', hit);
+    card.classList.toggle('search-dim', Boolean(query) && !hit);
+  }
+  if (dom.projectSearchClear) dom.projectSearchClear.hidden = !dom.projectSearch.value;
+}
+
 function renderLibraryView() {
   if (!dom.libraryPage) return;
   const home = state.libraryPage !== 'project';
@@ -3076,6 +3130,8 @@ function renderProjectCards() {
   }
   cards.push(addProjectCard());
   dom.projectGrid.replaceChildren(...cards);
+  // 卡片是整体重画的，搜索的高亮 / 压暗要从 state 里再补回来
+  applyProjectSearch();
 }
 
 function addProjectCard() {
@@ -3206,6 +3262,8 @@ function projectCard(project) {
     card.setAttribute('role', 'button');
   }
   card.className = 'project-card';
+  // 顶栏搜索按项目名匹配，名字存到 dataset 上，重画后不用再翻 state.projects
+  card.dataset.projectName = project.name;
   // 锁着的卡片不虚化、不变灰：要靠封面认项目，只是多一把锁
   if (project.hasPassword) card.classList.add('is-locked');
   const frame = document.createElement('div');

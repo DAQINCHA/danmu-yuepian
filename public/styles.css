@@ -149,6 +149,77 @@ h1, h2, p { margin: 0; }
   50% { box-shadow: 0 0 0 3px rgba(255, 180, 84, 0.22); }
 }
 
+/* 顶栏项目搜索：只搜首页的项目卡片。刻意不加 position / z-index，
+   没署名时的暗层（.topbar::before）才会把它和牌子、按钮一起压暗，
+   只有署名框浮在那层上面。 */
+.project-search-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 200px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 4px 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text-faint);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.project-search-field:focus-within {
+  border-color: #1f7f86;
+  background: var(--panel-2);
+  color: var(--text-dim);
+}
+
+.project-search-icon {
+  flex: none;
+  display: block;
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.project-search {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--text);
+  font-size: 12.5px;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.project-search::placeholder { color: var(--text-faint); }
+.project-search::-webkit-search-cancel-button,
+.project-search::-webkit-search-decoration { display: none; }
+
+.project-search-clear {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+.project-search-clear:hover { background: var(--panel-2); color: var(--text); }
+
 /* 没署名（首页或看片）：整页压暗，只留署名框。顶栏单独抬高，再用 ::before
    把牌子和按钮一起压暗，署名框 z-index 压过这层。 */
 .author-veil {
@@ -484,8 +555,19 @@ body.author-spotlight .toast { z-index: 100; }
   text-align: left;
   font: inherit;
   color: inherit;
+  transition: opacity 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .project-card:hover { border-color: #1f7f86; }
+/* 搜索：命中的项目描一圈强调色，落选的压暗但仍能点 */
+.project-card.search-dim { opacity: 0.36; }
+.project-card.search-dim:hover { opacity: 0.72; }
+.project-card.search-hit {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 1px rgba(34, 193, 195, 0.5),
+    0 0 18px rgba(34, 193, 195, 0.2);
+}
+.project-card.search-hit .project-name { color: #8fe6e7; }
 .project-cover-frame {
   position: relative;
   width: 100%;
@@ -1919,6 +2001,8 @@ body.dragging::after {
   .transport-right { width: 100%; justify-content: flex-end; }
   .brand-text small { display: none; }
   .author-field input { width: 78px; }
+  /* 搜索框跟着收窄，但保留可用宽度，别把署名框和按钮挤掉 */
+  .project-search-field { flex: 0 1 132px; }
   /* 手机端侧栏不显示片名、上传信息和筛选标签，列表直接顶上来，不留空档 */
   .sidebar-head,
   .tabs { display: none; }
@@ -1931,6 +2015,10 @@ body.dragging::after {
   .brand-text { display: none; }
   .author-field { flex: 1 1 auto; }
   .author-field input { width: 100%; }
+  /* 手机上放大镜让位，输入框和署名框一起分摊剩下的宽度 */
+  .project-search-field { flex: 1 1 96px; min-width: 64px; padding-left: 8px; }
+  .project-search-icon { display: none; }
+  .project-search { font-size: 12px; }
 }
 
 /* ── 手机端 ─────────────────────────────────────────────────────────── */
