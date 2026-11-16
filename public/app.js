@@ -81,6 +81,11 @@ const edgeToEdgeQuery = window.matchMedia('(max-width: 860px) and (orientation: 
 /** 和隐藏筛选标签同一档宽度：窄屏列表固定看「全部」 */
 const mobileListQuery = window.matchMedia('(max-width: 860px)');
 
+/** 和 styles.css 里搜索收成放大镜的那一档一致 */
+const compactSearchQuery = window.matchMedia('(max-width: 620px)');
+/** 小屏的搜索框是否展开；桌面不用这个状态 */
+let projectSearchExpanded = false;
+
 let composerExpanded = false;
 /** 后台上传任务。片名不在开传时读取，点「上传并审片」才落定。 */
 let uploadJob = null;
@@ -202,7 +207,7 @@ function boot() {
 function cacheDom() {
   const ids = [
     'author-field', 'author-input', 'author-veil', 'author-hint', 'presence', 'presence-count', 'library-open', 'home-open', 'project-new', 'upload-open',
-    'project-search-field', 'project-search', 'project-search-clear',
+    'project-search-field', 'project-search', 'project-search-clear', 'project-search-toggle',
     'empty-state', 'frame', 'video-wrap', 'video', 'danmaku-layer', 'ann-layer', 'draw-layer', 'paused-badge',
     'draw-toolbar', 'range-in', 'range-out', 'range-summary', 'swatches', 'mark-in', 'mark-out',
     'preview-range', 'draw-undo', 'draw-clear', 'draw-cancel', 'draw-save',
@@ -479,6 +484,8 @@ function syncTopbarNav() {
   dom.projectNew.hidden = !onHome;
   // 搜索只针对首页的项目卡片，进项目或看片就收起来，免得以为能搜片子
   dom.projectSearchField.hidden = !onHome;
+  // 小屏的展开态也别留着，回首页重新从放大镜开始
+  if (!onHome) setProjectSearchExpanded(false);
   dom.uploadOpen.hidden = onVideo;
 }
 
@@ -2994,6 +3001,19 @@ function maybeSavePlayingCover() {
   coverJobs.set(meta.id, job);
 }
 
+/** 只有小屏才看得出区别：收成 32px 图标 / 展开成输入框 */
+function setProjectSearchExpanded(expanded) {
+  projectSearchExpanded = expanded;
+  if (!dom.projectSearchField) return;
+  dom.projectSearchField.classList.toggle('is-expanded', expanded);
+  if (dom.projectSearchToggle) {
+    dom.projectSearchToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    dom.projectSearchToggle.setAttribute('aria-label', expanded ? '收起搜索' : '搜索项目');
+  }
+  // 收起时把焦点交出去，手机上的键盘才会跟着缩回去
+  if (!expanded) dom.projectSearch?.blur();
+}
+
 /** 首页顶栏的项目搜索：只打标签开关卡片样式，列表不重画，输入框焦点不会丢 */
 function initProjectSearch() {
   if (!dom.projectSearch) return;
@@ -3016,14 +3036,28 @@ function initProjectSearch() {
   });
   dom.projectSearchClear?.addEventListener('click', () => {
     clearProjectSearch();
-    dom.projectSearch.focus();
+    if (!compactSearchQuery.matches) dom.projectSearch.focus();
   });
+  // 放大镜：桌面只管把光标放进输入框；小屏点一下展开，再点一下收起
+  dom.projectSearchToggle?.addEventListener('click', () => {
+    if (!compactSearchQuery.matches) {
+      dom.projectSearch.focus();
+      return;
+    }
+    const expanding = !projectSearchExpanded;
+    setProjectSearchExpanded(expanding);
+    if (expanding) requestAnimationFrame(() => dom.projectSearch.focus());
+  });
+  // 转横屏或拖宽回到桌面时，别把展开态带过去
+  compactSearchQuery.addEventListener?.('change', () => setProjectSearchExpanded(false));
 }
 
 function clearProjectSearch() {
   state.projectSearch = '';
   dom.projectSearch.value = '';
   applyProjectSearch();
+  // 小屏清空后顺手收起；桌面保持原样，光标继续留在输入框里
+  if (compactSearchQuery.matches) setProjectSearchExpanded(false);
 }
 
 /**
@@ -3040,6 +3074,8 @@ function applyProjectSearch() {
     card.classList.toggle('search-dim', Boolean(query) && !hit);
   }
   if (dom.projectSearchClear) dom.projectSearchClear.hidden = !dom.projectSearch.value;
+  // 小屏收起时只剩放大镜，得靠这颗强调色提示筛选还没关
+  dom.projectSearchField?.classList.toggle('is-filtering', Boolean(query));
 }
 
 function renderLibraryView() {

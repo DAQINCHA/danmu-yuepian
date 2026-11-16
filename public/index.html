@@ -36,10 +36,13 @@
         <i class="live-dot"></i><span id="presence-count">0</span><span class="presence-label">人正在看</span>
       </div>
       <div class="project-search-field" id="project-search-field" hidden>
-        <svg class="project-search-icon" viewBox="0 0 16 16" aria-hidden="true">
-          <circle cx="7" cy="7" r="4.4" />
-          <path d="M10.4 10.4 14 14" />
-        </svg>
+        <button class="project-search-toggle" id="project-search-toggle" type="button"
+                aria-label="搜索项目" aria-expanded="false" aria-controls="project-search">
+          <svg class="project-search-icon" viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.4" />
+            <path d="M10.4 10.4 14 14" />
+          </svg>
+        </button>
         <input id="project-search" class="project-search" type="search" placeholder="搜索项目"
                aria-label="搜索项目" autocomplete="off" spellcheck="false" />
         <button class="project-search-clear" id="project-search-clear" type="button"

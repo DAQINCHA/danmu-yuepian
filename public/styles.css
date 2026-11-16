@@ -184,6 +184,20 @@ h1, h2, p { margin: 0; }
   stroke-linecap: round;
 }
 
+/* 放大镜是按钮，好让它在小屏上可点击展开；桌面视觉和原来那颗图标一样 */
+.project-search-toggle {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .project-search {
   flex: 1 1 auto;
   width: 100%;
@@ -2011,14 +2025,61 @@ body.dragging::after {
 }
 
 @media (max-width: 620px) {
+  .topbar { padding: 0 10px; gap: 8px; }
   .presence { display: none; }
   .brand-text { display: none; }
-  .author-field { flex: 1 1 auto; }
-  .author-field input { width: 100%; }
-  /* 手机上放大镜让位，输入框和署名框一起分摊剩下的宽度 */
-  .project-search-field { flex: 1 1 96px; min-width: 64px; padding-left: 8px; }
-  .project-search-icon { display: none; }
-  .project-search { font-size: 12px; }
+  /* 署名和搜索平分剩下的宽度，两个按钮不动 */
+  .author-field { flex: 1 1 64px; min-width: 44px; }
+  .author-field input { width: 100%; min-width: 0; }
+
+  /* 搜索默认收成一颗 32px 的放大镜；展开才让输入框和清除按钮出现 */
+  .project-search-field {
+    flex: 0 0 auto;
+    width: 32px;
+    min-width: 0;
+    padding: 0;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .project-search-field .project-search-toggle { width: 100%; height: 100%; }
+  .project-search-field .project-search,
+  .project-search-field .project-search-clear { display: none; }
+  /* 收起时别让键盘焦点把图标画成一整条输入框 */
+  .project-search-field:not(.is-expanded),
+  .project-search-field:not(.is-expanded):focus-within {
+    border-color: var(--line);
+    background: var(--panel);
+    color: var(--text-dim);
+  }
+  /* 有关键词但收起来了：用强调色提示「筛选还开着」 */
+  .project-search-field:not(.is-expanded).is-filtering,
+  .project-search-field:not(.is-expanded).is-filtering:focus-within {
+    border-color: #1f7f86;
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .project-search-field .project-search-toggle:focus-visible {
+    outline: 2px solid var(--accent);
+    /* 收起时外层 overflow: hidden，轮廓往里收才看得见 */
+    outline-offset: -2px;
+    border-radius: 6px;
+  }
+
+  .project-search-field.is-expanded {
+    flex: 1 1 96px;
+    width: auto;
+    min-width: 64px;
+    padding: 0 4px 0 8px;
+    justify-content: flex-start;
+    gap: 5px;
+  }
+  .project-search-field.is-expanded .project-search-toggle { width: 16px; flex: none; }
+  .project-search-field.is-expanded .project-search {
+    display: block;
+    flex: 1 1 0;
+    font-size: 12px;
+  }
+  .project-search-field.is-expanded .project-search-clear { display: grid; }
 }
 
 /* ── 手机端 ─────────────────────────────────────────────────────────── */
