@@ -15,7 +15,7 @@
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="theme-color" content="#0b0d11" />
+  <meta name="theme-color" content="#0c0d0f" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" sizes="180x180" href="./assets/icons/apple-touch-icon.png" />
@@ -193,7 +193,14 @@
       <div class="sidebar-head">
         <h2 id="video-title">还没有打开片子</h2>
         <p class="meta" id="video-meta">上传后在项目里选一支开始审。</p>
-        <button class="btn primary report-open" id="report-open" type="button" hidden>审片报告</button>
+        <button class="btn report-open" id="report-open" type="button" hidden>
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M3.6 2.2h5.6l3.2 3.2v8.4H3.6z" />
+            <path d="M9.2 2.2v3.2h3.2" />
+            <path d="M5.6 8.6h4.8M5.6 11h3.2" />
+          </svg>
+          审片报告
+        </button>
       </div>
       <div class="tabs" id="tabs">
         <button class="tab active" data-tab="all" type="button">全部 <span class="count" id="count-all">0</span></button>
