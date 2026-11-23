@@ -558,6 +558,7 @@ body.author-spotlight .toast { z-index: 100; }
   color: var(--accent);
   font: inherit;
   font-size: 14px;
+  flex: none;
   cursor: pointer;
 }
 .home-back:hover { color: #8fe6e7; }
@@ -606,13 +607,20 @@ body.author-spotlight .toast { z-index: 100; }
   font-size: 18px;
   font-weight: 650;
 }
-/* 改名按钮里的小铅笔：和项目卡片的编辑图标同源，只染图标不染文字 */
+/* 改名按钮里的小铅笔：和项目卡片的编辑图标同源 */
 .personal-folder-rename-icon {
   width: 13px;
   height: 13px;
   flex: none;
   display: block;
   color: #f0b35c;
+}
+/* 「改名」两个字也跟铅笔一样用金色 */
+#personal-folder-rename { color: #f0b35c; }
+#personal-folder-rename:hover {
+  background: rgba(240, 179, 92, 0.12);
+  border-color: rgba(240, 179, 92, 0.4);
+  color: #ffd08a;
 }
 
 .project-grid {
