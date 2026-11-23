@@ -707,15 +707,52 @@ body.author-spotlight .toast { z-index: 100; }
 }
 .project-meta { margin-top: 4px; color: var(--text-dim); font-size: 12px; }
 
-/* 个人文件夹：沿用项目卡片的外观，但只放上传者名字 */
-.personal-card {
-  align-items: center;
-  justify-content: center;
-  min-height: 184px;
-  text-align: center;
-}
-.personal-card .project-body { padding: 18px; }
+/* 个人文件夹：封面是最近最多 4 支片的拼图，名字留在封面下方 */
+.personal-card { text-align: left; }
 .personal-card .project-name { white-space: normal; word-break: break-word; }
+/* 拼图容器：和项目封面一样 16:9，细缝当照片墙的分隔 */
+.personal-cover {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: grid;
+  gap: 2px;
+  background: #10141c;
+  border-radius: 11px 11px 0 0;
+  overflow: hidden;
+}
+.personal-cover.layout-1 { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+.personal-cover.layout-2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
+/* 3 支：左一大格竖跨两行，右侧两小格，观感自然 */
+.personal-cover.layout-3 { grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; }
+.personal-cover.layout-3 .personal-tile:first-child { grid-row: 1 / 3; }
+.personal-cover.layout-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.personal-tile {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #10141c;
+}
+.personal-tile img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.personal-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 42px;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  user-select: none;
+}
 /* 空状态在网格里独占一行 */
 .project-grid > .list-empty { grid-column: 1 / -1; }
 

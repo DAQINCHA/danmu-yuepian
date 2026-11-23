@@ -3130,12 +3130,20 @@ function renderPersonalFolders() {
   dom.projectGrid.replaceChildren(...cards);
 }
 
-/** 个人文件夹卡片：外观跟项目卡片一致，但只有名字，没有统计数字 */
+/** 个人文件夹卡片：封面是这个人最近最多 4 支片的封面拼图，名字留在封面下方 */
 function personCard(name) {
   const card = document.createElement('button');
   card.type = 'button';
   card.className = 'project-card personal-card';
   card.setAttribute('aria-label', name);
+  // 按上传时间倒序取最近 1-4 支片，拼成小网格
+  const recent = state.videos
+    .filter((video) => video.uploader === name)
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+    .slice(0, 4);
+  const collage = document.createElement('div');
+  collage.className = `personal-cover layout-${recent.length}`;
+  for (const video of recent) collage.append(personalTile(name, video));
   const body = document.createElement('div');
   body.className = 'project-body';
   const copy = document.createElement('div');
@@ -3145,12 +3153,45 @@ function personCard(name) {
   title.textContent = name;
   copy.append(title);
   body.append(copy);
-  card.append(body);
+  card.append(collage, body);
   card.addEventListener('click', () => {
     state.personalUploader = name;
     renderLibraryView();
   });
   return card;
+}
+
+/** 拼图的一格：有封面放图，没有（或加载 404）就用首字渐变兜底，绝不留空白 */
+function personalTile(name, video) {
+  const tile = document.createElement('div');
+  tile.className = 'personal-tile';
+  if (video.hasCover || knownCovers.has(video.id)) {
+    const img = document.createElement('img');
+    img.alt = '';
+    img.decoding = 'async';
+    img.draggable = false;
+    img.loading = 'lazy';
+    img.src = knownCovers.get(video.id) || coverUrl(video.id);
+    img.addEventListener('error', () => {
+      tile.replaceChildren(fallbackArt(name));
+    }, { once: true });
+    tile.append(img);
+  } else {
+    tile.append(fallbackArt(name));
+  }
+  return tile;
+}
+
+/** 首字艺术字：名字算哈希定一个色相，同一个名字永远是同一个渐变，不同人能区分开 */
+function fallbackArt(name) {
+  const art = document.createElement('div');
+  art.className = 'personal-fallback';
+  let hash = 0;
+  for (const ch of name) hash = (hash * 31 + ch.codePointAt(0)) >>> 0;
+  const hue = hash % 360;
+  art.style.background = `linear-gradient(135deg, hsl(${hue} 62% 48%), hsl(${(hue + 42) % 360} 66% 30%))`;
+  art.textContent = [...name][0] || '?';
+  return art;
 }
 
 /** 某个人的文件夹：复用项目卡片，点进去仍是完整项目页（含密码流程） */
