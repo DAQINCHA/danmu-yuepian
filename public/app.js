@@ -3256,6 +3256,7 @@ function renderPersonalFolderHead(name, finalOpen = false) {
     dom.personalFolderRename.prepend(icon);
   }
   dom.personalFolderHead.hidden = !name && !finalOpen;
+  dom.personalFolderTitle.classList.toggle('is-final', Boolean(finalOpen));
   if (!name || finalOpen) {
     dom.personalFolderTitle.textContent = finalOpen ? '已定稿' : '';
     dom.personalFolderRename.hidden = true;
@@ -3425,7 +3426,7 @@ function sortedFinals(projects) {
 function finalFolderCard(projects) {
   const card = document.createElement('button');
   card.type = 'button';
-  card.className = 'project-card personal-card';
+  card.className = 'project-card personal-card final-folder';
   card.setAttribute('aria-label', '已定稿');
   // 搜索按卡片名字匹配：文件夹整体算一个命中，不展开到里面的项目
   card.dataset.projectName = '已定稿';

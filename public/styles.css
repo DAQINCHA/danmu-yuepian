@@ -888,6 +888,9 @@ body.author-spotlight .toast { z-index: 100; }
 .final-badge:hover { background: rgba(240, 179, 92, 0.3); }
 .version-row.is-final { border-color: rgba(240, 179, 92, 0.55); }
 .final-tag { color: #f0b35c; font-weight: 600; }
+/* 「已定稿」文件夹的名字用同一张黄 */
+.final-folder .project-name { color: #f0b35c; }
+.personal-folder-title.is-final { color: #f0b35c; }
 .version-meta { margin-top: 3px; color: var(--text-dim); font-size: 12px; }
 .version-move { flex: none; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; cursor: default; }
 /* 版本行上的「设为最终版」：悬浮到这一行才出现（和项目卡片的动作按钮同一套做法）。
