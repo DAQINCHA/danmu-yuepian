@@ -36,6 +36,8 @@ const state = {
   homeTab: 'project',
   // 个人标签下点开的上传者；null 表示还在文件夹列表
   personalUploader: null,
+  // 项目标签下点开了「已定稿」文件夹；false 表示还在项目网格
+  finalFolderOpen: false,
   // 首页顶栏的项目搜索词；卡片会因为刷新重画，命中/压暗状态靠它恢复
   projectSearch: '',
   // 片库里正在改名的视频 id 和输入草稿（SSE 刷新列表时保留）
@@ -490,8 +492,8 @@ function syncTopbarNav() {
   dom.homeOpen.hidden = !onVideo;
   dom.homeOpen.textContent = '返回项目';
   dom.projectNew.hidden = !onHome;
-  // 搜索只针对首页「项目」标签的卡片；个人标签、进项目、看片都收起来
-  dom.projectSearchField.hidden = !onHome || state.homeTab !== 'project';
+  // 搜索只针对首页「项目」标签的网格卡片；个人标签、文件夹里面、进项目、看片都收起来
+  dom.projectSearchField.hidden = !onHome || state.homeTab !== 'project' || state.finalFolderOpen;
   // 收起搜索时把小屏的展开态也清掉，下次进来重新从放大镜开始
   if (dom.projectSearchField.hidden) setProjectSearchExpanded(false);
   dom.uploadOpen.hidden = onVideo;
@@ -533,8 +535,9 @@ function leaveVideo() {
 function showProjectHome() {
   state.libraryPage = 'home';
   state.libraryProjectId = null;
-  // 回首页时退回个人文件夹列表，不留在某个人里面
+  // 回首页时退回文件夹列表，不留在某个人的文件夹或「已定稿」里面
   state.personalUploader = null;
+  state.finalFolderOpen = false;
   setDocumentTitle('');
   dom.empty.hidden = false;
   dom.empty.classList.add('library-view');
@@ -3098,9 +3101,10 @@ function initHomeTabs() {
   for (const tab of dom.homeTabs.querySelectorAll('.home-tab')) {
     tab.addEventListener('click', () => {
       const next = tab.dataset.homeTab;
-      if (state.homeTab === next && !state.personalUploader) return;
+      if (state.homeTab === next && !state.personalUploader && !state.finalFolderOpen) return;
       state.homeTab = next;
       state.personalUploader = null;
+      state.finalFolderOpen = false;
       // 搜索只服务于项目卡片，切到个人就把关键词清掉
       if (next !== 'project') {
         state.projectSearch = '';
@@ -3112,6 +3116,8 @@ function initHomeTabs() {
   }
   dom.homeBack?.addEventListener('click', () => {
     state.personalUploader = null;
+    state.finalFolderOpen = false;
+    syncTopbarNav();
     renderLibraryView();
   });
   dom.personalFolderRename?.addEventListener('click', () => {
@@ -3240,8 +3246,8 @@ function cleanUploaderName(value) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 16);
 }
 
-/** 个人文件夹页顶部：名字 + 改名；这个署名下没片时不显示改名按钮 */
-function renderPersonalFolderHead(name) {
+/** 下钻页顶部的标题条：个人文件夹是署名 + 改名；「已定稿」文件夹只写名字，不给改名 */
+function renderPersonalFolderHead(name, finalOpen = false) {
   if (!dom.personalFolderHead) return;
   // 改名按钮前挂一支铅笔，和项目卡片的「修改项目」用同一个图标，只挂一次
   if (dom.personalFolderRename && !dom.personalFolderRename.querySelector('svg')) {
@@ -3249,10 +3255,10 @@ function renderPersonalFolderHead(name) {
     icon.classList.add('personal-folder-rename-icon');
     dom.personalFolderRename.prepend(icon);
   }
-  dom.personalFolderHead.hidden = !name;
-  if (!name) {
-    dom.personalFolderTitle.textContent = '';
-    dom.personalFolderRename.hidden = false;
+  dom.personalFolderHead.hidden = !name && !finalOpen;
+  if (!name || finalOpen) {
+    dom.personalFolderTitle.textContent = finalOpen ? '已定稿' : '';
+    dom.personalFolderRename.hidden = true;
     return;
   }
   const count = state.videos.filter((video) => video.uploader === name).length;
@@ -3303,13 +3309,19 @@ function renderLibraryView() {
   dom.versionList.hidden = !showProject;
   const project = state.libraryProjectId ? projectById(state.libraryProjectId) : null;
   renderProjectActions(home ? null : project);
-  renderPersonalFolderHead(home && state.homeTab === 'personal' ? state.personalUploader : null);
-  // 介绍横幅只在原来的「项目」标签下出现，个人标签保持干净
-  if (dom.introCard) dom.introCard.hidden = !home || state.homeTab !== 'project' || introDismissed();
+  renderPersonalFolderHead(
+    home && state.homeTab === 'personal' ? state.personalUploader : null,
+    home && state.homeTab === 'project' && state.finalFolderOpen,
+  );
+  // 介绍横幅只在原来的「项目」标签网格上出现，个人标签和文件夹里面保持干净
+  if (dom.introCard) {
+    dom.introCard.hidden = !home || state.homeTab !== 'project' || state.finalFolderOpen || introDismissed();
+  }
   if (dom.introClose) dom.introClose.hidden = !libraryHasVideos();
   renderCrumb();
   if (home) {
     if (state.homeTab === 'personal') renderPersonalHome();
+    else if (state.finalFolderOpen) renderFinalFolder();
     else renderProjectCards();
   }
   if (showProject) renderVersionList();
@@ -3343,7 +3355,10 @@ function renderCrumb() {
     // 首页用「项目 / 个人」标签取代原来那行静态的「项目」标题
     dom.libraryCrumb.hidden = true;
     dom.homeNav.hidden = false;
-    dom.homeBack.hidden = !(state.homeTab === 'personal' && state.personalUploader);
+    dom.homeBack.hidden = !(
+      (state.homeTab === 'personal' && state.personalUploader) ||
+      (state.homeTab === 'project' && state.finalFolderOpen)
+    );
     for (const tab of dom.homeTabs.querySelectorAll('.home-tab')) {
       tab.classList.toggle('active', tab.dataset.homeTab === state.homeTab);
     }
@@ -3374,12 +3389,15 @@ function renderCrumb() {
 function renderProjectCards() {
   releaseCovers(dom.projectGrid);
   const cards = [];
-  // 已定稿的整体排在没定稿的后面（成片归档了，不再抢最前面）；两组内部还是按最近更新排
-  const projects = [...state.projects].sort((a, b) => {
-    const done = (a.finalVideoId ? 1 : 0) - (b.finalVideoId ? 1 : 0);
-    return done || (b.latestAt || 0) - (a.latestAt || 0);
-  });
-  for (const project of projects) cards.push(projectCard(project));
+  // 已定稿的收进「已定稿」文件夹，文件夹整体排在最后（成片归档了，不再抢最前面）；
+  // 没定稿的按最近更新排
+  const active = [];
+  const finals = [];
+  for (const project of state.projects) {
+    (project.finalVideoId ? finals : active).push(project);
+  }
+  active.sort((a, b) => (b.latestAt || 0) - (a.latestAt || 0));
+  for (const project of active) cards.push(projectCard(project));
   if (state.uncategorized?.videoCount) {
     cards.push(projectCard({
       id: 'uncategorized',
@@ -3390,10 +3408,83 @@ function renderProjectCards() {
       hasCover: state.uncategorized.hasCover,
     }));
   }
+  if (finals.length) cards.push(finalFolderCard(finals));
   cards.push(addProjectCard());
   dom.projectGrid.replaceChildren(...cards);
   // 卡片是整体重画的，搜索的高亮 / 压暗要从 state 里再补回来
   applyProjectSearch();
+}
+
+/** 已定稿项目：按定稿时间倒序，同一时刻定稿的再按最近更新 */
+function sortedFinals(projects) {
+  return [...projects].sort((a, b) =>
+    (b.finalAt || 0) - (a.finalAt || 0) || (b.latestAt || 0) - (a.latestAt || 0));
+}
+
+/** 「已定稿」文件夹卡片：最近定稿的最多 4 个项目拼成四宫格，名字留在封面下方 */
+function finalFolderCard(projects) {
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.className = 'project-card personal-card';
+  card.setAttribute('aria-label', '已定稿');
+  // 搜索按卡片名字匹配：文件夹整体算一个命中，不展开到里面的项目
+  card.dataset.projectName = '已定稿';
+  const recent = sortedFinals(projects).slice(0, 4);
+  const collage = document.createElement('div');
+  collage.className = `personal-cover layout-${recent.length}`;
+  for (const project of recent) collage.append(finalTile(project));
+  const body = document.createElement('div');
+  body.className = 'project-body';
+  const copy = document.createElement('div');
+  copy.className = 'project-copy';
+  const title = document.createElement('div');
+  title.className = 'project-name';
+  title.textContent = '已定稿';
+  copy.append(title);
+  body.append(copy);
+  card.append(collage, body);
+  card.addEventListener('click', () => {
+    state.finalFolderOpen = true;
+    syncTopbarNav();
+    renderLibraryView();
+  });
+  return card;
+}
+
+/** 拼图的一格：用项目封面（定稿后服务端已换成成片），没有就按项目名兜底 */
+function finalTile(project) {
+  const tile = document.createElement('div');
+  tile.className = 'personal-tile';
+  const videoId = project.coverVideoId;
+  if (videoId && (project.hasCover || knownCovers.has(videoId))) {
+    const img = document.createElement('img');
+    img.alt = '';
+    img.decoding = 'async';
+    img.draggable = false;
+    img.loading = 'lazy';
+    img.src = knownCovers.get(videoId) || coverUrl(videoId);
+    img.addEventListener('error', () => {
+      tile.replaceChildren(fallbackArt(project.name));
+    }, { once: true });
+    tile.append(img);
+  } else {
+    tile.append(fallbackArt(project.name));
+  }
+  return tile;
+}
+
+/** 「已定稿」文件夹里面：平铺项目卡片（保留金色角标），点进去仍是平时的项目页 */
+function renderFinalFolder() {
+  const projects = sortedFinals(state.projects.filter((project) => project.finalVideoId));
+  if (!projects.length) {
+    // 最后一个定稿被取消（别人操作经 SSE 同步过来）：文件夹没了，退回网格
+    state.finalFolderOpen = false;
+    syncTopbarNav();
+    renderLibraryView();
+    return;
+  }
+  releaseCovers(dom.projectGrid);
+  dom.projectGrid.replaceChildren(...projects.map(projectCard));
 }
 
 function addProjectCard() {
