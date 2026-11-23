@@ -32,6 +32,10 @@ const state = {
   // home = 项目卡片；project = 某个项目或未分类
   libraryPage: 'home',
   libraryProjectId: null,
+  // 首页的两个标签：project 是原来的项目列表，personal 是按上传者分组的个人文件夹
+  homeTab: 'project',
+  // 个人标签下点开的上传者；null 表示还在文件夹列表
+  personalUploader: null,
   // 首页顶栏的项目搜索词；卡片会因为刷新重画，命中/压暗状态靠它恢复
   projectSearch: '',
   // 片库里正在改名的视频 id 和输入草稿（SSE 刷新列表时保留）
@@ -145,6 +149,7 @@ function boot() {
 
   initAuthor();
   initProjectSearch();
+  initHomeTabs();
   initTransport();
   initTimeline();
   initComposer();
@@ -218,7 +223,7 @@ function cacheDom() {
     'overall-form', 'overall-input',
     'video-title', 'video-meta', 'tabs', 'list', 'count-all', 'count-comment', 'count-annotation',
     'report-open',
-    'library-modal', 'library-grid', 'library-page', 'library-crumb', 'project-grid', 'version-list',
+    'library-modal', 'library-grid', 'library-page', 'library-crumb', 'home-nav', 'home-back', 'home-tabs', 'project-grid', 'version-list',
     'library-actions', 'intro-card', 'intro-close',
     'upload-modal', 'dropzone', 'file-input', 'title-label', 'title-input', 'upload-project', 'upload-project-select', 'upload-new-project',
     'upload-new-lock', 'upload-new-password', 'upload-new-random',
@@ -482,10 +487,10 @@ function syncTopbarNav() {
   dom.homeOpen.hidden = !onVideo;
   dom.homeOpen.textContent = '返回项目';
   dom.projectNew.hidden = !onHome;
-  // 搜索只针对首页的项目卡片，进项目或看片就收起来，免得以为能搜片子
-  dom.projectSearchField.hidden = !onHome;
-  // 小屏的展开态也别留着，回首页重新从放大镜开始
-  if (!onHome) setProjectSearchExpanded(false);
+  // 搜索只针对首页「项目」标签的卡片；个人标签、进项目、看片都收起来
+  dom.projectSearchField.hidden = !onHome || state.homeTab !== 'project';
+  // 收起搜索时把小屏的展开态也清掉，下次进来重新从放大镜开始
+  if (dom.projectSearchField.hidden) setProjectSearchExpanded(false);
   dom.uploadOpen.hidden = onVideo;
 }
 
@@ -525,6 +530,8 @@ function leaveVideo() {
 function showProjectHome() {
   state.libraryPage = 'home';
   state.libraryProjectId = null;
+  // 回首页时退回个人文件夹列表，不留在某个人里面
+  state.personalUploader = null;
   setDocumentTitle('');
   dom.empty.hidden = false;
   dom.empty.classList.add('library-view');
@@ -3078,6 +3085,104 @@ function applyProjectSearch() {
   dom.projectSearchField?.classList.toggle('is-filtering', Boolean(query));
 }
 
+/** 首页「项目 / 个人」标签。状态留在前端，地址栏还是原来的 /、/p/...、/v/... */
+function initHomeTabs() {
+  for (const tab of dom.homeTabs.querySelectorAll('.home-tab')) {
+    tab.addEventListener('click', () => {
+      const next = tab.dataset.homeTab;
+      if (state.homeTab === next && !state.personalUploader) return;
+      state.homeTab = next;
+      state.personalUploader = null;
+      // 搜索只服务于项目卡片，切到个人就把关键词清掉
+      if (next !== 'project') {
+        state.projectSearch = '';
+        if (dom.projectSearch) dom.projectSearch.value = '';
+      }
+      syncTopbarNav();
+      renderLibraryView();
+    });
+  }
+  dom.homeBack?.addEventListener('click', () => {
+    state.personalUploader = null;
+    renderLibraryView();
+  });
+}
+
+/** 个人标签：先按上传者平铺文件夹，点开一个再看这个人传过的项目 */
+function renderPersonalHome() {
+  if (state.personalUploader) renderPersonalFolder(state.personalUploader);
+  else renderPersonalFolders();
+}
+
+/** 每个上传者一张卡片；按字面署名精确分组，同名就是同一个文件夹 */
+function renderPersonalFolders() {
+  releaseCovers(dom.projectGrid);
+  const latest = new Map();
+  for (const video of state.videos) {
+    const name = video.uploader;
+    if (!name) continue;
+    latest.set(name, Math.max(latest.get(name) || 0, video.createdAt || 0));
+  }
+  const names = [...latest.keys()].sort((a, b) =>
+    (latest.get(b) - latest.get(a)) || a.localeCompare(b));
+  const cards = names.map(personCard);
+  if (!cards.length) cards.push(emptyHint('还没有人上传过'));
+  dom.projectGrid.replaceChildren(...cards);
+}
+
+/** 个人文件夹卡片：外观跟项目卡片一致，但只有名字，没有统计数字 */
+function personCard(name) {
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.className = 'project-card personal-card';
+  card.setAttribute('aria-label', name);
+  const body = document.createElement('div');
+  body.className = 'project-body';
+  const copy = document.createElement('div');
+  copy.className = 'project-copy';
+  const title = document.createElement('div');
+  title.className = 'project-name';
+  title.textContent = name;
+  copy.append(title);
+  body.append(copy);
+  card.append(body);
+  card.addEventListener('click', () => {
+    state.personalUploader = name;
+    renderLibraryView();
+  });
+  return card;
+}
+
+/** 某个人的文件夹：复用项目卡片，点进去仍是完整项目页（含密码流程） */
+function renderPersonalFolder(name) {
+  releaseCovers(dom.projectGrid);
+  const ids = new Set();
+  for (const video of state.videos) {
+    if (video.uploader === name) ids.add(video.projectId || 'uncategorized');
+  }
+  const loose = state.uncategorized;
+  const projects = [...ids].map((id) => {
+    if (id !== 'uncategorized') return projectById(id);
+    if (!loose?.videoCount) return null;
+    return {
+      id: 'uncategorized',
+      name: '未分类',
+      videoCount: loose.videoCount,
+      latestAt: loose.latestAt,
+      coverVideoId: loose.coverVideoId,
+      hasCover: loose.hasCover,
+    };
+  }).filter(Boolean);
+  // 和项目标签完全一样的排序：定过稿的靠后，组内按最近更新
+  projects.sort((a, b) => {
+    const done = (a.finalVideoId ? 1 : 0) - (b.finalVideoId ? 1 : 0);
+    return done || (b.latestAt || 0) - (a.latestAt || 0);
+  });
+  const cards = projects.map(projectCard);
+  if (!cards.length) cards.push(emptyHint('这个人还没有传过片'));
+  dom.projectGrid.replaceChildren(...cards);
+}
+
 function renderLibraryView() {
   if (!dom.libraryPage) return;
   const home = state.libraryPage !== 'project';
@@ -3088,10 +3193,14 @@ function renderLibraryView() {
   dom.versionList.hidden = !showProject;
   const project = state.libraryProjectId ? projectById(state.libraryProjectId) : null;
   renderProjectActions(home ? null : project);
-  if (dom.introCard) dom.introCard.hidden = !home || introDismissed();
+  // 介绍横幅只在原来的「项目」标签下出现，个人标签保持干净
+  if (dom.introCard) dom.introCard.hidden = !home || state.homeTab !== 'project' || introDismissed();
   if (dom.introClose) dom.introClose.hidden = !libraryHasVideos();
   renderCrumb();
-  if (home) renderProjectCards();
+  if (home) {
+    if (state.homeTab === 'personal') renderPersonalHome();
+    else renderProjectCards();
+  }
   if (showProject) renderVersionList();
 }
 
@@ -3120,11 +3229,17 @@ function renderProjectActions(project) {
 function renderCrumb() {
   dom.libraryCrumb.replaceChildren();
   if (state.libraryPage !== 'project') {
-    const title = document.createElement('span');
-    title.textContent = '项目';
-    dom.libraryCrumb.append(title);
+    // 首页用「项目 / 个人」标签取代原来那行静态的「项目」标题
+    dom.libraryCrumb.hidden = true;
+    dom.homeNav.hidden = false;
+    dom.homeBack.hidden = !(state.homeTab === 'personal' && state.personalUploader);
+    for (const tab of dom.homeTabs.querySelectorAll('.home-tab')) {
+      tab.classList.toggle('active', tab.dataset.homeTab === state.homeTab);
+    }
     return;
   }
+  dom.libraryCrumb.hidden = false;
+  dom.homeNav.hidden = true;
   const back = document.createElement('button');
   back.type = 'button';
   back.textContent = '项目';

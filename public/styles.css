@@ -549,6 +549,44 @@ body.author-spotlight .toast { z-index: 100; }
   white-space: nowrap;
 }
 .library-crumb .crumb-sep { color: var(--text-faint); font-weight: 400; }
+/* 首页的「项目 / 个人」标签，占原来那行静态「项目」标题的位置 */
+.home-nav { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.home-back {
+  border: 0;
+  padding: 4px 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.home-back:hover { color: #8fe6e7; }
+.home-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.home-tab {
+  height: 30px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.home-tab:hover { background: var(--panel-2); color: var(--text); }
+.home-tab.active {
+  background: var(--accent-soft);
+  color: #8fe6e7;
+  border-color: #1d5a62;
+}
 .library-actions { display: flex; gap: 8px; flex: none; }
 
 .project-grid {
@@ -668,6 +706,18 @@ body.author-spotlight .toast { z-index: 100; }
   white-space: nowrap;
 }
 .project-meta { margin-top: 4px; color: var(--text-dim); font-size: 12px; }
+
+/* 个人文件夹：沿用项目卡片的外观，但只放上传者名字 */
+.personal-card {
+  align-items: center;
+  justify-content: center;
+  min-height: 184px;
+  text-align: center;
+}
+.personal-card .project-body { padding: 18px; }
+.personal-card .project-name { white-space: normal; word-break: break-word; }
+/* 空状态在网格里独占一行 */
+.project-grid > .list-empty { grid-column: 1 / -1; }
 
 /* 锁着的项目：卡片本体不虚化、不变灰（要靠封面认项目），只在封面角上挂一把锁 */
 .project-card.is-locked:hover { border-color: #f0b35c; }
