@@ -34,6 +34,8 @@ export const api = {
   deleteProject: (id, password) => request('DELETE', `/api/projects/${id}`, password ? { password } : undefined),
   getVideo: (id) => request('GET', `/api/videos/${id}`),
   patchVideo: (id, patch) => request('PATCH', `/api/videos/${id}`, patch),
+  // 批量改署名：把 from 名下所有视频并到 to，弹幕 / 画笔的 author 不动
+  renameUploader: (from, to) => request('PATCH', '/api/uploaders', { from, to }),
   moveVideo: (id, projectId) => request('PATCH', `/api/videos/${id}`, { projectId: projectId || null }),
   deleteVideo: (id) => request('DELETE', `/api/videos/${id}`),
   addComment: (id, comment) => request('POST', `/api/videos/${id}/comments`, comment),

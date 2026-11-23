@@ -225,6 +225,7 @@ function cacheDom() {
     'report-open',
     'library-modal', 'library-grid', 'library-page', 'library-crumb', 'home-nav', 'home-back', 'home-tabs', 'project-grid', 'version-list',
     'library-actions', 'intro-card', 'intro-close',
+    'personal-folder-head', 'personal-folder-title', 'personal-folder-rename',
     'upload-modal', 'dropzone', 'file-input', 'title-label', 'title-input', 'upload-project', 'upload-project-select', 'upload-new-project',
     'upload-new-lock', 'upload-new-password', 'upload-new-random',
     'lock-modal', 'lock-title', 'lock-input', 'lock-hint', 'lock-error', 'lock-cancel', 'lock-ok', 'lock-close',
@@ -473,6 +474,8 @@ function renderRoute() {
   const projectMatch = /^\/p\/([\w-]+)/.exec(route);
   if (projectMatch) showProjectPage(projectMatch[1]);
   else showProjectHome();
+  // 不在看片时也留一条 SSE：别人改署名 / 合并文件夹、增删片子，首页能实时跟上
+  if (!state.video && !state.es) connectEvents(null);
   syncTopbarNav();
 }
 
@@ -2299,6 +2302,11 @@ function connectEvents(videoId) {
   });
   // 项目变化：改名 / 删除 / 有人定稿或取消定稿，几秒内同步到所有人
   on('projects:changed', () => refreshVideos());
+  // 有人改署名 / 合并文件夹：旧名字的文件夹已经没了，退回列表看新的分组
+  on('uploaders:changed', (data) => {
+    if (state.personalUploader === data.from) state.personalUploader = null;
+    refreshVideos();
+  });
 
   es.addEventListener('error', () => {
     // EventSource 自带重连，这里只做提示
@@ -3106,6 +3114,9 @@ function initHomeTabs() {
     state.personalUploader = null;
     renderLibraryView();
   });
+  dom.personalFolderRename?.addEventListener('click', () => {
+    renamePersonalUploader(state.personalUploader);
+  });
 }
 
 /** 个人标签：先按上传者平铺文件夹，点开一个再看这个人传过的项目 */
@@ -3224,6 +3235,58 @@ function renderPersonalFolder(name) {
   dom.projectGrid.replaceChildren(...cards);
 }
 
+/** 和上传署名一致：连续空白收成一个空格，首尾去掉，最多 16 字 */
+function cleanUploaderName(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 16);
+}
+
+/** 个人文件夹页顶部：名字 + 改名；这个署名下没片时不显示改名按钮 */
+function renderPersonalFolderHead(name) {
+  if (!dom.personalFolderHead) return;
+  dom.personalFolderHead.hidden = !name;
+  if (!name) {
+    dom.personalFolderTitle.textContent = '';
+    dom.personalFolderRename.hidden = false;
+    return;
+  }
+  const count = state.videos.filter((video) => video.uploader === name).length;
+  dom.personalFolderTitle.textContent = name;
+  dom.personalFolderRename.hidden = count === 0;
+  dom.personalFolderRename.title = count ? '改名，或并进已有的个人文件夹' : '这个文件夹下还没有片子';
+}
+
+/**
+ * 改上传署名：新名字已经存在就是合并，否则是纯改名。
+ * 只动视频的 uploader；弹幕 / 画笔的 author 记的是「谁提的意见」，保持原样。
+ */
+async function renamePersonalUploader(oldName) {
+  if (!oldName) return;
+  const mine = state.videos.filter((video) => video.uploader === oldName);
+  if (!mine.length) {
+    toast('这个文件夹下还没有片子', true);
+    return;
+  }
+  const typed = await askText('修改上传者名字', oldName);
+  if (typed == null) return;
+  const next = cleanUploaderName(typed);
+  if (!next) {
+    toast('名字不能为空', true);
+    return;
+  }
+  if (next === oldName) return;
+  const merging = state.videos.some((video) => video.uploader === next);
+  if (merging && !await askConfirm(`「${oldName}」的 ${mine.length} 支片将并入「${next}」`)) return;
+  try {
+    await api.renameUploader(oldName, next);
+    // 旧文件夹已经不在了，回到个人文件夹列表
+    state.personalUploader = null;
+    await refreshVideos();
+    toast(merging ? `已并入「${next}」` : `已改名为「${next}」`);
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
 function renderLibraryView() {
   if (!dom.libraryPage) return;
   const home = state.libraryPage !== 'project';
@@ -3234,6 +3297,7 @@ function renderLibraryView() {
   dom.versionList.hidden = !showProject;
   const project = state.libraryProjectId ? projectById(state.libraryProjectId) : null;
   renderProjectActions(home ? null : project);
+  renderPersonalFolderHead(home && state.homeTab === 'personal' ? state.personalUploader : null);
   // 介绍横幅只在原来的「项目」标签下出现，个人标签保持干净
   if (dom.introCard) dom.introCard.hidden = !home || state.homeTab !== 'project' || introDismissed();
   if (dom.introClose) dom.introClose.hidden = !libraryHasVideos();

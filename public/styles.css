@@ -589,6 +589,24 @@ body.author-spotlight .toast { z-index: 100; }
 }
 .library-actions { display: flex; gap: 8px; flex: none; }
 
+/* 个人文件夹页顶部的上传者名字 + 改名：名字太长时截断，别把按钮挤下去 */
+.personal-folder-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  min-width: 0;
+}
+.personal-folder-title {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 18px;
+  font-weight: 650;
+}
+
 .project-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
