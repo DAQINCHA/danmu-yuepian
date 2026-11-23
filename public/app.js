@@ -3147,17 +3147,16 @@ function renderPersonalFolders() {
   dom.projectGrid.replaceChildren(...cards);
 }
 
-/** 个人文件夹卡片：封面是这个人最近最多 4 支片的封面拼图，名字留在封面下方 */
+/** 个人文件夹卡片：每个项目（未分类算一组）取这个人最近上传的一支片的封面拼图，名字留在封面下方 */
 function personCard(name) {
   const card = document.createElement('button');
   card.type = 'button';
   card.className = 'project-card personal-card';
   card.setAttribute('aria-label', name);
-  // 按上传时间倒序取最近 1-4 支片，拼成小网格
-  const recent = state.videos
-    .filter((video) => video.uploader === name)
-    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-    .slice(0, 4);
+  // 按项目分组，每组只留这人最近上传的一支片，再按各组最近上传时间倒序取前 4 组
+  const recent = recentPerProject(
+    state.videos.filter((video) => video.uploader === name),
+  ).slice(0, 4);
   const collage = document.createElement('div');
   collage.className = `personal-cover layout-${recent.length}`;
   for (const video of recent) collage.append(personalTile(name, video));
@@ -3176,6 +3175,17 @@ function personCard(name) {
     renderLibraryView();
   });
   return card;
+}
+
+/** 同一个人传的片按项目分组（未分类也是一组），每组只留最近上传的那支；分组按各自最近上传时间倒序 */
+function recentPerProject(videos) {
+  const groups = new Map();
+  for (const video of videos) {
+    const key = video.projectId || 'uncategorized';
+    const picked = groups.get(key);
+    if (!picked || (video.createdAt || 0) > (picked.createdAt || 0)) groups.set(key, video);
+  }
+  return [...groups.values()].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
 
 /** 拼图的一格：有封面放图，没有（或加载 404）就用首字渐变兜底，绝不留空白 */
