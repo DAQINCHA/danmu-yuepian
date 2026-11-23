@@ -606,6 +606,14 @@ body.author-spotlight .toast { z-index: 100; }
   font-size: 18px;
   font-weight: 650;
 }
+/* 改名按钮里的小铅笔：和项目卡片的编辑图标同源，只染图标不染文字 */
+.personal-folder-rename-icon {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  display: block;
+  color: #f0b35c;
+}
 
 .project-grid {
   display: grid;

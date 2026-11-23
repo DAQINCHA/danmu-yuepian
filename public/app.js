@@ -3243,6 +3243,12 @@ function cleanUploaderName(value) {
 /** 个人文件夹页顶部：名字 + 改名；这个署名下没片时不显示改名按钮 */
 function renderPersonalFolderHead(name) {
   if (!dom.personalFolderHead) return;
+  // 改名按钮前挂一支铅笔，和项目卡片的「修改项目」用同一个图标，只挂一次
+  if (dom.personalFolderRename && !dom.personalFolderRename.querySelector('svg')) {
+    const icon = iconSvg(ICON_PATHS.edit);
+    icon.classList.add('personal-folder-rename-icon');
+    dom.personalFolderRename.prepend(icon);
+  }
   dom.personalFolderHead.hidden = !name;
   if (!name) {
     dom.personalFolderTitle.textContent = '';
