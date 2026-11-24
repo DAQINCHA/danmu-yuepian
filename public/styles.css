@@ -33,8 +33,8 @@ html { background-color: #000; }
 body {
   display: flex;
   flex-direction: column;
-  /* 纯色打底，页面上不再铺任何光影 */
-  background-color: var(--bg);
+  /* 底色透明，让下面那层极光透出来；纯黑由 html 兜底 */
+  background-color: transparent;
   color: var(--text);
   font: 14px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro SC", "PingFang SC",
         "Helvetica Neue", "Microsoft YaHei", system-ui, sans-serif;
@@ -53,6 +53,31 @@ body::before {
   mix-blend-mode: screen;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 180px 180px;
+}
+
+/* 极光：铺在内容之下的固定光雾层，只靠缓慢漂移产生流动感。
+   放在 body::before（噪点）之后、body.dragging::after（拖拽提示）之前，
+   拖拽时会被那段规则临时顶掉，松手即恢复。 */
+body::after {
+  content: "";
+  position: fixed;
+  inset: -30%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 34% 22% at 24% 30%, rgba(34, 193, 195, 0.42), transparent 64%),
+    radial-gradient(ellipse 28% 18% at 76% 22%, rgba(127, 240, 234, 0.26), transparent 62%),
+    radial-gradient(ellipse 38% 24% at 64% 76%, rgba(14, 154, 167, 0.34), transparent 66%),
+    radial-gradient(ellipse 26% 18% at 16% 82%, rgba(95, 216, 214, 0.22), transparent 62%);
+  filter: blur(70px);
+  opacity: 0.5;
+  animation: aurora-drift 48s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes aurora-drift {
+  from { transform: translate3d(-4%, -3%, 0) scale(1.05) rotate(-2deg); }
+  to   { transform: translate3d(5%, 4%, 0) scale(1.14) rotate(2deg); }
 }
 
 .mono {
@@ -101,10 +126,7 @@ h1, h2, p { margin: 0; }
   font-size: 14px;
   letter-spacing: 0.04em;
   white-space: nowrap;
-  background: linear-gradient(90deg, #f4ffff, #8ff0ea 50%, #7ff0e2);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: #f4ffff;
 }
 .brand-text small { color: #7e9a9b; font-size: 11px; letter-spacing: 0.1em; }
 
@@ -2332,6 +2354,7 @@ body.dragging::after {
   body { display: block; }
   /* 打印纸是白的，皮肤的光影和噪点都别跟过去 */
   body::before { display: none !important; }
+  body::after { display: none !important; }
 
   .topbar,
   .workspace,
@@ -2563,5 +2586,6 @@ body.dragging::after {
   .report-open,
   .video-wrap,
   .author-field.need,
-  .author-hint { animation: none; }
+  .author-hint,
+  body::after { animation: none; }
 }
