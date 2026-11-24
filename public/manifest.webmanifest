@@ -4,8 +4,8 @@
   "description": "局域网内的视频审片工具：任意一帧发弹幕，圈出任意连续帧。",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#0c0d0f",
-  "theme_color": "#0c0d0f",
+  "background_color": "#0b0d11",
+  "theme_color": "#0b0d11",
   "lang": "zh-CN",
   "icons": [
     {

@@ -3216,7 +3216,7 @@ function fallbackArt(name) {
   let hash = 0;
   for (const ch of name) hash = (hash * 31 + ch.codePointAt(0)) >>> 0;
   const hue = hash % 360;
-  art.style.background = `linear-gradient(135deg, hsl(${hue} 32% 28%), hsl(${(hue + 42) % 360} 36% 18%))`;
+  art.style.background = `linear-gradient(135deg, hsl(${hue} 62% 48%), hsl(${(hue + 42) % 360} 66% 30%))`;
   art.textContent = [...name][0] || '?';
   return art;
 }
