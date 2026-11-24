@@ -3209,14 +3209,20 @@ function personalTile(name, video) {
   return tile;
 }
 
-/** 首字艺术字：名字算哈希定一个色相，同一个名字永远是同一个渐变，不同人能区分开 */
+/** 首字艺术字：名字算哈希定一种色调，同一个名字永远是同一个渐变，不同人能区分开 */
 function fallbackArt(name) {
   const art = document.createElement('div');
   art.className = 'personal-fallback';
   let hash = 0;
   for (const ch of name) hash = (hash * 31 + ch.codePointAt(0)) >>> 0;
   const hue = hash % 360;
-  art.style.background = `linear-gradient(135deg, hsl(${hue} 62% 48%), hsl(${(hue + 42) % 360} 66% 30%))`;
+  // 皮肤只留青 / 金 / 红三种底：色相折算成三档，名字依旧决定用哪一种
+  const tones = [
+    'linear-gradient(145deg, #123c40, #071214)',
+    'linear-gradient(145deg, #3a2f18, #0d0a05)',
+    'linear-gradient(145deg, #3a1f1f, #100707)',
+  ];
+  art.style.background = tones[hue % tones.length];
   art.textContent = [...name][0] || '?';
   return art;
 }

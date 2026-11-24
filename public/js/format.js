@@ -41,12 +41,11 @@ export function relativeTime(timestamp) {
   return new Date(Number(timestamp)).toLocaleDateString('zh-CN');
 }
 
-export const PALETTE = [
-  '#8ab4ff', '#ffd166', '#7ee787', '#ff9ecb', '#c3a6ff', '#6ee7d7', '#ffa46b', '#f28b82',
-  '#b5e48c', '#ffc6ff', '#90dbf4', '#fde68a', '#a0c4ff', '#ffb3a7', '#caffbf', '#d0a2f7',
-];
+// 「弹幕流光」皮肤只留青 / 金 / 红三色：同一支片里按署名先后轮着分，
+// 同名同色。气泡、侧栏、报告的署名色都跟着走。
+export const PALETTE = ['#7ff0e2', '#e0c46a', '#ff9b8f'];
 
-// 同一个视频内按署名先后分配颜色：同名同色，前 16 人不撞色；不同视频互不影响。
+// 同一个视频内按署名先后分配颜色：同名同色，青 / 金 / 红轮着来；不同视频互不影响。
 const roster = new Map();
 
 export function setAuthorRoster(comments = [], annotations = []) {
