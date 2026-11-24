@@ -629,13 +629,15 @@ body.author-spotlight .toast { z-index: 100; }
   gap: 14px;
 }
 .project-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
   padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.018) 55%, rgba(34, 193, 195, 0.04));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 16px 36px rgba(0, 0, 0, 0.55);
   overflow: hidden;
   cursor: pointer;
   text-align: left;
@@ -643,7 +645,25 @@ body.author-spotlight .toast { z-index: 100; }
   color: inherit;
   transition: opacity 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
-.project-card:hover { border-color: #1f7f86; }
+/* 卡片顶沿一道青金细线 */
+.project-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 14px;
+  right: 14px;
+  height: 1px;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(127, 240, 234, 0.55), rgba(224, 196, 106, 0.4), transparent);
+}
+.project-card:hover {
+  border-color: rgba(127, 240, 234, 0.45);
+  box-shadow:
+    0 0 0 1px rgba(34, 193, 195, 0.18),
+    0 0 32px rgba(34, 193, 195, 0.16),
+    0 20px 44px rgba(0, 0, 0, 0.62);
+}
 /* 搜索：命中的项目描一圈强调色，落选的压暗但仍能点 */
 .project-card.search-dim { opacity: 0.36; }
 .project-card.search-dim:hover { opacity: 0.72; }
@@ -659,8 +679,9 @@ body.author-spotlight .toast { z-index: 100; }
   width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  border-radius: 11px 11px 0 0;
-  background: #10141c;
+  border-radius: 13px 13px 0 0;
+  background: #05080a;
+  box-shadow: inset 0 0 60px rgba(34, 193, 195, 0.12);
 }
 .project-cover {
   position: absolute;
@@ -842,10 +863,17 @@ body.author-spotlight .toast { z-index: 100; }
   align-items: center;
   gap: 12px;
   padding: 10px;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 12px;
-  background: var(--panel);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.018));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.version-row:hover {
+  border-color: rgba(127, 240, 234, 0.4);
+  background: linear-gradient(150deg, rgba(34, 193, 195, 0.1), rgba(255, 255, 255, 0.025));
+  box-shadow: 0 0 24px rgba(34, 193, 195, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 .version-cover {
   flex: none;
@@ -894,7 +922,10 @@ body.author-spotlight .toast { z-index: 100; }
   cursor: pointer;
 }
 .final-badge:hover { background: rgba(240, 179, 92, 0.3); }
-.version-row.is-final { border-color: rgba(240, 179, 92, 0.55); }
+.version-row.is-final {
+  border-color: rgba(240, 179, 92, 0.55);
+  box-shadow: 0 0 22px rgba(224, 196, 106, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
 .final-tag { color: #f0b35c; font-weight: 600; }
 /* 「已定稿」文件夹的名字用同一张黄 */
 .final-folder .project-name { color: #f0b35c; }
@@ -955,10 +986,16 @@ body.author-spotlight .toast { z-index: 100; }
   width: 640px;
   height: 360px;
   max-width: 100%;
-  border-radius: var(--radius);
+  border: 1px solid transparent;
+  border-radius: 14px;
   overflow: hidden;
-  background: #000;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  background:
+    linear-gradient(#000, #000) padding-box,
+    linear-gradient(120deg, rgba(34, 193, 195, 0.85), rgba(127, 240, 234, 0.25) 40%, rgba(224, 196, 106, 0.45) 70%, rgba(255, 107, 94, 0.35)) border-box;
+  box-shadow:
+    0 0 42px rgba(34, 193, 195, 0.2),
+    0 0 130px rgba(34, 193, 195, 0.09),
+    0 30px 80px rgba(0, 0, 0, 0.9);
 }
 
 .video-wrap video {
