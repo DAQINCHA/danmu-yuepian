@@ -71,7 +71,7 @@ if curl -fsS --max-time 2 "${url}${health}" >/dev/null 2>&1; then
   exit 0
 fi
 
-if lsof -ti "tcp:${port}" >/dev/null 2>&1; then
+if lsof -nP -ti "tcp:${port}" -sTCP:LISTEN >/dev/null 2>&1; then
   print ''
   print "  无法启动：端口 ${port} 已被其他程序占用。"
   print '  请先关闭占用该端口的程序，或用 PORT 指定其他端口。'
