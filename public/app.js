@@ -5,6 +5,7 @@ import { createAnnotationView, createDrawPad, drawStrokes } from './js/annotatio
 import { createReportView } from './js/report.js';
 import { detectFrameRate } from './js/fps.js';
 import { createFrameGrabber, drawOverlayBoxes, drawWatermark, downloadCanvas, safeFileName } from './js/capture.js';
+import { GUIDE_MODES, createGuideOverlay } from './js/guides.js';
 
 const $ = (id) => document.getElementById(id);
 const DRAW_COLORS = ['#ff5a4d', '#ffd166', '#4ec9a0', '#8ab4ff'];
@@ -15,6 +16,7 @@ const STORE = {
   danmaku: 'danmu:danmaku',
   mute: 'danmu:mute',
   intro: 'danmu:intro',
+  guide: 'danmu:guide',
 };
 
 // 和服务端 config.maxAnnotationSpan 保持一致
@@ -66,6 +68,8 @@ const state = {
   // 倍速与 A/B 循环区间（纯本机临时状态，换片自动重置）
   playbackRate: 1,
   loop: null,
+  // 画面参考线 / 安全框（本机偏好，不进截图、不影响他人）
+  guide: localStorage.getItem(STORE.guide) || 'off',
   // 侧栏里正在回复哪一条（'comment:<id>' 或 'annotation:<id>'，全局只开一个）；
   // 列表会因为别人发弹幕整体重画，草稿和焦点要能接上
   replyOpen: null,
@@ -82,6 +86,7 @@ const dom = {};
 let danmaku;
 let annView;
 let pad;
+let guides;
 let reportView;
 let tickRaf = 0;
 
@@ -139,6 +144,7 @@ function boot() {
   danmaku.setEnabled(state.danmakuOn);
   annView = createAnnotationView(dom.annLayer);
   pad = createDrawPad(dom.drawLayer, { onChange: () => refreshDrawButtons() });
+  guides = createGuideOverlay(dom.guideLayer);
   reportView = createReportView({
     getData: () => ({
       video: state.video,
@@ -158,6 +164,7 @@ function boot() {
   initProjectSearch();
   initHomeTabs();
   initTransport();
+  initGuideMenu();
   initTimeline();
   initComposer();
   initOverall();
@@ -226,11 +233,11 @@ function cacheDom() {
   const ids = [
     'author-field', 'author-input', 'author-veil', 'author-hint', 'presence', 'presence-count', 'library-open', 'home-open', 'project-new', 'upload-open',
     'project-search-field', 'project-search', 'project-search-clear', 'project-search-toggle',
-    'empty-state', 'frame', 'video-wrap', 'video', 'danmaku-layer', 'ann-layer', 'draw-layer', 'paused-badge',
+    'empty-state', 'frame', 'video-wrap', 'video', 'guide-layer', 'danmaku-layer', 'ann-layer', 'draw-layer', 'paused-badge',
     'draw-toolbar', 'range-in', 'range-out', 'range-summary', 'swatches', 'mark-in', 'mark-out',
     'preview-range', 'draw-undo', 'draw-clear', 'draw-cancel', 'draw-save',
     'play-btn', 'mute-btn', 'tc-now', 'timeline', 'timeline-fill', 'timeline-loop', 'timeline-marks', 'timeline-head', 'tc-total',
-    'transport', 'step-back', 'step-fwd', 'speed-btn', 'loop-btn', 'draw-toggle', 'fps-input', 'fps-badge', 'fps-field',
+    'transport', 'step-back', 'step-fwd', 'speed-btn', 'loop-btn', 'draw-toggle', 'guide-btn', 'guide-menu', 'fps-input', 'fps-badge', 'fps-field',
     'danmaku-toggle', 'snap-btn', 'help-btn', 'help-modal', 'fullscreen-btn',
     'composer', 'composer-time', 'composer-input', 'composer-reveal', 'composer-collapse',
     'overall-form', 'overall-input',
@@ -521,6 +528,8 @@ function leaveVideo() {
   state.draw = null;
   setPlaybackRate(1, { notify: false });
   clearLoop({ notify: false });
+  closeGuideMenu();
+  guides?.clear();
   dom.video.pause();
   dom.video.removeAttribute('src');
   dom.video.load();
@@ -664,6 +673,7 @@ async function openVideo(id) {
 
   danmaku.clear();
   annView.clear();
+  guides.setMode(state.guide);
   renderHeader();
   renderSidebar();
   renderMarks();
@@ -680,6 +690,7 @@ async function openVideo(id) {
 
 function onMetadata() {
   fitVideoWrap();
+  guides.setAspect(dom.video.videoWidth, dom.video.videoHeight);
   dom.tcTotal.textContent = timecode(dom.video.duration || 0);
   dom.video.playbackRate = state.playbackRate;
   renderMarks();
@@ -1094,6 +1105,123 @@ function jumpTodo(direction) {
 function toggleHelpModal() {
   if (!dom.helpModal) return;
   dom.helpModal.hidden = !dom.helpModal.hidden;
+}
+
+/* ── 画面参考线 / 安全框 ─────────────────────────────────────────── */
+
+function guidePreset(id) {
+  return GUIDE_MODES.find((m) => m.id === id) || GUIDE_MODES[0];
+}
+
+function syncGuideUI() {
+  const current = guidePreset(state.guide);
+  if (dom.guideBtn) {
+    dom.guideBtn.textContent = current.short;
+    dom.guideBtn.classList.toggle('active', current.id !== 'off');
+  }
+  if (dom.guideMenu) {
+    for (const btn of dom.guideMenu.querySelectorAll('.guide-option')) {
+      const on = btn.dataset.guide === current.id;
+      btn.classList.toggle('on', on);
+      btn.setAttribute('aria-checked', on ? 'true' : 'false');
+    }
+  }
+}
+
+function setGuideMode(mode, { notify = true } = {}) {
+  const preset = guidePreset(mode);
+  state.guide = preset.id;
+  try {
+    localStorage.setItem(STORE.guide, preset.id);
+  } catch {
+    /* 无痕模式忽略 */
+  }
+  if (state.video) guides.setMode(preset.id);
+  syncGuideUI();
+  if (notify) toast(preset.id === 'off' ? '已关闭画面参考线' : `已开启：${preset.label}`);
+}
+
+function cycleGuideMode() {
+  if (!state.video) return;
+  const idx = GUIDE_MODES.findIndex((m) => m.id === state.guide);
+  const next = GUIDE_MODES[(idx + 1) % GUIDE_MODES.length];
+  setGuideMode(next.id);
+}
+
+function closeGuideMenu() {
+  if (!dom.guideMenu || dom.guideMenu.hidden) return;
+  dom.guideMenu.hidden = true;
+  dom.guideBtn?.setAttribute('aria-expanded', 'false');
+}
+
+function openGuideMenu() {
+  if (!dom.guideMenu || !dom.guideBtn) return;
+  // 全屏时把菜单挂到全屏容器里，不然会被 top-layer 压在下面看不见
+  const host = document.fullscreenElement || document.body;
+  if (dom.guideMenu.parentNode !== host) host.appendChild(dom.guideMenu);
+
+  dom.guideMenu.hidden = false;
+  dom.guideBtn.setAttribute('aria-expanded', 'true');
+
+  const btnRect = dom.guideBtn.getBoundingClientRect();
+  const menuW = dom.guideMenu.offsetWidth || 244;
+  const menuH = dom.guideMenu.offsetHeight || 220;
+  const vw = window.innerWidth;
+  const left = Math.min(vw - menuW - 10, Math.max(10, btnRect.left + btnRect.width / 2 - menuW / 2));
+  const top = Math.max(10, btnRect.top - menuH - 8);
+  dom.guideMenu.style.left = `${Math.round(left)}px`;
+  dom.guideMenu.style.top = `${Math.round(top)}px`;
+}
+
+function initGuideMenu() {
+  if (!dom.guideMenu || !dom.guideBtn) return;
+  dom.guideMenu.replaceChildren(...GUIDE_MODES.map((preset) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'guide-option';
+    item.role = 'menuitemradio';
+    item.dataset.guide = preset.id;
+
+    const head = document.createElement('span');
+    head.className = 'guide-option-head';
+    const title = document.createElement('span');
+    title.textContent = preset.label;
+    const check = document.createElement('span');
+    check.className = 'guide-option-check';
+    check.textContent = '✓';
+    head.append(title, check);
+
+    const desc = document.createElement('span');
+    desc.className = 'guide-option-desc';
+    desc.textContent = preset.desc;
+
+    item.append(head, desc);
+    item.addEventListener('click', () => {
+      setGuideMode(preset.id);
+      closeGuideMenu();
+    });
+    return item;
+  }));
+
+  syncGuideUI();
+
+  dom.guideBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (dom.guideMenu.hidden) openGuideMenu();
+    else closeGuideMenu();
+  });
+  dom.guideBtn.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+    closeGuideMenu();
+    if (state.guide !== 'off') setGuideMode('off');
+  });
+  document.addEventListener('pointerdown', (event) => {
+    if (dom.guideMenu.hidden) return;
+    if (dom.guideMenu.contains(event.target) || dom.guideBtn.contains(event.target)) return;
+    closeGuideMenu();
+  });
+  window.addEventListener('resize', closeGuideMenu);
+  document.addEventListener('fullscreenchange', closeGuideMenu);
 }
 
 function initTransport() {
@@ -4800,6 +4928,7 @@ function initKeyboard() {
       for (const modal of document.querySelectorAll('.modal')) {
         if (modal !== dom.uploadModal) modal.hidden = true;
       }
+      closeGuideMenu();
       if (state.draw) exitDrawMode();
       if (typing) active.blur();
       return;
@@ -4894,6 +5023,10 @@ function initKeyboard() {
       case 's':
       case 'S':
         captureCurrentFrame();
+        break;
+      case 'g':
+      case 'G':
+        cycleGuideMode();
         break;
       default:
         break;

@@ -92,6 +92,7 @@
       <div class="frame" id="frame" hidden>
         <div class="video-wrap" id="video-wrap">
           <video id="video" playsinline preload="metadata"></video>
+          <div class="guide-layer" id="guide-layer" aria-hidden="true" hidden></div>
           <canvas class="paint-layer" id="ann-layer"></canvas>
           <canvas class="paint-layer draw-layer" id="draw-layer"></canvas>
           <div class="paused-badge" id="paused-badge" hidden>已暂停 · 可说弹幕</div>
@@ -162,6 +163,8 @@
           <button class="btn tiny mono" id="speed-btn" type="button" title="切换倍速（J 减速 / K 暂停 / L 加速，右键恢复 1x）">1x</button>
           <button class="btn tiny mono" id="loop-btn" type="button" title="A/B 区间循环：点一次设起点 A，再点设终点 B，再点取消（快捷键 A / B / C）">A/B</button>
           <button class="btn tiny" id="draw-toggle" type="button" title="画笔标注 (D)">画笔</button>
+          <button class="btn tiny" id="guide-btn" type="button" aria-haspopup="menu" aria-expanded="false"
+                  title="画面参考线与安全框（抖音/小红书避让区、2.35:1 电影遮幅、三分线；快捷键 G，右键关闭）">参考线</button>
           <label class="fps-field" id="fps-field" title="帧率决定「一帧」有多长：逐帧步进和标注区间都靠它。默认自动识别，不准可以手动改">
             <span class="fps-badge" id="fps-badge">默认</span>
             <input id="fps-input" type="number" min="1" max="240" step="0.001" inputmode="decimal" />
@@ -431,6 +434,7 @@
             <div><dt><kbd>I</kbd> / <kbd>O</kbd></dt><dd>设画笔入点 / 出点</dd></div>
             <div><dt><kbd>Z</kbd></dt><dd>撤销上一笔</dd></div>
             <div><dt><kbd>S</kbd></dt><dd>截取当前帧（含弹幕与笔迹）</dd></div>
+            <div><dt><kbd>G</kbd></dt><dd>切换参考线 / 安全框</dd></div>
             <div><dt><kbd>?</kbd> / <kbd>Esc</kbd></dt><dd>开关本速查卡 / 关闭弹窗</dd></div>
           </dl>
         </section>
@@ -449,6 +453,8 @@
     </svg>
     <p class="author-hint-text">先写一个昵称吧</p>
   </div>
+
+  <div class="guide-menu" id="guide-menu" role="menu" aria-label="画面参考线" hidden></div>
 
   <div class="toast" id="toast" hidden></div>
 
