@@ -493,6 +493,28 @@
     </div>
   </div>
 
+  <!-- 可复用更新公告（由 js/notice.js 控制，每次新公告同浏览器仅自动弹出一次） -->
+  <div class="modal" id="notice-modal" hidden role="dialog" aria-modal="true" aria-labelledby="notice-title">
+    <div class="modal-box notice-box">
+      <header class="modal-head notice-head">
+        <div class="notice-title-wrap">
+          <div class="notice-title-row">
+            <span class="notice-badge" id="notice-badge">更新公告</span>
+            <span class="notice-date" id="notice-ver"></span>
+          </div>
+          <h2 id="notice-title"></h2>
+          <p class="notice-lead" id="notice-lead"></p>
+        </div>
+        <button class="icon-btn" data-close-modal type="button" aria-label="关闭">✕</button>
+      </header>
+      <div class="notice-body" id="notice-body"></div>
+      <footer class="notice-foot">
+        <span class="notice-tip" id="notice-tip">本公告在当前浏览器仅弹出一次</span>
+        <button class="btn primary" id="notice-ok" type="button">知道了</button>
+      </footer>
+    </div>
+  </div>
+
   <!-- 没署名时盖住整页；署名框在顶栏里单独抬到这层上面 -->
   <div id="author-veil" class="author-veil" hidden></div>
   <!-- 弹簧绕圈，画布 400×260。线尾 (80,205)，箭头尖 (256,114)。换样式只改这两条 d -->

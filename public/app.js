@@ -9,6 +9,7 @@ import { GUIDE_MODES, createGuideOverlay } from './js/guides.js';
 import { createTimelineHeatmap, createTimelinePreview } from './js/timeline-fx.js';
 import { createTimelineWaveform } from './js/waveform.js';
 import { createCompareController } from './js/compare.js';
+import { createNoticeController } from './js/notice.js';
 
 const $ = (id) => document.getElementById(id);
 const DRAW_COLORS = ['#ff5a4d', '#ffd166', '#4ec9a0', '#8ab4ff'];
@@ -22,6 +23,7 @@ const STORE = {
   intro: 'danmu:intro',
   guide: 'danmu:guide',
   sidebarW: 'danmu:sidebar-w',
+  notice: 'danmu:seen-notice',
 };
 
 // 和服务端 config.maxAnnotationSpan 保持一致
@@ -100,6 +102,7 @@ let heatmap;
 let waveform;
 let timelinePreview;
 let reportView;
+let notice;
 let tickRaf = 0;
 
 /* ── 启动 ─────────────────────────────────────────────────────────── */
@@ -216,6 +219,16 @@ function boot() {
     },
     notify: toast,
   });
+  notice = createNoticeController({
+    modal: dom.noticeModal,
+    badge: dom.noticeBadge,
+    version: dom.noticeVer,
+    title: dom.noticeTitle,
+    lead: dom.noticeLead,
+    body: dom.noticeBody,
+    tip: dom.noticeTip,
+    ok: dom.noticeOk,
+  }, { storeKey: STORE.notice });
 
   initAuthor();
   initProjectSearch();
@@ -282,6 +295,8 @@ function boot() {
   syncComposerCollapse();
   // 没署名就先压暗，首页和带片地址都一样，不必等列表回来
   syncAuthorSpotlight({ focus: !state.author });
+  // 已有署名的用户直接按需弹出更新公告（同浏览器每期仅一次）；未署名用户填完昵称后再弹
+  if (state.author) notice.maybeShow();
 
   refreshVideos().finally(renderRoute);
 }
@@ -299,6 +314,7 @@ function cacheDom() {
     'play-btn', 'mute-btn', 'tc-now', 'timeline', 'timeline-heatmap', 'timeline-waveform', 'timeline-fill', 'timeline-loop', 'timeline-marks', 'timeline-head', 'tc-total',
     'transport', 'step-back', 'step-fwd', 'speed-btn', 'loop-btn', 'draw-toggle', 'guide-btn', 'compare-btn', 'guide-menu', 'tl-preview', 'fps-input', 'fps-badge', 'fps-field',
     'danmaku-toggle', 'wave-btn', 'snap-btn', 'help-btn', 'help-modal', 'fullscreen-btn',
+    'notice-modal', 'notice-badge', 'notice-ver', 'notice-title', 'notice-lead', 'notice-body', 'notice-tip', 'notice-ok',
     'composer', 'composer-time', 'composer-time-text', 'composer-input', 'composer-submit', 'composer-reveal', 'composer-collapse',
     'sidebar', 'sidebar-resizer',
     'video-title', 'video-meta', 'tabs', 'list', 'count-all', 'count-comment', 'count-annotation',
@@ -341,6 +357,7 @@ function initAuthor() {
       setAuthor(input.value, input === dom.authorInput ? 'topbar' : 'upload');
       renderSidebar();
       maybeBeginUpload();
+      if (state.author) notice?.maybeShow();
     });
   }
 
@@ -3015,6 +3032,7 @@ function initModals() {
     button.addEventListener('click', () => {
       const modal = button.closest('.modal');
       if (modal === dom.uploadModal) dismissUpload();
+      else if (modal === dom.noticeModal) notice?.dismiss();
       else modal.hidden = true;
     });
   }
@@ -3023,6 +3041,7 @@ function initModals() {
     modal.addEventListener('click', (event) => {
       if (event.target !== modal) return;
       if (modal === dom.uploadModal) dismissUpload();
+      else if (modal === dom.noticeModal) notice?.dismiss();
       else modal.hidden = true;
     });
   }
@@ -5133,8 +5152,9 @@ function initKeyboard() {
       // 自定义确认框在捕获阶段已经 preventDefault；输入法选词时对话框还开着，Esc 只交给输入法
       if (event.defaultPrevented || (dom.askModal && !dom.askModal.hidden)) return;
       if (dom.uploadModal && !dom.uploadModal.hidden) dismissUpload();
+      if (dom.noticeModal && !dom.noticeModal.hidden) notice?.dismiss();
       for (const modal of document.querySelectorAll('.modal')) {
-        if (modal !== dom.uploadModal) modal.hidden = true;
+        if (modal !== dom.uploadModal && modal !== dom.noticeModal) modal.hidden = true;
       }
       closeGuideMenu();
       if (compare?.active) compare.close();
