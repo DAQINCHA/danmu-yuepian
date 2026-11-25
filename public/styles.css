@@ -80,6 +80,19 @@ body::after {
   to   { transform: translate3d(5%, 4%, 0) scale(1.14) rotate(2deg); }
 }
 
+/* 播片时把 GPU 留给视频解码：停掉超大视口的 blur(70px) 漂移和按钮流光，并减轻环境光干扰 */
+body.is-playing::after {
+  animation-play-state: paused;
+  opacity: 0.28;
+}
+body.is-playing::before {
+  opacity: 0.012;
+}
+body.is-playing .btn.primary,
+body.is-playing .report-open {
+  animation-play-state: paused;
+}
+
 .mono {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-variant-numeric: tabular-nums;

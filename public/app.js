@@ -78,7 +78,7 @@ let danmaku;
 let annView;
 let pad;
 let reportView;
-let lastFitCheck = 0;
+let tickRaf = 0;
 
 /* ── 启动 ─────────────────────────────────────────────────────────── */
 
@@ -165,12 +165,14 @@ function boot() {
   initPresence();
 
   dom.video.addEventListener('loadedmetadata', onMetadata);
+  dom.video.addEventListener('loadeddata', () => syncVideoFrame({ forceTransport: true }));
   dom.video.addEventListener('play', onPlay);
   dom.video.addEventListener('pause', onPause);
   dom.video.addEventListener('seeked', () => {
     // 输入中途拖了进度/逐帧，说明在找更准的那一帧，以新位置为准
     if (state.composeTime !== null) lockComposeTime(dom.video.currentTime || 0);
     state.annShown.clear();
+    syncVideoFrame({ forceTransport: true });
     if (!dom.video.paused) return;
     // 暂停时换了位置，之前定住的弹幕已经不属于这一帧了
     danmaku.clearLive();
@@ -182,6 +184,11 @@ function boot() {
   dom.video.addEventListener('ended', onPause);
 
   new ResizeObserver(() => fitVideoWrap()).observe(dom.frame);
+  document.fonts?.ready?.then(() => fitVideoWrap());
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopTick();
+    else if (state.video && !dom.video.paused) startTick();
+  });
   window.addEventListener('resize', () => {
     fitVideoWrap();
     placeAuthorHint();
@@ -207,7 +214,6 @@ function boot() {
   // 没署名就先压暗，首页和带片地址都一样，不必等列表回来
   syncAuthorSpotlight({ focus: !state.author });
 
-  requestAnimationFrame(tick);
   refreshVideos().finally(renderRoute);
 }
 
@@ -501,6 +507,8 @@ function syncTopbarNav() {
 
 function leaveVideo() {
   if (!state.video && dom.frame.hidden) return;
+  stopTick();
+  document.body.classList.remove('is-playing');
   state.video = null;
   state.comments = [];
   state.annotations = [];
@@ -665,6 +673,7 @@ function onMetadata() {
   fitVideoWrap();
   dom.tcTotal.textContent = timecode(dom.video.duration || 0);
   renderMarks();
+  syncVideoFrame({ forceTransport: true });
 
   if (!state.video) return;
   if (!state.video.duration && Number.isFinite(dom.video.duration)) {
@@ -712,8 +721,7 @@ function computeFit() {
 }
 
 /**
- * 画布要跟视频内容严格 1:1，所以尺寸由 JS 算。tick 里定期调用一次，
- * 布局晚一步就绪（字体、侧栏回流、媒体查询切换）也能自己纠正回来。
+ * 画布要跟视频内容严格 1:1，所以尺寸由 JS 算；ResizeObserver 在窗口/侧栏/字体变化时自动重算。
  */
 function fitVideoWrap() {
   const size = computeFit();
@@ -725,6 +733,7 @@ function fitVideoWrap() {
   dom.videoWrap.style.height = h;
   annView.fit();
   pad.fit();
+  if (state.video) annView.render(state.annotations, dom.video.currentTime || 0);
 }
 
 /** 竖屏看片时，署名、弹幕输入、整体意见和画笔入口收成一颗「发弹幕」 */
@@ -857,6 +866,7 @@ function seekTo(time) {
   }
   state.lastTime = target;
   state.lastTick = -1;
+  syncVideoFrame({ forceTransport: true });
 }
 
 function togglePlay() {
@@ -963,6 +973,7 @@ function initTimeline() {
 }
 
 function onPlay() {
+  document.body.classList.add('is-playing');
   dom.pausedBadge.hidden = true;
   // 暂停时定住的弹幕接着淡出就行；只收掉下方的暂停卡片
   danmaku.showFocus([]);
@@ -970,15 +981,37 @@ function onPlay() {
   // 正好停在弹幕时间点上再继续播放时，让这条也能出来（pop 自己会去重）
   state.lastTime = Math.max(0, (dom.video.currentTime || 0) - 0.05);
   updateTransport(true);
+  startTick();
   // 只有真正在播才能量到帧间隔
   maybeDetectFrameRate();
 }
 
 function onPause() {
+  document.body.classList.remove('is-playing');
+  stopTick();
   danmaku.setPaused(true);
   dom.pausedBadge.hidden = Boolean(!state.video || state.draw);
   setTimeout(updateFocus, 50);
-  updateTransport(true);
+  syncVideoFrame({ forceTransport: true });
+}
+
+function syncVideoFrame({ forceTransport = false } = {}) {
+  if (!state.video) return;
+  const t = dom.video.currentTime || 0;
+  annView.render(state.annotations, t);
+  updateTransport(forceTransport);
+  maybeSavePlayingCover();
+}
+
+function startTick() {
+  if (tickRaf || !state.video || dom.video.paused || document.hidden) return;
+  tickRaf = requestAnimationFrame(tick);
+}
+
+function stopTick() {
+  if (!tickRaf) return;
+  cancelAnimationFrame(tickRaf);
+  tickRaf = 0;
 }
 
 function updateTransport(force = false) {
@@ -997,46 +1030,42 @@ function updateTransport(force = false) {
 }
 
 function tick() {
-  if (state.video) {
-    const t = dom.video.currentTime || 0;
-    if (!dom.video.paused && !dom.video.seeking) {
-      if (t < state.lastTime - 0.05) {
-        state.lastTime = t;
-        state.annShown.clear();
+  tickRaf = 0;
+  if (!state.video || dom.video.paused || document.hidden) return;
+
+  const t = dom.video.currentTime || 0;
+  if (!dom.video.seeking) {
+    if (t < state.lastTime - 0.05) {
+      state.lastTime = t;
+      state.annShown.clear();
+    }
+    if (t > state.lastTime) {
+      // 从片头起播时把第 0 帧的弹幕（含整体意见）也算进来
+      const from = state.lastTime <= 0 ? -1 : state.lastTime;
+      for (const comment of state.comments) {
+        if (comment.time > from && comment.time <= t) danmaku.pop(comment);
       }
-      if (t > state.lastTime) {
-        // 从片头起播时把第 0 帧的弹幕（含整体意见）也算进来
-        const from = state.lastTime <= 0 ? -1 : state.lastTime;
-        for (const comment of state.comments) {
-          if (comment.time > from && comment.time <= t) danmaku.pop(comment);
-        }
-        // 画笔标注有回复的，播到它的区间也弹一个气泡（从区间中间开始播也算）
-        for (const annotation of state.annotations) {
-          if (state.annShown.has(annotation.id)) continue;
-          const reached = annotation.start > from && annotation.start <= t;
-          const inside = annotation.start <= t && t <= annotation.end;
-          if (!reached && !inside) continue;
-          const bubble = annotationBubble(annotation);
-          if (!bubble) continue;
-          state.annShown.add(annotation.id);
-          danmaku.pop(bubble);
-        }
-        state.lastTime = t;
+      // 画笔标注有回复的，播到它的区间也弹一个气泡（从区间中间开始播也算）
+      for (const annotation of state.annotations) {
+        if (state.annShown.has(annotation.id)) continue;
+        const reached = annotation.start > from && annotation.start <= t;
+        const inside = annotation.start <= t && t <= annotation.end;
+        if (!reached && !inside) continue;
+        const bubble = annotationBubble(annotation);
+        if (!bubble) continue;
+        state.annShown.add(annotation.id);
+        danmaku.pop(bubble);
       }
-    } else {
       state.lastTime = t;
     }
-    annView.render(state.annotations, t);
-    updateTransport();
-    maybeSavePlayingCover();
-
-    const now = performance.now();
-    if (now - lastFitCheck > 400) {
-      lastFitCheck = now;
-      fitVideoWrap();
-    }
+  } else {
+    state.lastTime = t;
   }
-  requestAnimationFrame(tick);
+  syncVideoFrame();
+
+  if (state.video && !dom.video.paused && !document.hidden) {
+    tickRaf = requestAnimationFrame(tick);
+  }
 }
 
 function updateFocus() {
@@ -1317,6 +1346,7 @@ function afterRangeChange() {
   renderMarks();
   renderSidebar();
   reportView.refresh();
+  if (state.video) annView.render(state.annotations, dom.video.currentTime || 0);
   if (dom.video.paused) updateFocus();
 }
 
@@ -1908,6 +1938,7 @@ function removeAnnotationLocal(id) {
   state.annotations = state.annotations.filter((a) => a.id !== id);
   dropReplyFor('annotation', id);
   annView.fit();
+  if (state.video) annView.render(state.annotations, dom.video.currentTime || 0);
   renderSidebar();
   renderMarks();
 }
@@ -2049,6 +2080,7 @@ function upsertAnnotation(annotation) {
   if (!Array.isArray(annotation.replies)) annotation.replies = [];
   state.annotations.push(annotation);
   state.annotations.sort((a, b) => a.start - b.start || a.createdAt - b.createdAt);
+  if (state.video) annView.render(state.annotations, dom.video.currentTime || 0);
   renderSidebar();
   renderMarks();
 }
@@ -2152,6 +2184,7 @@ function exitDrawMode() {
   pad.reset();
   refreshDrawButtons();
   annView.fit();
+  if (state.video) annView.render(state.annotations, dom.video.currentTime || 0);
   dom.pausedBadge.hidden = !dom.video.paused;
   syncComposerCollapse();
   fitVideoWrap();
