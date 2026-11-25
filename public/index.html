@@ -147,6 +147,7 @@
         <div class="timeline" id="timeline" role="slider" aria-label="播放进度" tabindex="0">
           <div class="timeline-rail">
             <div class="timeline-fill" id="timeline-fill"></div>
+            <div class="timeline-loop" id="timeline-loop" hidden></div>
             <div class="timeline-marks" id="timeline-marks"></div>
             <div class="timeline-head" id="timeline-head"></div>
           </div>
@@ -158,6 +159,8 @@
             <button class="btn tiny" id="step-back" type="button" title="后退一帧 (←)">◀ 帧</button>
             <button class="btn tiny" id="step-fwd" type="button" title="前进一帧 (→)">帧 ▶</button>
           </div>
+          <button class="btn tiny mono" id="speed-btn" type="button" title="切换倍速（J 减速 / K 暂停 / L 加速，右键恢复 1x）">1x</button>
+          <button class="btn tiny mono" id="loop-btn" type="button" title="A/B 区间循环：点一次设起点 A，再点设终点 B，再点取消（快捷键 A / B / C）">A/B</button>
           <button class="btn tiny" id="draw-toggle" type="button" title="画笔标注 (D)">画笔</button>
           <label class="fps-field" id="fps-field" title="帧率决定「一帧」有多长：逐帧步进和标注区间都靠它。默认自动识别，不准可以手动改">
             <span class="fps-badge" id="fps-badge">默认</span>
@@ -166,7 +169,8 @@
           </label>
           <button class="btn tiny active" id="danmaku-toggle" type="button" title="显示 / 隐藏弹幕">弹幕</button>
           <button class="btn tiny" id="snap-btn" type="button" title="截取当前帧：连同弹幕、画笔笔迹和时间戳水印存成 PNG (S)">截取当前帧</button>
-          <button class="icon-btn" id="fullscreen-btn" type="button" title="全屏">⛶</button>
+          <button class="icon-btn" id="help-btn" type="button" title="快捷键速查 (?)" aria-label="快捷键速查">?</button>
+          <button class="icon-btn" id="fullscreen-btn" type="button" title="全屏 (F)">⛶</button>
         </div>
       </div>
 
@@ -389,6 +393,49 @@
         <button class="btn ghost" id="ask-cancel" type="button">取消</button>
         <button class="btn primary" id="ask-ok" type="button">确定</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 快捷键速查 -->
+  <div class="modal" id="help-modal" hidden role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <div class="modal-box help-box">
+      <header class="modal-head">
+        <h2 id="help-title">快捷键速查</h2>
+        <button class="icon-btn" data-close-modal type="button" aria-label="关闭">✕</button>
+      </header>
+      <div class="help-groups">
+        <section class="help-group">
+          <h3>播放与变速</h3>
+          <dl class="help-list">
+            <div><dt><kbd>空格</kbd> / <kbd>K</kbd></dt><dd>播放 / 暂停</dd></div>
+            <div><dt><kbd>J</kbd> / <kbd>L</kbd></dt><dd>减速 / 加速（0.25x – 2x）</dd></div>
+            <div><dt><kbd>←</kbd> / <kbd>→</kbd></dt><dd>后退 / 前进一帧</dd></div>
+            <div><dt><kbd>Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd></dt><dd>后退 / 前进 1 秒</dd></div>
+            <div><dt><kbd>M</kbd></dt><dd>静音 / 取消静音</dd></div>
+            <div><dt><kbd>F</kbd></dt><dd>全屏</dd></div>
+          </dl>
+        </section>
+        <section class="help-group">
+          <h3>A/B 循环与核对</h3>
+          <dl class="help-list">
+            <div><dt><kbd>A</kbd></dt><dd>设循环起点 A</dd></div>
+            <div><dt><kbd>B</kbd></dt><dd>设循环终点 B（直接开启循环）</dd></div>
+            <div><dt><kbd>C</kbd></dt><dd>取消 A/B 循环</dd></div>
+            <div><dt><kbd>[</kbd> / <kbd>]</kbd></dt><dd>跳到上一条 / 下一条未处理意见</dd></div>
+          </dl>
+        </section>
+        <section class="help-group">
+          <h3>画笔与截屏</h3>
+          <dl class="help-list">
+            <div><dt><kbd>D</kbd></dt><dd>进入 / 退出画笔模式</dd></div>
+            <div><dt><kbd>I</kbd> / <kbd>O</kbd></dt><dd>设画笔入点 / 出点</dd></div>
+            <div><dt><kbd>Z</kbd></dt><dd>撤销上一笔</dd></div>
+            <div><dt><kbd>S</kbd></dt><dd>截取当前帧（含弹幕与笔迹）</dd></div>
+            <div><dt><kbd>?</kbd> / <kbd>Esc</kbd></dt><dd>开关本速查卡 / 关闭弹窗</dd></div>
+          </dl>
+        </section>
+      </div>
+      <p class="help-tip">提示：输入框里打字时快捷键不会误触发；右键点倍速按钮可一键回 1x，右键点 A/B 按钮可清除循环。</p>
     </div>
   </div>
 

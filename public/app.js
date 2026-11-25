@@ -8,6 +8,8 @@ import { createFrameGrabber, drawOverlayBoxes, drawWatermark, downloadCanvas, sa
 
 const $ = (id) => document.getElementById(id);
 const DRAW_COLORS = ['#ff5a4d', '#ffd166', '#4ec9a0', '#8ab4ff'];
+const PLAYBACK_RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2];
+const SPEED_CYCLE = [1, 1.5, 2, 0.5, 0.25];
 const STORE = {
   author: 'danmu:author',
   danmaku: 'danmu:danmaku',
@@ -61,6 +63,9 @@ const state = {
   // 正在拖手把：{ id, which }；拖动期间别的地方触发的 renderMarks 先攒着
   annDrag: null,
   marksPending: false,
+  // 倍速与 A/B 循环区间（纯本机临时状态，换片自动重置）
+  playbackRate: 1,
+  loop: null,
   // 侧栏里正在回复哪一条（'comment:<id>' 或 'annotation:<id>'，全局只开一个）；
   // 列表会因为别人发弹幕整体重画，草稿和焦点要能接上
   replyOpen: null,
@@ -181,7 +186,7 @@ function boot() {
   dom.video.addEventListener('error', () => {
     if (state.video) toast('视频解不开，可能是编码浏览器不支持（建议 H.264 的 mp4）', true);
   });
-  dom.video.addEventListener('ended', onPause);
+  dom.video.addEventListener('ended', onEnded);
 
   new ResizeObserver(() => fitVideoWrap()).observe(dom.frame);
   document.fonts?.ready?.then(() => fitVideoWrap());
@@ -224,9 +229,9 @@ function cacheDom() {
     'empty-state', 'frame', 'video-wrap', 'video', 'danmaku-layer', 'ann-layer', 'draw-layer', 'paused-badge',
     'draw-toolbar', 'range-in', 'range-out', 'range-summary', 'swatches', 'mark-in', 'mark-out',
     'preview-range', 'draw-undo', 'draw-clear', 'draw-cancel', 'draw-save',
-    'play-btn', 'mute-btn', 'tc-now', 'timeline', 'timeline-fill', 'timeline-marks', 'timeline-head', 'tc-total',
-    'transport', 'step-back', 'step-fwd', 'draw-toggle', 'fps-input', 'fps-badge', 'fps-field',
-    'danmaku-toggle', 'snap-btn', 'fullscreen-btn',
+    'play-btn', 'mute-btn', 'tc-now', 'timeline', 'timeline-fill', 'timeline-loop', 'timeline-marks', 'timeline-head', 'tc-total',
+    'transport', 'step-back', 'step-fwd', 'speed-btn', 'loop-btn', 'draw-toggle', 'fps-input', 'fps-badge', 'fps-field',
+    'danmaku-toggle', 'snap-btn', 'help-btn', 'help-modal', 'fullscreen-btn',
     'composer', 'composer-time', 'composer-input', 'composer-reveal', 'composer-collapse',
     'overall-form', 'overall-input',
     'video-title', 'video-meta', 'tabs', 'list', 'count-all', 'count-comment', 'count-annotation',
@@ -514,6 +519,8 @@ function leaveVideo() {
   state.annotations = [];
   setAuthorRoster();
   state.draw = null;
+  setPlaybackRate(1, { notify: false });
+  clearLoop({ notify: false });
   dom.video.pause();
   dom.video.removeAttribute('src');
   dom.video.load();
@@ -635,6 +642,8 @@ async function openVideo(id) {
   setAuthorRoster(state.comments, state.annotations);
   applyFps(data.video.fps || 25, data.video.fpsSource || 'default');
   state.draw = null;
+  setPlaybackRate(1, { notify: false });
+  clearLoop({ notify: false });
   state.lastTime = 0;
   state.lastTick = -1;
   unlockComposeTime();
@@ -672,7 +681,9 @@ async function openVideo(id) {
 function onMetadata() {
   fitVideoWrap();
   dom.tcTotal.textContent = timecode(dom.video.duration || 0);
+  dom.video.playbackRate = state.playbackRate;
   renderMarks();
+  renderLoopRange();
   syncVideoFrame({ forceTransport: true });
 
   if (!state.video) return;
@@ -895,6 +906,196 @@ function stepFrame(direction) {
   seekTo(dom.video.currentTime + (direction / fps) * 1.0 + direction * 0.0008);
 }
 
+/* ── 倍速（J/K/L）· A/B 循环 · 待改跳转 · 快捷键速查 ──────────────── */
+
+function formatRate(rate) {
+  return `${Number(rate.toFixed(2))}x`;
+}
+
+function setPlaybackRate(rate, { notify = true } = {}) {
+  const next = PLAYBACK_RATES.includes(rate) ? rate : 1;
+  state.playbackRate = next;
+  if (dom.video) dom.video.playbackRate = next;
+  if (dom.speedBtn) {
+    dom.speedBtn.textContent = formatRate(next);
+    dom.speedBtn.classList.toggle('active', next !== 1);
+  }
+  if (notify) toast(`播放速度 ${formatRate(next)}`);
+}
+
+function stepPlaybackRate(direction) {
+  if (!state.video) return;
+  const idx = PLAYBACK_RATES.indexOf(state.playbackRate);
+  const current = idx === -1 ? PLAYBACK_RATES.indexOf(1) : idx;
+  const nextIdx = Math.min(PLAYBACK_RATES.length - 1, Math.max(0, current + direction));
+  setPlaybackRate(PLAYBACK_RATES[nextIdx]);
+  if (dom.video.paused) {
+    dom.video.play().catch(() => {});
+  }
+}
+
+function cyclePlaybackRate() {
+  if (!state.video) return;
+  const idx = SPEED_CYCLE.indexOf(state.playbackRate);
+  const next = SPEED_CYCLE[(idx + 1) % SPEED_CYCLE.length];
+  setPlaybackRate(next);
+}
+
+function renderLoopRange() {
+  if (!dom.timelineLoop || !dom.loopBtn) return;
+  const loop = state.loop;
+  if (!loop) {
+    dom.timelineLoop.hidden = true;
+    dom.timelineLoop.classList.remove('pending');
+    dom.loopBtn.textContent = 'A/B';
+    dom.loopBtn.classList.remove('active', 'pending');
+    return;
+  }
+  const total = duration();
+  if (!total) {
+    dom.timelineLoop.hidden = true;
+    return;
+  }
+  const startPct = Math.min(100, Math.max(0, (loop.start / total) * 100));
+  dom.timelineLoop.hidden = false;
+  dom.timelineLoop.style.left = `${startPct}%`;
+  if (loop.end === null) {
+    dom.timelineLoop.classList.add('pending');
+    dom.timelineLoop.style.width = '3px';
+    dom.loopBtn.textContent = 'A…';
+    dom.loopBtn.classList.add('pending');
+    dom.loopBtn.classList.remove('active');
+    return;
+  }
+  const endPct = Math.min(100, Math.max(startPct, (loop.end / total) * 100));
+  dom.timelineLoop.classList.remove('pending');
+  dom.timelineLoop.style.width = `${Math.max(0.6, endPct - startPct)}%`;
+  dom.loopBtn.textContent = 'A⇄B';
+  dom.loopBtn.classList.remove('pending');
+  dom.loopBtn.classList.add('active');
+}
+
+function clearLoop({ notify = true } = {}) {
+  const had = Boolean(state.loop);
+  state.loop = null;
+  renderLoopRange();
+  if (notify && had) toast('已取消 A/B 循环');
+}
+
+function setLoopPoint(which) {
+  if (!state.video) return;
+  const total = duration();
+  if (!total) {
+    toast('等视频加载完再设循环区间');
+    return;
+  }
+  const now = Math.min(Math.max(0, dom.video.currentTime || 0), total);
+  const minGap = Math.max(2 / (state.fps || 25), 0.15);
+
+  if (which === 'start') {
+    const end = state.loop?.end !== null && state.loop?.end !== undefined && state.loop.end > now + minGap
+      ? state.loop.end
+      : null;
+    state.loop = { start: now, end };
+    renderLoopRange();
+    toast(end !== null
+      ? `循环区间已更新：${timecode(now)} – ${timecode(end)}`
+      : `已设循环起点 A（${timecode(now)}），按 B 设终点`);
+    return;
+  }
+
+  // 设终点 B：如果还没设 A，自动取前 3 秒作为 A，单按 B 也能立刻循环最近一段
+  let start = state.loop ? state.loop.start : Math.max(0, now - 3);
+  let end = now;
+  if (end < start) [start, end] = [end, start];
+  if (end - start < minGap) {
+    end = Math.min(total, start + minGap);
+    if (end - start < minGap) start = Math.max(0, end - minGap);
+  }
+  state.loop = { start, end };
+  renderLoopRange();
+  seekTo(start);
+  state.lastTime = Math.max(0, start - 0.05);
+  state.annShown.clear();
+  danmaku.clearLive();
+  dom.video.play().catch(() => {});
+  toast(`A/B 循环已开启：${timecode(start)} – ${timecode(end)}`);
+}
+
+function toggleLoopButton() {
+  if (!state.video) return;
+  if (!state.loop) setLoopPoint('start');
+  else if (state.loop.end === null) setLoopPoint('end');
+  else clearLoop();
+}
+
+function jumpTodo(direction) {
+  if (!state.video) return;
+  const pending = [];
+  for (const comment of state.comments) {
+    if (!comment.done) pending.push({ type: 'comment', id: comment.id, time: comment.time });
+  }
+  for (const annotation of state.annotations) {
+    if (!annotation.done) pending.push({ type: 'annotation', id: annotation.id, time: annotation.start });
+  }
+  if (!pending.length) {
+    toast('所有意见都已处理完');
+    return;
+  }
+  // 有带时间码的待改项时，跳过第 0 帧的整体意见；全是整体意见时照常跳
+  const timed = pending.filter((x) => x.time >= 0.001);
+  const pool = (timed.length ? timed : pending).sort((a, b) => a.time - b.time);
+
+  const now = dom.video.currentTime || 0;
+  const eps = 0.06;
+  let target = null;
+  let wrapped = false;
+  if (direction > 0) {
+    target = pool.find((x) => x.time > now + eps);
+    if (!target) {
+      target = pool[0];
+      wrapped = true;
+    }
+  } else {
+    for (let i = pool.length - 1; i >= 0; i -= 1) {
+      if (pool[i].time < now - eps) {
+        target = pool[i];
+        break;
+      }
+    }
+    if (!target) {
+      target = pool[pool.length - 1];
+      wrapped = true;
+    }
+  }
+
+  if (target.type === 'annotation') selectAnnotation(target.id);
+  jumpTo(target.time);
+
+  // 如果当前侧栏标签过滤掉了该类型，自动切到「全部」让卡片露出来
+  if (!mobileListQuery.matches && state.tab !== 'all' && state.tab !== target.type) {
+    state.tab = 'all';
+    for (const tab of dom.tabs.querySelectorAll('.tab')) {
+      tab.classList.toggle('active', tab.dataset.tab === 'all');
+    }
+    renderSidebar();
+  }
+  const card = dom.list.querySelector(`[data-item-key="${target.type}:${target.id}"]`);
+  if (card) {
+    card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    card.classList.remove('flash');
+    void card.offsetWidth;
+    card.classList.add('flash');
+  }
+  const idx = pool.indexOf(target) + 1;
+  toast(`${wrapped ? '已循环到' : '待改'}第 ${idx}/${pool.length} 条 · ${timecode(target.time)}`);
+}
+
+function toggleHelpModal() {
+  if (!dom.helpModal) return;
+  dom.helpModal.hidden = !dom.helpModal.hidden;
+}
+
 function initTransport() {
   dom.playBtn.addEventListener('click', togglePlay);
 
@@ -911,6 +1112,18 @@ function initTransport() {
   dom.video.addEventListener('click', togglePlay);
   dom.stepBack.addEventListener('click', () => stepFrame(-1));
   dom.stepFwd.addEventListener('click', () => stepFrame(1));
+
+  dom.speedBtn.addEventListener('click', cyclePlaybackRate);
+  dom.speedBtn.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+    setPlaybackRate(1);
+  });
+  dom.loopBtn.addEventListener('click', toggleLoopButton);
+  dom.loopBtn.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+    clearLoop();
+  });
+  dom.helpBtn.addEventListener('click', toggleHelpModal);
 
   dom.drawToggle.addEventListener('click', () => (state.draw ? exitDrawMode() : enterDrawMode()));
 
@@ -995,6 +1208,18 @@ function onPause() {
   syncVideoFrame({ forceTransport: true });
 }
 
+function onEnded() {
+  if (state.video && state.loop && state.loop.end !== null && state.loop.end >= duration() - 0.1) {
+    seekTo(state.loop.start);
+    state.lastTime = Math.max(0, state.loop.start - 0.05);
+    state.annShown.clear();
+    danmaku.clearLive();
+    dom.video.play().catch(() => onPause());
+    return;
+  }
+  onPause();
+}
+
 function syncVideoFrame({ forceTransport = false } = {}) {
   if (!state.video) return;
   const t = dom.video.currentTime || 0;
@@ -1034,6 +1259,21 @@ function tick() {
   if (!state.video || dom.video.paused || document.hidden) return;
 
   const t = dom.video.currentTime || 0;
+  if (state.loop && state.loop.end !== null && !dom.video.seeking) {
+    // 只有从区间内播到终点 B 时折回起点 A；手动拖到 B 后面看别的片段不强行拽回
+    const reachedEnd = t >= state.loop.end - 0.015
+      && (state.lastTime < state.loop.end + 0.08 || t <= state.loop.end + 0.45);
+    if (reachedEnd) {
+      seekTo(state.loop.start);
+      state.lastTime = Math.max(0, state.loop.start - 0.05);
+      state.annShown.clear();
+      danmaku.clearLive();
+      if (state.video && !dom.video.paused && !document.hidden) {
+        tickRaf = requestAnimationFrame(tick);
+      }
+      return;
+    }
+  }
   if (!dom.video.seeking) {
     if (t < state.lastTime - 0.05) {
       state.lastTime = t;
@@ -1419,6 +1659,7 @@ function jumpTo(time) {
 function buildCommentItem(comment) {
   const item = document.createElement('div');
   item.className = 'item' + (comment.done ? ' done' : '');
+  item.dataset.itemKey = `comment:${comment.id}`;
   item.style.setProperty('--dm-color', authorColor(comment.author));
 
   const head = document.createElement('div');
@@ -1845,6 +2086,7 @@ function doneFlag() {
 function buildAnnotationItem(annotation) {
   const item = document.createElement('div');
   item.className = 'item item-annotation' + (annotation.done ? ' done' : '');
+  item.dataset.itemKey = `annotation:${annotation.id}`;
   item.style.setProperty('--dm-color', authorColor(annotation.author));
 
   const thumb = document.createElement('canvas');
@@ -4563,13 +4805,57 @@ function initKeyboard() {
       return;
     }
 
-    if (typing || !state.video) return;
+    if (typing) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+    if (event.key === '?' || event.key === '？') {
+      event.preventDefault();
+      toggleHelpModal();
+      return;
+    }
+
+    if (!state.video) return;
 
     switch (event.key) {
       case ' ':
+      case 'k':
+      case 'K':
         event.preventDefault();
         togglePlay();
+        break;
+      case 'j':
+      case 'J':
+        event.preventDefault();
+        stepPlaybackRate(-1);
+        break;
+      case 'l':
+      case 'L':
+        event.preventDefault();
+        stepPlaybackRate(1);
+        break;
+      case 'a':
+      case 'A':
+        event.preventDefault();
+        setLoopPoint('start');
+        break;
+      case 'b':
+      case 'B':
+        event.preventDefault();
+        setLoopPoint('end');
+        break;
+      case 'c':
+      case 'C':
+        clearLoop();
+        break;
+      case '[':
+      case '【':
+        event.preventDefault();
+        jumpTodo(-1);
+        break;
+      case ']':
+      case '】':
+        event.preventDefault();
+        jumpTodo(1);
         break;
       case 'ArrowLeft':
         event.preventDefault();
