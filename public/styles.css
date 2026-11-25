@@ -1691,6 +1691,21 @@ body.author-spotlight .toast { z-index: 100; }
 }
 .timeline-heatmap[hidden] { display: none; }
 
+/* 时间轴音频波形轨：居中衬在进度条背后，已播/未播分段着色，卡点与静音段一目了然 */
+.timeline-waveform {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  width: 100%;
+  height: 22px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  opacity: 0.9;
+}
+.timeline-waveform[hidden] { display: none; }
+#wave-btn.loading { opacity: 0.72; }
+
 /* 时间轴悬停缩略图预览卡 */
 .tl-preview {
   position: fixed;

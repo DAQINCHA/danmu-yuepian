@@ -7,6 +7,7 @@ import { detectFrameRate } from './js/fps.js';
 import { createFrameGrabber, drawOverlayBoxes, drawWatermark, downloadCanvas, safeFileName } from './js/capture.js';
 import { GUIDE_MODES, createGuideOverlay } from './js/guides.js';
 import { createTimelineHeatmap, createTimelinePreview } from './js/timeline-fx.js';
+import { createTimelineWaveform } from './js/waveform.js';
 
 const $ = (id) => document.getElementById(id);
 const DRAW_COLORS = ['#ff5a4d', '#ffd166', '#4ec9a0', '#8ab4ff'];
@@ -15,6 +16,7 @@ const SPEED_CYCLE = [1, 1.5, 2, 0.5, 0.25];
 const STORE = {
   author: 'danmu:author',
   danmaku: 'danmu:danmaku',
+  wave: 'danmu:wave',
   mute: 'danmu:mute',
   intro: 'danmu:intro',
   guide: 'danmu:guide',
@@ -29,6 +31,7 @@ const state = {
   // default = 还没识别过的猜测值；auto = 从视频里量出来的；manual = 用户手改过
   fpsSource: 'default',
   danmakuOn: localStorage.getItem(STORE.danmaku) !== 'off',
+  waveOn: localStorage.getItem(STORE.wave) !== 'off',
   // 静音是个人偏好，记在本机；每个视频都沿用，不写到服务端
   muted: localStorage.getItem(STORE.mute) === 'on',
   videos: [],
@@ -89,6 +92,7 @@ let annView;
 let pad;
 let guides;
 let heatmap;
+let waveform;
 let timelinePreview;
 let reportView;
 let tickRaf = 0;
@@ -149,6 +153,8 @@ function boot() {
   pad = createDrawPad(dom.drawLayer, { onChange: () => refreshDrawButtons() });
   guides = createGuideOverlay(dom.guideLayer);
   heatmap = createTimelineHeatmap(dom.timelineHeatmap);
+  waveform = createTimelineWaveform(dom.timelineWaveform, { onStatus: syncWaveButton });
+  waveform.setEnabled(state.waveOn);
   timelinePreview = createTimelinePreview({
     timeline: dom.timeline,
     popover: dom.tlPreview,
@@ -254,9 +260,9 @@ function cacheDom() {
     'empty-state', 'frame', 'video-wrap', 'video', 'guide-layer', 'danmaku-layer', 'ann-layer', 'draw-layer', 'paused-badge',
     'draw-toolbar', 'range-in', 'range-out', 'range-summary', 'swatches', 'mark-in', 'mark-out',
     'preview-range', 'draw-undo', 'draw-clear', 'draw-cancel', 'draw-save',
-    'play-btn', 'mute-btn', 'tc-now', 'timeline', 'timeline-heatmap', 'timeline-fill', 'timeline-loop', 'timeline-marks', 'timeline-head', 'tc-total',
+    'play-btn', 'mute-btn', 'tc-now', 'timeline', 'timeline-heatmap', 'timeline-waveform', 'timeline-fill', 'timeline-loop', 'timeline-marks', 'timeline-head', 'tc-total',
     'transport', 'step-back', 'step-fwd', 'speed-btn', 'loop-btn', 'draw-toggle', 'guide-btn', 'guide-menu', 'tl-preview', 'fps-input', 'fps-badge', 'fps-field',
-    'danmaku-toggle', 'snap-btn', 'help-btn', 'help-modal', 'fullscreen-btn',
+    'danmaku-toggle', 'wave-btn', 'snap-btn', 'help-btn', 'help-modal', 'fullscreen-btn',
     'composer', 'composer-time', 'composer-input', 'composer-reveal', 'composer-collapse',
     'overall-form', 'overall-input',
     'video-title', 'video-meta', 'tabs', 'list', 'count-all', 'count-comment', 'count-annotation',
@@ -549,6 +555,7 @@ function leaveVideo() {
   closeGuideMenu();
   guides?.clear();
   heatmap?.clear();
+  waveform?.clear();
   timelinePreview?.reset();
   dom.video.pause();
   dom.video.removeAttribute('src');
@@ -694,6 +701,7 @@ async function openVideo(id) {
   danmaku.clear();
   annView.clear();
   heatmap.clear();
+  waveform.load(data.video);
   timelinePreview.reset();
   guides.setMode(state.guide);
   renderHeader();
@@ -1246,6 +1254,23 @@ function initGuideMenu() {
   document.addEventListener('fullscreenchange', closeGuideMenu);
 }
 
+function syncWaveButton(status = waveform?.status || 'idle') {
+  if (!dom.waveBtn) return;
+  dom.waveBtn.classList.toggle('active', state.waveOn);
+  dom.waveBtn.classList.toggle('loading', state.waveOn && status === 'loading');
+  if (!state.waveOn) {
+    dom.waveBtn.title = '音频波形已隐藏（点击开启）';
+  } else if (status === 'too-large') {
+    dom.waveBtn.title = '当前片源超过 160MB，已自动跳过整片波形解码以省内存';
+  } else if (status === 'no-audio') {
+    dom.waveBtn.title = '当前片子没有可解码的音轨';
+  } else if (status === 'loading') {
+    dom.waveBtn.title = '正在后台提取音频波形…';
+  } else {
+    dom.waveBtn.title = '显示 / 隐藏时间轴音频波形（已缓存在本机）';
+  }
+}
+
 function initTransport() {
   dom.playBtn.addEventListener('click', togglePlay);
 
@@ -1284,6 +1309,18 @@ function initTransport() {
     dom.danmakuToggle.classList.toggle('active', state.danmakuOn);
     localStorage.setItem(STORE.danmaku, state.danmakuOn ? 'on' : 'off');
     updateFocus();
+  });
+
+  syncWaveButton();
+  dom.waveBtn?.addEventListener('click', () => {
+    state.waveOn = !state.waveOn;
+    localStorage.setItem(STORE.wave, state.waveOn ? 'on' : 'off');
+    waveform.setEnabled(state.waveOn);
+    syncWaveButton();
+    if (state.waveOn) {
+      if (waveform.status === 'too-large') toast('当前片源超过 160MB，为省内存已跳过波形解码');
+      else if (waveform.status === 'no-audio') toast('这支片没有可解码的音轨');
+    }
   });
 
   dom.fpsInput.value = state.fps;
@@ -1399,6 +1436,7 @@ function updateTransport(force = false) {
   const percent = Math.min(100, (t / total) * 100);
   dom.timelineFill.style.width = `${percent}%`;
   dom.timelineHead.style.left = `${percent}%`;
+  waveform?.setProgress(percent / 100);
   dom.tcNow.textContent = timecode(t);
   if (state.composeTime === null) dom.composerTime.textContent = timecode(t);
   dom.playBtn.textContent = dom.video.paused ? '▶' : '❚❚';

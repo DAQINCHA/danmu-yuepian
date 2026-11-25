@@ -147,6 +147,7 @@
         <span class="mono tc" id="tc-now">00:00.000</span>
         <div class="timeline" id="timeline" role="slider" aria-label="播放进度" tabindex="0">
           <canvas class="timeline-heatmap" id="timeline-heatmap" aria-hidden="true" hidden></canvas>
+          <canvas class="timeline-waveform" id="timeline-waveform" aria-hidden="true" hidden></canvas>
           <div class="timeline-rail">
             <div class="timeline-fill" id="timeline-fill"></div>
             <div class="timeline-loop" id="timeline-loop" hidden></div>
@@ -172,6 +173,7 @@
             <span class="fps-unit">fps</span>
           </label>
           <button class="btn tiny active" id="danmaku-toggle" type="button" title="显示 / 隐藏弹幕">弹幕</button>
+          <button class="btn tiny active" id="wave-btn" type="button" title="显示 / 隐藏时间轴音频波形（首次自动解码并缓存在本机）">波形</button>
           <button class="btn tiny" id="snap-btn" type="button" title="截取当前帧：连同弹幕、画笔笔迹和时间戳水印存成 PNG (S)">截取当前帧</button>
           <button class="icon-btn" id="help-btn" type="button" title="快捷键速查 (?)" aria-label="快捷键速查">?</button>
           <button class="icon-btn" id="fullscreen-btn" type="button" title="全屏 (F)">⛶</button>
