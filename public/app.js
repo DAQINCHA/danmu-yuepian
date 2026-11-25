@@ -111,6 +111,8 @@ let tickRaf = 0;
 const edgeToEdgeQuery = window.matchMedia('(max-width: 860px) and (orientation: portrait)');
 /** 和隐藏筛选标签同一档宽度：窄屏列表固定看「全部」 */
 const mobileListQuery = window.matchMedia('(max-width: 860px)');
+/** 和 styles.css 里切上下布局的那一档一致：上下布局下分屏一律保持左右并排，保证一屏看得全 */
+const stackedLayoutQuery = window.matchMedia('(max-width: 980px), (max-width: 1024px) and (orientation: portrait)');
 
 /** 和 styles.css 里搜索收成放大镜的那一档一致 */
 const compactSearchQuery = window.matchMedia('(max-width: 620px)');
@@ -287,6 +289,7 @@ function boot() {
     }, 60);
   });
   mobileListQuery.addEventListener?.('change', syncMobileListFilter);
+  stackedLayoutQuery.addEventListener?.('change', () => requestAnimationFrame(fitVideoWrap));
   syncMobileListFilter();
   window.addEventListener('popstate', renderRoute);
   // 老井号链接（页面里的 href="#/"）走这条路，renderRoute 会把它换成正经路径
@@ -798,9 +801,13 @@ function computeFit() {
   const splitActive = Boolean(compare?.active && compare.mode === 'split');
   const baseRatio = width / height;
 
-  // 分屏对比时自动对比「左右并排」与「上下堆叠」哪种排法下单支画面更大，避免窄高舞台把横片挤成细条
+  // 窄屏/上下布局下视频占满整宽，一律保持左右分屏，避免上下两格把进度条和评论挤出首屏；
+  // 仅在桌面左右双栏且左侧舞台偏窄高时，才自动切换上下分屏放大单格画面
   const resolveRatio = (availW, availH) => {
     if (!splitActive) return { ratio: baseRatio, splitVertical: false };
+    if (stackedLayoutQuery.matches && !document.fullscreenElement) {
+      return { ratio: baseRatio * 2, splitVertical: false };
+    }
     const wLR = Math.min(availW / 2, availH * baseRatio);
     const wTB = Math.min(availW, (availH / 2) * baseRatio);
     const splitVertical = wTB > wLR * 1.02;
