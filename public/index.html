@@ -92,6 +92,14 @@
       <div class="frame" id="frame" hidden>
         <div class="video-wrap" id="video-wrap">
           <video id="video" playsinline preload="metadata"></video>
+          <div class="compare-layer" id="compare-layer" hidden>
+            <video class="compare-video" id="compare-video" playsinline preload="auto"></video>
+            <div class="compare-handle" id="compare-handle" title="左右拖动对比（双击居中）" hidden>
+              <span class="compare-knob" aria-hidden="true">⇄</span>
+            </div>
+            <span class="compare-badge left" id="compare-badge-left"></span>
+            <span class="compare-badge right" id="compare-badge-right"></span>
+          </div>
           <div class="guide-layer" id="guide-layer" aria-hidden="true" hidden></div>
           <canvas class="paint-layer" id="ann-layer"></canvas>
           <canvas class="paint-layer draw-layer" id="draw-layer"></canvas>
@@ -132,6 +140,26 @@
         <button class="btn primary tiny" id="draw-save" type="button">保存标注</button>
       </div>
 
+      <div class="toolbar compare-toolbar" id="compare-toolbar" hidden>
+        <span class="tag">版本对比</span>
+        <select class="compare-select" id="compare-select" aria-label="选择对照版本"></select>
+        <div class="compare-modes" id="compare-modes">
+          <button class="btn tiny active" data-compare-mode="wipe" type="button" title="左右拖动拉杆卷帘对比">卷帘</button>
+          <button class="btn tiny" data-compare-mode="split" type="button" title="左右并排同步播放对比">分屏</button>
+          <button class="btn tiny" data-compare-mode="diff" type="button" title="像素差值：没动的地方变纯黑，改动区域亮起">差值</button>
+        </div>
+        <button class="btn tiny" id="compare-boost" type="button" title="放大细微调色或像素差异" hidden>增益</button>
+        <div class="compare-offset" title="两版开头长短不同时，按帧微调对照版对齐；点帧数归零">
+          <span class="compare-offset-label">偏移</span>
+          <button class="btn tiny" id="compare-offset-back" type="button" title="对照版退 1 帧">◀</button>
+          <button class="btn tiny ghost mono" id="compare-offset-val" type="button" title="点击归零">0 帧</button>
+          <button class="btn tiny" id="compare-offset-fwd" type="button" title="对照版进 1 帧">▶</button>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn tiny" id="compare-audio" type="button" title="切换听当前版还是对照版的声音">声音：当前版</button>
+        <button class="btn ghost tiny" id="compare-close" type="button">退出对比</button>
+      </div>
+
       <div class="transport" id="transport" hidden>
         <button class="icon-btn" id="play-btn" type="button" title="播放 / 暂停 (空格)">▶</button>
         <button class="icon-btn" id="mute-btn" type="button" title="静音 (M)" aria-label="静音">
@@ -167,6 +195,8 @@
           <button class="btn tiny" id="draw-toggle" type="button" title="画笔标注 (D)">画笔</button>
           <button class="btn tiny" id="guide-btn" type="button" aria-haspopup="menu" aria-expanded="false"
                   title="画面参考线与安全框（抖音/小红书避让区、2.35:1 电影遮幅、三分线；快捷键 G，右键关闭）">参考线</button>
+          <button class="btn tiny" id="compare-btn" type="button" hidden
+                  title="与同项目其他版本同步对比（卷帘 / 分屏 / 像素差值）">对比</button>
           <label class="fps-field" id="fps-field" title="帧率决定「一帧」有多长：逐帧步进和标注区间都靠它。默认自动识别，不准可以手动改">
             <span class="fps-badge" id="fps-badge">默认</span>
             <input id="fps-input" type="number" min="1" max="240" step="0.001" inputmode="decimal" />

@@ -8,6 +8,7 @@ import { createFrameGrabber, drawOverlayBoxes, drawWatermark, downloadCanvas, sa
 import { GUIDE_MODES, createGuideOverlay } from './js/guides.js';
 import { createTimelineHeatmap, createTimelinePreview } from './js/timeline-fx.js';
 import { createTimelineWaveform } from './js/waveform.js';
+import { createCompareController } from './js/compare.js';
 
 const $ = (id) => document.getElementById(id);
 const DRAW_COLORS = ['#ff5a4d', '#ffd166', '#4ec9a0', '#8ab4ff'];
@@ -91,6 +92,7 @@ let danmaku;
 let annView;
 let pad;
 let guides;
+let compare;
 let heatmap;
 let waveform;
 let timelinePreview;
@@ -152,6 +154,34 @@ function boot() {
   annView = createAnnotationView(dom.annLayer);
   pad = createDrawPad(dom.drawLayer, { onChange: () => refreshDrawButtons() });
   guides = createGuideOverlay(dom.guideLayer);
+  compare = createCompareController({
+    frame: dom.frame,
+    videoWrap: dom.videoWrap,
+    masterVideo: dom.video,
+    layer: dom.compareLayer,
+    slaveVideo: dom.compareVideo,
+    handle: dom.compareHandle,
+    leftBadge: dom.compareBadgeLeft,
+    rightBadge: dom.compareBadgeRight,
+    toolbar: dom.compareToolbar,
+    selectEl: dom.compareSelect,
+    modeButtons: [...dom.compareModes.querySelectorAll('[data-compare-mode]')],
+    boostBtn: dom.compareBoost,
+    audioBtn: dom.compareAudio,
+    offsetLabel: dom.compareOffsetVal,
+    offsetBackBtn: dom.compareOffsetBack,
+    offsetFwdBtn: dom.compareOffsetFwd,
+    closeBtn: dom.compareClose,
+    getSiblings: getCompareSiblings,
+    getCurrentVideo: () => state.video,
+    getFps: () => state.fps,
+    onLayoutChange: () => {
+      fitVideoWrap();
+      requestAnimationFrame(fitVideoWrap);
+    },
+    onActiveChange: syncCompareButton,
+    notify: toast,
+  });
   heatmap = createTimelineHeatmap(dom.timelineHeatmap);
   waveform = createTimelineWaveform(dom.timelineWaveform, { onStatus: syncWaveButton });
   waveform.setEnabled(state.waveOn);
@@ -257,11 +287,14 @@ function cacheDom() {
   const ids = [
     'author-field', 'author-input', 'author-veil', 'author-hint', 'presence', 'presence-count', 'library-open', 'home-open', 'project-new', 'upload-open',
     'project-search-field', 'project-search', 'project-search-clear', 'project-search-toggle',
-    'empty-state', 'frame', 'video-wrap', 'video', 'guide-layer', 'danmaku-layer', 'ann-layer', 'draw-layer', 'paused-badge',
+    'empty-state', 'frame', 'video-wrap', 'video', 'compare-layer', 'compare-video', 'compare-handle',
+    'compare-badge-left', 'compare-badge-right', 'compare-toolbar', 'compare-select', 'compare-modes',
+    'compare-boost', 'compare-offset-back', 'compare-offset-val', 'compare-offset-fwd', 'compare-audio', 'compare-close',
+    'guide-layer', 'danmaku-layer', 'ann-layer', 'draw-layer', 'paused-badge',
     'draw-toolbar', 'range-in', 'range-out', 'range-summary', 'swatches', 'mark-in', 'mark-out',
     'preview-range', 'draw-undo', 'draw-clear', 'draw-cancel', 'draw-save',
     'play-btn', 'mute-btn', 'tc-now', 'timeline', 'timeline-heatmap', 'timeline-waveform', 'timeline-fill', 'timeline-loop', 'timeline-marks', 'timeline-head', 'tc-total',
-    'transport', 'step-back', 'step-fwd', 'speed-btn', 'loop-btn', 'draw-toggle', 'guide-btn', 'guide-menu', 'tl-preview', 'fps-input', 'fps-badge', 'fps-field',
+    'transport', 'step-back', 'step-fwd', 'speed-btn', 'loop-btn', 'draw-toggle', 'guide-btn', 'compare-btn', 'guide-menu', 'tl-preview', 'fps-input', 'fps-badge', 'fps-field',
     'danmaku-toggle', 'wave-btn', 'snap-btn', 'help-btn', 'help-modal', 'fullscreen-btn',
     'composer', 'composer-time', 'composer-input', 'composer-reveal', 'composer-collapse',
     'overall-form', 'overall-input',
@@ -553,10 +586,12 @@ function leaveVideo() {
   setPlaybackRate(1, { notify: false });
   clearLoop({ notify: false });
   closeGuideMenu();
+  compare?.close();
   guides?.clear();
   heatmap?.clear();
   waveform?.clear();
   timelinePreview?.reset();
+  syncCompareButton();
   dom.video.pause();
   dom.video.removeAttribute('src');
   dom.video.load();
@@ -700,10 +735,12 @@ async function openVideo(id) {
 
   danmaku.clear();
   annView.clear();
+  compare?.close();
   heatmap.clear();
   waveform.load(data.video);
   timelinePreview.reset();
   guides.setMode(state.guide);
+  syncCompareButton();
   renderHeader();
   renderSidebar();
   renderMarks();
@@ -739,11 +776,12 @@ function computeFit() {
   const width = dom.video.videoWidth;
   const height = dom.video.videoHeight;
   if (!width || !height || dom.frame.hidden) return null;
+  const splitDouble = compare?.active && compare.mode === 'split';
+  const ratio = (width / height) * (splitDouble ? 2 : 1);
 
   if (edgeToEdgeQuery.matches && !document.fullscreenElement) {
     const fullW = dom.frame.clientWidth;
     if (fullW < 48) return null;
-    const ratio = width / height;
     // 竖版片子按宽度撑满会太高，封顶到屏幕高度的 80%，超出才两边留一点
     const maxH = Math.round((window.innerHeight || fullW / ratio) * 0.8);
     let w = fullW;
@@ -762,7 +800,6 @@ function computeFit() {
   const boxH = dom.frame.clientHeight - padY;
   if (boxW < 48 || boxH < 48) return null;
 
-  const ratio = width / height;
   let w = boxW;
   let h = w / ratio;
   if (h > boxH) {
@@ -1271,6 +1308,26 @@ function syncWaveButton(status = waveform?.status || 'idle') {
   }
 }
 
+/* ── 多版本对比辅助 ──────────────────────────────────────────────── */
+
+function getCompareSiblings() {
+  if (!state.video) return { others: [], versionMap: new Map() };
+  const all = videosIn(state.video.projectId);
+  const versionMap = versionOf(all);
+  const others = [...all]
+    .filter((v) => v.id !== state.video.id)
+    .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
+  return { others, versionMap };
+}
+
+function syncCompareButton() {
+  if (!dom.compareBtn) return;
+  const { others } = getCompareSiblings();
+  const available = Boolean(state.video && others.length > 0);
+  dom.compareBtn.hidden = !available;
+  dom.compareBtn.classList.toggle('active', Boolean(available && compare?.active));
+}
+
 function initTransport() {
   dom.playBtn.addEventListener('click', togglePlay);
 
@@ -1301,6 +1358,10 @@ function initTransport() {
   dom.helpBtn.addEventListener('click', toggleHelpModal);
 
   dom.drawToggle.addEventListener('click', () => (state.draw ? exitDrawMode() : enterDrawMode()));
+  dom.compareBtn?.addEventListener('click', () => {
+    if (state.draw) exitDrawMode();
+    compare?.toggle();
+  });
 
   dom.danmakuToggle.classList.toggle('active', state.danmakuOn);
   dom.danmakuToggle.addEventListener('click', () => {
@@ -1381,6 +1442,7 @@ function onPlay() {
   // 正好停在弹幕时间点上再继续播放时，让这条也能出来（pop 自己会去重）
   state.lastTime = Math.max(0, (dom.video.currentTime || 0) - 0.05);
   updateTransport(true);
+  compare?.sync(true);
   startTick();
   // 只有真正在播才能量到帧间隔
   maybeDetectFrameRate();
@@ -1412,6 +1474,7 @@ function syncVideoFrame({ forceTransport = false } = {}) {
   const t = dom.video.currentTime || 0;
   annView.render(state.annotations, t);
   updateTransport(forceTransport);
+  compare?.sync(forceTransport);
   maybeSavePlayingCover();
 }
 
@@ -2577,6 +2640,7 @@ function initDrawToolbar() {
 
 function enterDrawMode() {
   if (!state.video) return;
+  if (compare?.active) compare.close();
   const total = duration();
   if (!total) {
     toast('等视频加载完再标');
@@ -2827,6 +2891,8 @@ async function refreshVideos() {
   if (!dom.libraryModal.hidden) renderLibrary();
   if (!state.video) renderLibraryView();
   fillUploadProjectSelect();
+  syncCompareButton();
+  compare?.refreshOptions();
 }
 
 function initModals() {
@@ -4993,6 +5059,7 @@ function initKeyboard() {
         if (modal !== dom.uploadModal) modal.hidden = true;
       }
       closeGuideMenu();
+      if (compare?.active) compare.close();
       if (state.draw) exitDrawMode();
       if (typing) active.blur();
       return;
