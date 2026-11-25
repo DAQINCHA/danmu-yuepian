@@ -1025,7 +1025,7 @@ function renderLoopRange() {
   if (!loop) {
     dom.timelineLoop.hidden = true;
     dom.timelineLoop.classList.remove('pending');
-    dom.loopBtn.textContent = 'A/B';
+    dom.loopBtn.textContent = 'I/O';
     dom.loopBtn.classList.remove('active', 'pending');
     return;
   }
@@ -1040,7 +1040,7 @@ function renderLoopRange() {
   if (loop.end === null) {
     dom.timelineLoop.classList.add('pending');
     dom.timelineLoop.style.width = '3px';
-    dom.loopBtn.textContent = 'A…';
+    dom.loopBtn.textContent = 'I…';
     dom.loopBtn.classList.add('pending');
     dom.loopBtn.classList.remove('active');
     return;
@@ -1048,7 +1048,7 @@ function renderLoopRange() {
   const endPct = Math.min(100, Math.max(startPct, (loop.end / total) * 100));
   dom.timelineLoop.classList.remove('pending');
   dom.timelineLoop.style.width = `${Math.max(0.6, endPct - startPct)}%`;
-  dom.loopBtn.textContent = 'A⇄B';
+  dom.loopBtn.textContent = 'I⇄O';
   dom.loopBtn.classList.remove('pending');
   dom.loopBtn.classList.add('active');
 }
@@ -1057,7 +1057,7 @@ function clearLoop({ notify = true } = {}) {
   const had = Boolean(state.loop);
   state.loop = null;
   renderLoopRange();
-  if (notify && had) toast('已取消 A/B 循环');
+  if (notify && had) toast('已取消 I/O 循环');
 }
 
 function setLoopPoint(which) {
@@ -1078,11 +1078,11 @@ function setLoopPoint(which) {
     renderLoopRange();
     toast(end !== null
       ? `循环区间已更新：${timecode(now)} – ${timecode(end)}`
-      : `已设循环起点 A（${timecode(now)}），按 B 设终点`);
+      : `已设循环入点 I（${timecode(now)}），按 O 设出点`);
     return;
   }
 
-  // 设终点 B：如果还没设 A，自动取前 3 秒作为 A，单按 B 也能立刻循环最近一段
+  // 设出点 O：如果还没设 I，自动取前 3 秒作为 I，单按 O 也能立刻循环最近一段
   let start = state.loop ? state.loop.start : Math.max(0, now - 3);
   let end = now;
   if (end < start) [start, end] = [end, start];
@@ -1097,7 +1097,7 @@ function setLoopPoint(which) {
   state.annShown.clear();
   danmaku.clearLive();
   dom.video.play().catch(() => {});
-  toast(`A/B 循环已开启：${timecode(start)} – ${timecode(end)}`);
+  toast(`I/O 循环已开启：${timecode(start)} – ${timecode(end)}`);
 }
 
 function toggleLoopButton() {
@@ -1183,8 +1183,12 @@ function guidePreset(id) {
 function syncGuideUI() {
   const current = guidePreset(state.guide);
   if (dom.guideBtn) {
-    dom.guideBtn.textContent = current.short;
-    dom.guideBtn.classList.toggle('active', current.id !== 'off');
+    const on = current.id !== 'off';
+    dom.guideBtn.classList.toggle('active', on);
+    dom.guideBtn.title = on
+      ? `参考线：${current.label}（快捷键 G 切换，右键关闭）`
+      : '画面参考线与安全框（抖音/小红书避让区、2.35:1 电影遮幅、三分线；快捷键 G，右键关闭）';
+    dom.guideBtn.setAttribute('aria-label', on ? `参考线：${current.label}` : '画面参考线与安全框');
   }
   if (dom.guideMenu) {
     for (const btn of dom.guideMenu.querySelectorAll('.guide-option')) {
@@ -5093,13 +5097,13 @@ function initKeyboard() {
         event.preventDefault();
         stepPlaybackRate(1);
         break;
-      case 'a':
-      case 'A':
+      case 'i':
+      case 'I':
         event.preventDefault();
         setLoopPoint('start');
         break;
-      case 'b':
-      case 'B':
+      case 'o':
+      case 'O':
         event.preventDefault();
         setLoopPoint('end');
         break;
@@ -5131,12 +5135,12 @@ function initKeyboard() {
       case 'D':
         state.draw ? exitDrawMode() : enterDrawMode();
         break;
-      case 'i':
-      case 'I':
+      case 'a':
+      case 'A':
         setEndpoint('start');
         break;
-      case 'o':
-      case 'O':
+      case 'b':
+      case 'B':
         setEndpoint('end');
         break;
       case 'z':

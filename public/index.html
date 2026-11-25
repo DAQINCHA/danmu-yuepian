@@ -131,8 +131,8 @@
         <div class="spacer"></div>
 
         <div class="swatches" id="swatches"></div>
-        <button class="btn tiny" id="mark-in" type="button" title="把当前时间设为入点 (I)">设入点</button>
-        <button class="btn tiny" id="mark-out" type="button" title="把当前时间设为出点 (O)">设出点</button>
+        <button class="btn tiny" id="mark-in" type="button" title="把当前时间设为入点 (A)">设入点</button>
+        <button class="btn tiny" id="mark-out" type="button" title="把当前时间设为出点 (B)">设出点</button>
         <button class="btn tiny" id="preview-range" type="button" title="播放这一段">预览</button>
         <button class="btn tiny" id="draw-undo" type="button" title="撤销上一笔 (Z)">撤销</button>
         <button class="btn tiny" id="draw-clear" type="button">清空</button>
@@ -186,27 +186,46 @@
         <span class="mono tc dim" id="tc-total">00:00.000</span>
 
         <div class="transport-right">
-          <div class="step-buttons">
-            <button class="btn tiny" id="step-back" type="button" title="后退一帧 (←)">◀ 帧</button>
-            <button class="btn tiny" id="step-fwd" type="button" title="前进一帧 (→)">帧 ▶</button>
-          </div>
-          <button class="btn tiny mono" id="speed-btn" type="button" title="切换倍速（J 减速 / K 暂停 / L 加速，右键恢复 1x）">1x</button>
-          <button class="btn tiny mono" id="loop-btn" type="button" title="A/B 区间循环：点一次设起点 A，再点设终点 B，再点取消（快捷键 A / B / C）">A/B</button>
-          <button class="btn tiny" id="draw-toggle" type="button" title="画笔标注 (D)">画笔</button>
-          <button class="btn tiny" id="guide-btn" type="button" aria-haspopup="menu" aria-expanded="false"
-                  title="画面参考线与安全框（抖音/小红书避让区、2.35:1 电影遮幅、三分线；快捷键 G，右键关闭）">参考线</button>
-          <button class="btn tiny" id="compare-btn" type="button" hidden
-                  title="与同项目其他版本同步对比（卷帘 / 分屏 / 像素差值）">对比</button>
           <label class="fps-field" id="fps-field" title="帧率决定「一帧」有多长：逐帧步进和标注区间都靠它。默认自动识别，不准可以手动改">
             <span class="fps-badge" id="fps-badge">默认</span>
             <input id="fps-input" type="number" min="1" max="240" step="0.001" inputmode="decimal" />
             <span class="fps-unit">fps</span>
           </label>
-          <button class="btn tiny active" id="danmaku-toggle" type="button" title="显示 / 隐藏弹幕">弹幕</button>
+          <div class="step-buttons" role="group" aria-label="逐帧步进">
+            <button class="step-btn" id="step-back" type="button" title="后退一帧 (←)" aria-label="后退一帧">◀</button>
+            <span class="step-label" aria-hidden="true">帧</span>
+            <button class="step-btn" id="step-fwd" type="button" title="前进一帧 (→)" aria-label="前进一帧">▶</button>
+          </div>
+          <button class="btn tiny mono" id="speed-btn" type="button" title="切换倍速（J 减速 / K 暂停 / L 加速，右键恢复 1x）">1x</button>
+          <button class="btn tiny mono" id="loop-btn" type="button" title="I/O 区间循环：点一次设入点 I，再点设出点 O，再点取消（快捷键 I / O / C，右键清除）">I/O</button>
+          <button class="btn tiny tool-icon" id="draw-toggle" type="button" title="画笔标注 (D)" aria-label="画笔标注">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M11.3 2.5 13.5 4.7 5.6 12.6 2.8 13.2l.6-2.8z" />
+              <path d="m9.6 4.2 2.2 2.2" />
+            </svg>
+          </button>
+          <button class="btn tiny tool-icon" id="guide-btn" type="button" aria-haspopup="menu" aria-expanded="false"
+                  title="画面参考线与安全框（抖音/小红书避让区、2.35:1 电影遮幅、三分线；快捷键 G，右键关闭）" aria-label="画面参考线与安全框">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M5.8 2.4v11.2M10.2 2.4v11.2M2.4 5.8h11.2M2.4 10.2h11.2" />
+            </svg>
+          </button>
+          <button class="btn tiny" id="compare-btn" type="button" hidden
+                  title="与同项目其他版本同步对比（卷帘 / 分屏 / 像素差值）">对比</button>
           <button class="btn tiny active" id="wave-btn" type="button" title="显示 / 隐藏时间轴音频波形（首次自动解码并缓存在本机）">波形</button>
-          <button class="btn tiny" id="snap-btn" type="button" title="截取当前帧：连同弹幕、画笔笔迹和时间戳水印存成 PNG (S)">截取当前帧</button>
-          <button class="icon-btn" id="help-btn" type="button" title="快捷键速查 (?)" aria-label="快捷键速查">?</button>
-          <button class="icon-btn" id="fullscreen-btn" type="button" title="全屏 (F)">⛶</button>
+          <button class="btn tiny active" id="danmaku-toggle" type="button" title="显示 / 隐藏弹幕">弹幕</button>
+          <button class="btn tiny tool-icon" id="snap-btn" type="button" title="截取当前帧：连同弹幕、画笔笔迹和时间戳水印存成 PNG (S)" aria-label="截取当前帧">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M2.3 5.2a1.2 1.2 0 0 1 1.2-1.2h1.6l.8-1.3h4.2l.8 1.3h1.6a1.2 1.2 0 0 1 1.2 1.2v6.6a1.2 1.2 0 0 1-1.2 1.2h-9a1.2 1.2 0 0 1-1.2-1.2z" />
+              <circle cx="8" cy="8.4" r="2.2" />
+            </svg>
+          </button>
+          <button class="btn tiny tool-icon" id="help-btn" type="button" title="快捷键速查 (?)" aria-label="快捷键速查">?</button>
+          <button class="btn tiny tool-icon" id="fullscreen-btn" type="button" title="全屏 (F)" aria-label="全屏">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M2.6 5.8V2.8h3M10.4 2.8h3v3M13.4 10.2v3h-3M5.6 13.2h-3v-3" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -452,11 +471,11 @@
           </dl>
         </section>
         <section class="help-group">
-          <h3>A/B 循环与核对</h3>
+          <h3>I/O 循环与核对</h3>
           <dl class="help-list">
-            <div><dt><kbd>A</kbd></dt><dd>设循环起点 A</dd></div>
-            <div><dt><kbd>B</kbd></dt><dd>设循环终点 B（直接开启循环）</dd></div>
-            <div><dt><kbd>C</kbd></dt><dd>取消 A/B 循环</dd></div>
+            <div><dt><kbd>I</kbd></dt><dd>设循环入点 I</dd></div>
+            <div><dt><kbd>O</kbd></dt><dd>设循环出点 O（直接开启循环）</dd></div>
+            <div><dt><kbd>C</kbd></dt><dd>取消 I/O 循环</dd></div>
             <div><dt><kbd>[</kbd> / <kbd>]</kbd></dt><dd>跳到上一条 / 下一条未处理意见</dd></div>
           </dl>
         </section>
@@ -464,7 +483,7 @@
           <h3>画笔与截屏</h3>
           <dl class="help-list">
             <div><dt><kbd>D</kbd></dt><dd>进入 / 退出画笔模式</dd></div>
-            <div><dt><kbd>I</kbd> / <kbd>O</kbd></dt><dd>设画笔入点 / 出点</dd></div>
+            <div><dt><kbd>A</kbd> / <kbd>B</kbd></dt><dd>设画笔入点 / 出点</dd></div>
             <div><dt><kbd>Z</kbd></dt><dd>撤销上一笔</dd></div>
             <div><dt><kbd>S</kbd></dt><dd>截取当前帧（含弹幕与笔迹）</dd></div>
             <div><dt><kbd>G</kbd></dt><dd>切换参考线 / 安全框</dd></div>
@@ -472,7 +491,7 @@
           </dl>
         </section>
       </div>
-      <p class="help-tip">提示：输入框里打字时快捷键不会误触发；右键点倍速按钮可一键回 1x，右键点 A/B 按钮可清除循环。</p>
+      <p class="help-tip">提示：输入框里打字时快捷键不会误触发；右键点倍速按钮可一键回 1x，右键点 I/O 按钮可清除循环。</p>
     </div>
   </div>
 
