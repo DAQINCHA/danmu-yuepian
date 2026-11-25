@@ -757,7 +757,7 @@ async function openVideo(id) {
   compare?.close();
   heatmap.clear();
   waveform.load(data.video);
-  timelinePreview.reset();
+  timelinePreview.load(data.video);
   guides.setMode(state.guide);
   syncCompareButton();
   renderHeader();
@@ -1316,8 +1316,10 @@ function initGuideMenu() {
 
 function syncWaveButton(status = waveform?.status || 'idle') {
   if (!dom.waveBtn) return;
+  const loading = state.waveOn && status === 'loading';
   dom.waveBtn.classList.toggle('active', state.waveOn);
-  dom.waveBtn.classList.toggle('loading', state.waveOn && status === 'loading');
+  dom.waveBtn.classList.toggle('loading', loading);
+  dom.waveBtn.textContent = loading ? '波形…' : '波形';
   if (!state.waveOn) {
     dom.waveBtn.title = '音频波形已隐藏（点击开启）';
   } else if (status === 'too-large') {
@@ -3339,6 +3341,12 @@ async function confirmUpload() {
         hint: '',
         setBy: state.author,
       });
+    }
+    // 趁本地原文件还在手里，后台零流量提取波形与缩略图雪碧图并存到服务端，之后全员首次打开秒出
+    const uploadedFile = job.file || state.pendingFile;
+    if (uploadedFile) {
+      waveform?.seedFromFile(video, uploadedFile);
+      timelinePreview?.seedFromFile(video.id, uploadedFile);
     }
     uploadJob = null;
     state.pendingFile = null;

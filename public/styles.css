@@ -1927,7 +1927,14 @@ body.author-spotlight .toast { z-index: 100; }
   opacity: 0.9;
 }
 .timeline-waveform[hidden] { display: none; }
-#wave-btn.loading { opacity: 0.72; }
+#wave-btn.loading {
+  opacity: 0.78;
+  animation: wave-pulse 1.4s ease-in-out infinite;
+}
+@keyframes wave-pulse {
+  0%, 100% { opacity: 0.58; }
+  50% { opacity: 0.96; }
+}
 
 /* 时间轴悬停缩略图预览卡 */
 .tl-preview {
@@ -1958,15 +1965,18 @@ body.author-spotlight .toast { z-index: 100; }
     #05080a;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
-.tl-preview-media img {
+.tl-preview-media img,
+.tl-preview-sprite {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
   opacity: 0;
   transition: opacity 0.12s ease;
 }
-.tl-preview-media.loaded img { opacity: 1; }
+.tl-preview-media img { object-fit: cover; }
+.tl-preview-sprite { background-repeat: no-repeat; }
+.tl-preview-media.loaded img,
+.tl-preview-media.loaded .tl-preview-sprite { opacity: 1; }
 
 .tl-preview-tc {
   position: absolute;

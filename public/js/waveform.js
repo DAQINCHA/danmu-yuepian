@@ -1,9 +1,10 @@
 /**
- * 纯前端 Web Audio 音频波形轨（第 6 期）：
- *  · 后台独立请求（绕开与 <video> 同 URL 的 HTTP 缓存锁），用 OfflineAudioContext 离线解码音轨；
- *  · 抽取 220 根 Peak+RMS 混合包络柱并存入 IndexedDB，二次打开同一支片 0ms 秒出；
- *  · 超过 160MB 的超大原片自动跳过整片下载解码，避免占满浏览器内存；
- *  · 切视频/离开页面时立即 AbortController 掐断请求，绝不拖慢播放。
+ * 音频波形轨（服务端单份共享缓存 + 纯前端零依赖解码）：
+ *  · 打开片子优先 GET /api/videos/:id/waveform（仅 ~1KB JSON，全员首次打开 10ms 秒出）；
+ *  · 上传新片时直接用本地 File 在本机瞬间解码并 PUT 存到服务端，零回传流量；
+ *  · 旧片若服务端还没有缓存，先查本机 IndexedDB 并静默补传服务端；都没有时后台独立拉流
+ *    （?purpose=waveform + cache:'no-store' 避开与 <video> 的 HTTP 缓存锁），用 OfflineAudioContext
+ *    解码后写回服务端，之后全员秒出。
  */
 
 const WAVE_BARS = 220;
@@ -99,7 +100,6 @@ function extractPeaks(audioBuffer, barCount = WAVE_BARS) {
 
   const totalSamples = audioBuffer.length;
   const blockSize = Math.max(1, Math.floor(totalSamples / barCount));
-  // 大块时抽样步进，既精准又保证几十秒音频在几毫秒内算完
   const step = Math.max(1, Math.floor(blockSize / 512));
   const raw = new Float32Array(barCount);
   const chanData = [];
@@ -121,7 +121,6 @@ function extractPeaks(audioBuffer, barCount = WAVE_BARS) {
       count += 1;
     }
     const rms = count ? Math.sqrt(sumSq / count) : 0;
-    // Peak + RMS 混合：既看得清鼓点瞬态，人声对话也不会被个别爆音压扁
     const val = peak * 0.62 + rms * 0.38;
     raw[i] = val;
     if (val > maxVal) maxVal = val;
@@ -136,10 +135,32 @@ function extractPeaks(audioBuffer, barCount = WAVE_BARS) {
   return out;
 }
 
+function waveformEndpoint(videoId) {
+  return `/api/videos/${encodeURIComponent(videoId)}/waveform`;
+}
+
+async function fetchServerWaveform(videoId, signal) {
+  try {
+    const res = await fetch(waveformEndpoint(videoId), { signal });
+    if (res.status === 204 || res.status === 404) return null;
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data?.status === 'no-audio') return { status: 'no-audio', peaks: null };
+    if (Array.isArray(data?.peaks) && data.peaks.length >= 16) {
+      return { status: 'ok', peaks: Uint8Array.from(data.peaks) };
+    }
+    return null;
+  } catch (err) {
+    if (err?.name === 'AbortError') throw err;
+    return null;
+  }
+}
+
 export function createTimelineWaveform(canvas, { onStatus } = {}) {
   if (!canvas) {
     return {
       load() {},
+      seedFromFile() {},
       retry() {},
       setProgress() {},
       setEnabled() {},
@@ -150,6 +171,8 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
 
   const ctx = canvas.getContext('2d');
   const memCache = new Map();
+  const uploadedIds = new Set();
+  const seedJobs = new Map();
   let enabled = true;
   let currentVideo = null;
   let peaks = null;
@@ -164,10 +187,29 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
   /** idle | loading | ready | too-large | no-audio | error */
   let status = 'idle';
 
+  function cacheKey(video) {
+    return `${video.id}:${video.size || 0}`;
+  }
+
   function setStatus(next) {
     if (status === next) return;
     status = next;
     onStatus?.(next);
+  }
+
+  function uploadServerWaveform(videoId, extracted) {
+    if (!videoId || uploadedIds.has(videoId)) return;
+    uploadedIds.add(videoId);
+    const body = extracted && extracted.length
+      ? { status: 'ok', peaks: Array.from(extracted) }
+      : { status: 'no-audio', peaks: [] };
+    fetch(waveformEndpoint(videoId), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).catch(() => {
+      uploadedIds.delete(videoId);
+    });
   }
 
   function cancelPending() {
@@ -201,7 +243,6 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
     }
     canvas.hidden = false;
     const rect = canvas.getBoundingClientRect();
-    // 刚切入看片页时进度条可能尚未完成首帧排版，下一帧自动补画
     if (rect.width < 24 || rect.height < 6) {
       scheduleLayoutDraw();
       return;
@@ -220,7 +261,6 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
-    // 根据实际宽度决定绘制根数，每根约 3px 步进，纤细清透不糊成一团
     const stepPx = 3;
     const barW = 1.6;
     const drawCount = Math.max(12, Math.floor(w / stepPx));
@@ -241,9 +281,21 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
     hasDrawn = true;
   }
 
+  function applyResult(extracted) {
+    if (extracted && extracted.length) {
+      peaks = extracted;
+      setStatus('ready');
+      draw(true);
+    } else {
+      peaks = null;
+      setStatus('no-audio');
+      canvas.hidden = true;
+    }
+  }
+
   function fetchAndDecode(video, key, epoch, attempt = 0) {
     if (epoch !== runEpoch || !enabled) return;
-    const delayMs = attempt === 0 ? 180 : 900;
+    const delayMs = attempt === 0 ? 150 : 900;
     delayTimer = setTimeout(async () => {
       delayTimer = 0;
       if (epoch !== runEpoch || !enabled) return;
@@ -251,7 +303,6 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
       abortCtrl = ctrl;
       let stage = 'fetch';
       try {
-        // 带独立查询参数 + cache:'no-store'，彻底避开与 <video> 同 URL 的浏览器 HTTP 缓存排他锁
         const url = `/api/videos/${encodeURIComponent(video.id)}/file?purpose=waveform`;
         const res = await fetch(url, { signal: ctrl.signal, cache: 'no-store' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -274,19 +325,11 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
 
         const extracted = extractPeaks(decoded, WAVE_BARS);
         memCache.set(key, extracted);
-        if (extracted) {
-          peaks = extracted;
-          idbSet(key, extracted);
-          setStatus('ready');
-          draw(true);
-        } else {
-          peaks = null;
-          setStatus('no-audio');
-          canvas.hidden = true;
-        }
+        if (extracted) idbSet(key, extracted);
+        uploadServerWaveform(video.id, extracted);
+        applyResult(extracted);
       } catch (err) {
         if (err?.name === 'AbortError' || epoch !== runEpoch) return;
-        // 拉流偶发失败时自动静默重试一次，避免误判为「无音轨」
         if (stage === 'fetch' && attempt < 1) {
           fetchAndDecode(video, key, epoch, attempt + 1);
           return;
@@ -294,7 +337,13 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
         console.warn(`[waveform] ${stage} failed:`, err);
         peaks = null;
         canvas.hidden = true;
-        setStatus(stage === 'decode' ? 'no-audio' : 'error');
+        if (stage === 'decode') {
+          memCache.set(key, null);
+          uploadServerWaveform(video.id, null);
+          setStatus('no-audio');
+        } else {
+          setStatus('error');
+        }
       } finally {
         if (abortCtrl === ctrl) abortCtrl = null;
       }
@@ -306,22 +355,53 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
     const epoch = ++runEpoch;
     cancelPending();
 
-    const key = `${video.id}:${video.size || 0}`;
+    const key = cacheKey(video);
     if (memCache.has(key)) {
-      peaks = memCache.get(key);
-      setStatus(peaks ? 'ready' : 'no-audio');
-      draw(true);
+      applyResult(memCache.get(key));
       return;
     }
 
     setStatus('loading');
+
+    // 如果刚上传完正在用本地 File 预计算，直接等它完成，零网络回传
+    const pendingSeed = seedJobs.get(video.id);
+    if (pendingSeed) {
+      await pendingSeed;
+      if (epoch !== runEpoch || !enabled) return;
+      if (memCache.has(key)) {
+        applyResult(memCache.get(key));
+        return;
+      }
+    }
+
+    // 1. 优先查服务端共享缓存（~1KB，全员首次打开 10ms 秒出）
+    const ctrl = new AbortController();
+    abortCtrl = ctrl;
+    let serverHit = null;
+    try {
+      serverHit = await fetchServerWaveform(video.id, ctrl.signal);
+    } catch (err) {
+      if (err?.name === 'AbortError' || epoch !== runEpoch) return;
+    } finally {
+      if (abortCtrl === ctrl) abortCtrl = null;
+    }
+    if (epoch !== runEpoch || !enabled) return;
+    if (serverHit) {
+      uploadedIds.add(video.id);
+      memCache.set(key, serverHit.peaks);
+      if (serverHit.peaks) idbSet(key, serverHit.peaks);
+      applyResult(serverHit.peaks);
+      return;
+    }
+
+    // 2. 服务端暂无时查本机 IndexedDB：命中直接画出，同时静默补传到服务端造福全员
     const cached = await idbGet(key);
     if (epoch !== runEpoch || !enabled) return;
     if (cached && cached.length) {
-      peaks = cached instanceof Uint8Array ? cached : new Uint8Array(cached);
-      memCache.set(key, peaks);
-      setStatus('ready');
-      draw(true);
+      const arr = cached instanceof Uint8Array ? cached : new Uint8Array(cached);
+      memCache.set(key, arr);
+      uploadServerWaveform(video.id, arr);
+      applyResult(arr);
       return;
     }
 
@@ -337,7 +417,44 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
       return;
     }
 
+    // 3. 首次解码旧片：独立拉流解码并存到服务端
     fetchAndDecode(video, key, epoch, 0);
+  }
+
+  /** 上传完成后用本地 File 零流量提取波形并存服务端，全员首次打开直接秒出 */
+  function seedFromFile(video, file) {
+    if (!video?.id || !file || file.size > MAX_DECODE_BYTES) return Promise.resolve();
+    if (seedJobs.has(video.id)) return seedJobs.get(video.id);
+    if (!(window.OfflineAudioContext || window.webkitOfflineAudioContext || window.AudioContext || window.webkitAudioContext)) {
+      return Promise.resolve();
+    }
+
+    const key = cacheKey(video);
+    const job = (async () => {
+      try {
+        const buf = await file.arrayBuffer();
+        let extracted = null;
+        try {
+          const decoded = await decodeAudioBuffer(buf);
+          extracted = extractPeaks(decoded, WAVE_BARS);
+        } catch {
+          extracted = null;
+        }
+        memCache.set(key, extracted);
+        if (extracted) idbSet(key, extracted);
+        uploadServerWaveform(video.id, extracted);
+        if (currentVideo?.id === video.id && enabled) {
+          applyResult(extracted);
+        }
+      } catch (err) {
+        console.warn('[waveform] local seed failed:', err);
+      } finally {
+        seedJobs.delete(video.id);
+      }
+    })();
+
+    seedJobs.set(video.id, job);
+    return job;
   }
 
   if (typeof ResizeObserver === 'function') {
@@ -370,6 +487,7 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
       if (enabled) startLoad(currentVideo);
       else setStatus('idle');
     },
+    seedFromFile,
     retry() {
       if (!enabled || !currentVideo) return;
       startLoad(currentVideo);

@@ -12,6 +12,11 @@ const THUMB_QUALITY = 0.72;
 const THUMB_DB_NAME = 'danmu-yuepian-thumbs';
 const THUMB_STORE = 'frames';
 const THUMB_MAX_SLOTS = 48;
+// 服务端雪碧图：单格最长边 160px（16:9 → 160×90，9:16 → 90×160），8 列网格，整支片约 120~350KB
+const SPRITE_MAX_EDGE = 160;
+const SPRITE_COLS = 8;
+const SPRITE_QUALITY = 0.68;
+const SPRITE_MAX_BYTES = 1800 * 1024;
 
 /* ── IndexedDB 缩略图缓存（静默降级：无痕/禁用时只走内存） ──────────── */
 
@@ -263,10 +268,124 @@ function waitMetadata(video, timeout = 5000) {
   });
 }
 
-function canvasToBlob(canvas) {
+function canvasToBlob(canvas, quality = THUMB_QUALITY) {
   return new Promise((resolve) => {
-    canvas.toBlob((blob) => resolve(blob || null), 'image/jpeg', THUMB_QUALITY);
+    canvas.toBlob((blob) => resolve(blob || null), 'image/jpeg', quality);
   });
+}
+
+function preloadImage(url) {
+  return new Promise((resolve, reject) => {
+    const pic = new Image();
+    pic.decoding = 'async';
+    pic.onload = () => resolve(url);
+    pic.onerror = () => reject(new Error('sprite image load failed'));
+    pic.src = url;
+  });
+}
+
+function pauseMs(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function thumbsMetaEndpoint(videoId) {
+  return `/api/videos/${encodeURIComponent(videoId)}/thumbs`;
+}
+
+function thumbsImageEndpoint(videoId) {
+  return `/api/videos/${encodeURIComponent(videoId)}/thumbs.jpg`;
+}
+
+/**
+ * 从本地 File（上传者零流量）或视频直链抽帧拼成一张 JPEG 雪碧图，
+ * 供全员共享服务端单份缓存，悬停时间轴 0ms 瞬出。
+ */
+async function buildSpriteSheet(srcUrl, { isCancelled = () => false, yieldMs = 0 } = {}) {
+  const v = document.createElement('video');
+  v.muted = true;
+  v.playsInline = true;
+  v.preload = 'auto';
+  v.setAttribute('aria-hidden', 'true');
+  v.style.cssText = 'position:fixed;left:-8px;top:-8px;width:2px;height:2px;opacity:0;pointer-events:none;';
+  document.body.appendChild(v);
+
+  try {
+    v.src = srcUrl;
+    v.load();
+    await waitMetadata(v, 10000);
+    if (isCancelled()) return null;
+
+    const total = Number(v.duration);
+    const vw = v.videoWidth;
+    const vh = v.videoHeight;
+    if (!(total > 0) || !vw || !vh) return null;
+
+    const count = Math.max(8, Math.min(THUMB_MAX_SLOTS, Math.round(total * 1.2)));
+    const cols = Math.min(SPRITE_COLS, count);
+    const rows = Math.ceil(count / cols);
+    const scale = Math.min(1, SPRITE_MAX_EDGE / Math.max(vw, vh));
+    // 偶像素宽高，JPEG 采样更干净
+    const cellW = Math.max(32, Math.round((vw * scale) / 2) * 2);
+    const cellH = Math.max(32, Math.round((vh * scale) / 2) * 2);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = cols * cellW;
+    canvas.height = rows * cellH;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#05080a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    let drawn = 0;
+    for (let i = 0; i < count; i += 1) {
+      if (isCancelled()) return null;
+      const t = Math.min(Math.max(0, total - 0.05), ((i + 0.5) / count) * total);
+      try {
+        if (Math.abs(v.currentTime - t) > 0.02 || v.readyState < 2) {
+          const sought = waitSeek(v, 4000);
+          v.currentTime = t;
+          await sought;
+        }
+        if (isCancelled()) return null;
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        ctx.drawImage(v, col * cellW, row * cellH, cellW, cellH);
+        drawn += 1;
+      } catch {
+        // 单帧解码偶发超时跳过，不中断整张雪碧图
+      }
+      if (yieldMs > 0 && i < count - 1) await pauseMs(yieldMs);
+    }
+
+    if (drawn < Math.max(2, Math.floor(count * 0.5))) return null;
+
+    let blob = await canvasToBlob(canvas, SPRITE_QUALITY);
+    if (blob && blob.size > SPRITE_MAX_BYTES) {
+      blob = await canvasToBlob(canvas, 0.52);
+    }
+    if (!blob || blob.size > SPRITE_MAX_BYTES || isCancelled()) return null;
+
+    return {
+      blob,
+      meta: { count, cols, rows, cellW, cellH, duration: total },
+    };
+  } finally {
+    v.pause();
+    v.removeAttribute('src');
+    v.load();
+    v.remove();
+  }
+}
+
+async function uploadSpriteSheet(videoId, blob, meta) {
+  const res = await fetch(thumbsMetaEndpoint(videoId), {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'image/jpeg',
+      'X-Thumb-Meta': encodeURIComponent(JSON.stringify(meta)),
+    },
+    body: blob,
+  });
+  return res.ok;
 }
 
 export function createTimelinePreview({
@@ -275,18 +394,21 @@ export function createTimelinePreview({
   getContext,
 }) {
   if (!timeline || !popover) {
-    return { reset() {}, hide() {} };
+    return { load() {}, seedFromFile() {}, reset() {}, hide() {} };
   }
 
-  // 构建浮卡 DOM
+  // 构建浮卡 DOM（同时支持 0ms 雪碧图与单帧兜底）
   const media = document.createElement('div');
   media.className = 'tl-preview-media';
+  const spriteEl = document.createElement('div');
+  spriteEl.className = 'tl-preview-sprite';
+  spriteEl.hidden = true;
   const img = document.createElement('img');
   img.alt = '';
   img.decoding = 'async';
   const tcBadge = document.createElement('span');
   tcBadge.className = 'tl-preview-tc mono';
-  media.append(img, tcBadge);
+  media.append(spriteEl, img, tcBadge);
 
   const note = document.createElement('div');
   note.className = 'tl-preview-note';
@@ -294,15 +416,25 @@ export function createTimelinePreview({
 
   popover.replaceChildren(media, note);
 
-  /** 当前视频的缩略图 URL 缓存：slotIndex -> objectUrl */
+  /** 当前视频的兜底单帧缩略图缓存：slotIndex -> objectUrl */
   const memUrls = new Map();
+  /** 服务端雪碧图缓存：videoId -> { count, cols, rows, cellW, cellH, duration, imageUrl, isBlobUrl } */
+  const spriteCache = new Map();
+  /** 正在生成的雪碧图任务：videoId -> Promise */
+  const spriteJobs = new Map();
+
   let currentVideoId = '';
+  let loadEpoch = 0;
+  let spriteTimer = 0;
+  let spriteAbort = null;
+  let bgCancelled = false;
   let hiddenVideo = null;
   let hiddenSrc = '';
   let busy = false;
-  let desiredSlot = null; // { videoId, url, slot, time }
+  let desiredSlot = null; // { videoId, url, idx, count, slotTime }
   let activeSlot = -1;
   let lastShownUrl = '';
+  let lastSpriteBg = '';
 
   function ensureHiddenVideo(url) {
     if (!hiddenVideo) {
@@ -330,16 +462,30 @@ export function createTimelinePreview({
     hiddenVideo.load();
   }
 
+  function cancelSpriteWork() {
+    clearTimeout(spriteTimer);
+    spriteTimer = 0;
+    bgCancelled = true;
+    if (spriteAbort) {
+      spriteAbort.abort();
+      spriteAbort = null;
+    }
+  }
+
   function clearMemoryCache() {
     for (const url of memUrls.values()) URL.revokeObjectURL(url);
     memUrls.clear();
     lastShownUrl = '';
+    lastSpriteBg = '';
     img.removeAttribute('src');
+    img.hidden = false;
+    spriteEl.hidden = true;
+    spriteEl.style.backgroundImage = '';
     media.classList.remove('loaded');
   }
 
-  function slotInfo(time, total) {
-    const count = Math.max(8, Math.min(THUMB_MAX_SLOTS, Math.round(total * 1.2)));
+  function slotInfo(time, total, countOverride = 0) {
+    const count = countOverride || Math.max(8, Math.min(THUMB_MAX_SLOTS, Math.round(total * 1.2)));
     const idx = Math.min(count - 1, Math.max(0, Math.floor((time / total) * count)));
     const slotTime = Math.min(Math.max(0, total - 0.05), ((idx + 0.5) / count) * total);
     return { idx, count, slotTime };
@@ -349,11 +495,135 @@ export function createTimelinePreview({
     return `${videoId}:${count}:${idx}`;
   }
 
+  function showSpriteCell(sprite, idx) {
+    const col = idx % sprite.cols;
+    const row = Math.floor(idx / sprite.cols);
+    const xPct = sprite.cols > 1 ? (col / (sprite.cols - 1)) * 100 : 0;
+    const yPct = sprite.rows > 1 ? (row / (sprite.rows - 1)) * 100 : 0;
+    if (lastSpriteBg !== sprite.imageUrl) {
+      lastSpriteBg = sprite.imageUrl;
+      spriteEl.style.backgroundImage = `url("${sprite.imageUrl}")`;
+      spriteEl.style.backgroundSize = `${sprite.cols * 100}% ${sprite.rows * 100}%`;
+    }
+    spriteEl.style.backgroundPosition = `${xPct}% ${yPct}%`;
+    spriteEl.hidden = false;
+    img.hidden = true;
+    media.classList.add('loaded');
+  }
+
   function showImage(url) {
+    spriteEl.hidden = true;
+    img.hidden = false;
     if (lastShownUrl === url) return;
     lastShownUrl = url;
     img.src = url;
     media.classList.add('loaded');
+  }
+
+  function storeSprite(videoId, meta, imageUrl, isBlobUrl = false) {
+    const prev = spriteCache.get(videoId);
+    if (prev && prev.isBlobUrl && prev.imageUrl !== imageUrl) {
+      URL.revokeObjectURL(prev.imageUrl);
+    }
+    const entry = { ...meta, imageUrl, isBlobUrl };
+    spriteCache.set(videoId, entry);
+    return entry;
+  }
+
+  /** 打开视频时优先加载服务端雪碧图；服务端暂无则低优先级后台生成并补传 */
+  async function load(video) {
+    cancelSpriteWork();
+    const epoch = ++loadEpoch;
+    if (!video?.id) {
+      currentVideoId = '';
+      clearMemoryCache();
+      releaseHiddenVideo();
+      return;
+    }
+
+    if (video.id !== currentVideoId) {
+      clearMemoryCache();
+      releaseHiddenVideo();
+      currentVideoId = video.id;
+    }
+
+    if (spriteCache.has(video.id)) return;
+
+    // 刚上传完正在用本地 File 生成雪碧图：直接等待即可
+    if (spriteJobs.has(video.id)) {
+      await spriteJobs.get(video.id);
+      return;
+    }
+
+    const ctrl = new AbortController();
+    spriteAbort = ctrl;
+    try {
+      const res = await fetch(thumbsMetaEndpoint(video.id), { signal: ctrl.signal });
+      if (epoch !== loadEpoch) return;
+      if (res.ok && res.status === 200) {
+        const meta = await res.json();
+        if (meta && meta.count > 0 && meta.cols > 0 && meta.rows > 0) {
+          const imgUrl = thumbsImageEndpoint(video.id);
+          await preloadImage(imgUrl);
+          if (epoch !== loadEpoch) return;
+          storeSprite(video.id, meta, imgUrl, false);
+          return;
+        }
+      }
+      if (res.status !== 204 && res.status !== 404) return;
+    } catch (err) {
+      if (err?.name === 'AbortError' || epoch !== loadEpoch) return;
+      return;
+    } finally {
+      if (spriteAbort === ctrl) spriteAbort = null;
+    }
+
+    // 服务端还没有旧片雪碧图：延迟 1.5s 后低优先级后台抽帧并存到服务端（期间悬停照常走实时抽帧兜底）
+    bgCancelled = false;
+    const targetId = video.id;
+    spriteTimer = setTimeout(() => {
+      spriteTimer = 0;
+      if (epoch !== loadEpoch || bgCancelled || spriteCache.has(targetId) || spriteJobs.has(targetId)) return;
+      const job = (async () => {
+        try {
+          const built = await buildSpriteSheet(
+            `/api/videos/${encodeURIComponent(targetId)}/file?purpose=thumbs-sprite`,
+            { isCancelled: () => epoch !== loadEpoch || bgCancelled, yieldMs: 40 },
+          );
+          if (!built || epoch !== loadEpoch || bgCancelled) return;
+          const objUrl = URL.createObjectURL(built.blob);
+          storeSprite(targetId, built.meta, objUrl, true);
+          uploadSpriteSheet(targetId, built.blob, built.meta).catch(() => {});
+        } catch {
+          /* 旧片后台补传失败静默降级为实时抽帧 */
+        } finally {
+          spriteJobs.delete(targetId);
+        }
+      })();
+      spriteJobs.set(targetId, job);
+    }, 1500);
+  }
+
+  /** 上传完成后用本地 File 零流量极速生成雪碧图并传服务端，全员首次打开 0ms 秒出 */
+  function seedFromFile(videoId, file) {
+    if (!videoId || !file || spriteCache.has(videoId) || spriteJobs.has(videoId)) return Promise.resolve();
+    const job = (async () => {
+      const localUrl = URL.createObjectURL(file);
+      try {
+        const built = await buildSpriteSheet(localUrl, { yieldMs: 0 });
+        if (!built) return;
+        const objUrl = URL.createObjectURL(built.blob);
+        storeSprite(videoId, built.meta, objUrl, true);
+        await uploadSpriteSheet(videoId, built.blob, built.meta).catch(() => {});
+      } catch {
+        /* 生成失败不影响正常看片，后续悬停会自动兜底 */
+      } finally {
+        URL.revokeObjectURL(localUrl);
+        spriteJobs.delete(videoId);
+      }
+    })();
+    spriteJobs.set(videoId, job);
+    return job;
   }
 
   async function processQueue() {
@@ -364,6 +634,12 @@ export function createTimelinePreview({
         const job = desiredSlot;
         desiredSlot = null;
         if (job.videoId !== currentVideoId) continue;
+
+        const sprite = spriteCache.get(job.videoId);
+        if (sprite) {
+          if (activeSlot === job.idx) showSpriteCell(sprite, Math.min(sprite.count - 1, job.idx));
+          continue;
+        }
 
         const key = cacheKey(job.videoId, job.count, job.idx);
         if (memUrls.has(key)) {
@@ -381,12 +657,11 @@ export function createTimelinePreview({
           continue;
         }
 
-        // 实时从隐藏 <video> 抽一帧缩略图
+        // 实时从隐藏 <video> 抽一帧缩略图（仅在雪碧图尚未就绪时兜底）
         try {
           const v = ensureHiddenVideo(job.url);
           await waitMetadata(v);
           if (job.videoId !== currentVideoId) continue;
-          // 如果期间鼠标已经划走去新槽位，跳过旧槽位直接抽最新的
           if (desiredSlot && desiredSlot.idx !== job.idx) continue;
 
           if (Math.abs(v.currentTime - job.slotTime) > 0.02 || v.readyState < 2) {
@@ -505,7 +780,16 @@ export function createTimelinePreview({
     popover.style.left = `${Math.round(left)}px`;
     popover.style.top = `${Math.round(top)}px`;
 
-    // 请求该槽位缩略图
+    // 优先走服务端雪碧图：0ms 瞬出、零 seek 延迟
+    const sprite = spriteCache.get(ctx.video.id);
+    if (sprite) {
+      const slot = slotInfo(hoverTime, ctx.total, sprite.count);
+      activeSlot = slot.idx;
+      showSpriteCell(sprite, slot.idx);
+      return;
+    }
+
+    // 雪碧图尚未就绪时走实时单帧兜底
     const slot = slotInfo(hoverTime, ctx.total);
     activeSlot = slot.idx;
     const key = cacheKey(ctx.video.id, slot.count, slot.idx);
@@ -514,7 +798,7 @@ export function createTimelinePreview({
     } else {
       desiredSlot = {
         videoId: ctx.video.id,
-        url: `/api/videos/${ctx.video.id}/file`,
+        url: `/api/videos/${encodeURIComponent(ctx.video.id)}/file?purpose=thumbs-live`,
         idx: slot.idx,
         count: slot.count,
         slotTime: slot.slotTime,
@@ -524,7 +808,6 @@ export function createTimelinePreview({
   }
 
   timeline.addEventListener('pointermove', (event) => {
-    // 触摸设备上只在按住拖动时展示，避免点一下浮卡一直悬在屏幕上
     if (event.pointerType === 'touch' && event.buttons === 0) return;
     showAt(event.clientX);
   });
@@ -534,9 +817,12 @@ export function createTimelinePreview({
   document.addEventListener('fullscreenchange', hide);
 
   return {
+    load,
+    seedFromFile,
     hide,
     reset() {
       hide();
+      cancelSpriteWork();
       desiredSlot = null;
       currentVideoId = '';
       clearMemoryCache();
