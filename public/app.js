@@ -6,6 +6,7 @@ import { createReportView } from './js/report.js';
 import { detectFrameRate } from './js/fps.js';
 import { createFrameGrabber, drawOverlayBoxes, drawWatermark, downloadCanvas, safeFileName } from './js/capture.js';
 import { GUIDE_MODES, createGuideOverlay } from './js/guides.js';
+import { createTimelineHeatmap, createTimelinePreview } from './js/timeline-fx.js';
 
 const $ = (id) => document.getElementById(id);
 const DRAW_COLORS = ['#ff5a4d', '#ffd166', '#4ec9a0', '#8ab4ff'];
@@ -87,6 +88,8 @@ let danmaku;
 let annView;
 let pad;
 let guides;
+let heatmap;
+let timelinePreview;
 let reportView;
 let tickRaf = 0;
 
@@ -145,6 +148,21 @@ function boot() {
   annView = createAnnotationView(dom.annLayer);
   pad = createDrawPad(dom.drawLayer, { onChange: () => refreshDrawButtons() });
   guides = createGuideOverlay(dom.guideLayer);
+  heatmap = createTimelineHeatmap(dom.timelineHeatmap);
+  timelinePreview = createTimelinePreview({
+    timeline: dom.timeline,
+    popover: dom.tlPreview,
+    getContext: () => ({
+      video: state.video,
+      total: duration(),
+      fps: state.fps,
+      videoWidth: dom.video.videoWidth,
+      videoHeight: dom.video.videoHeight,
+      comments: state.comments,
+      annotations: state.annotations,
+      blocked: Boolean(state.annDrag),
+    }),
+  });
   reportView = createReportView({
     getData: () => ({
       video: state.video,
@@ -236,8 +254,8 @@ function cacheDom() {
     'empty-state', 'frame', 'video-wrap', 'video', 'guide-layer', 'danmaku-layer', 'ann-layer', 'draw-layer', 'paused-badge',
     'draw-toolbar', 'range-in', 'range-out', 'range-summary', 'swatches', 'mark-in', 'mark-out',
     'preview-range', 'draw-undo', 'draw-clear', 'draw-cancel', 'draw-save',
-    'play-btn', 'mute-btn', 'tc-now', 'timeline', 'timeline-fill', 'timeline-loop', 'timeline-marks', 'timeline-head', 'tc-total',
-    'transport', 'step-back', 'step-fwd', 'speed-btn', 'loop-btn', 'draw-toggle', 'guide-btn', 'guide-menu', 'fps-input', 'fps-badge', 'fps-field',
+    'play-btn', 'mute-btn', 'tc-now', 'timeline', 'timeline-heatmap', 'timeline-fill', 'timeline-loop', 'timeline-marks', 'timeline-head', 'tc-total',
+    'transport', 'step-back', 'step-fwd', 'speed-btn', 'loop-btn', 'draw-toggle', 'guide-btn', 'guide-menu', 'tl-preview', 'fps-input', 'fps-badge', 'fps-field',
     'danmaku-toggle', 'snap-btn', 'help-btn', 'help-modal', 'fullscreen-btn',
     'composer', 'composer-time', 'composer-input', 'composer-reveal', 'composer-collapse',
     'overall-form', 'overall-input',
@@ -530,6 +548,8 @@ function leaveVideo() {
   clearLoop({ notify: false });
   closeGuideMenu();
   guides?.clear();
+  heatmap?.clear();
+  timelinePreview?.reset();
   dom.video.pause();
   dom.video.removeAttribute('src');
   dom.video.load();
@@ -673,6 +693,8 @@ async function openVideo(id) {
 
   danmaku.clear();
   annView.clear();
+  heatmap.clear();
+  timelinePreview.reset();
   guides.setMode(state.guide);
   renderHeader();
   renderSidebar();
@@ -1600,6 +1622,7 @@ function renderMarks() {
   if (selectedMark) nodes.push(selectedMark);
 
   dom.timelineMarks.replaceChildren(...nodes);
+  heatmap?.update(state.comments, state.annotations, duration());
 }
 
 function selectAnnotation(id) {
@@ -1623,6 +1646,7 @@ function startAnnDrag(event, annotation, which, handle) {
   event.preventDefault();
   const total = duration();
   if (!total) return;
+  timelinePreview?.hide();
 
   const fps = state.fps || 25;
   const frame = 1 / fps;
@@ -2195,6 +2219,8 @@ function applyItemUpdate(kind, data, { fromSelf = false } = {}) {
   if (rangeChanged) {
     state.annotations.sort((a, b) => a.start - b.start || a.createdAt - b.createdAt);
     renderMarks();
+  } else if (repliesChanged) {
+    heatmap?.update(state.comments, state.annotations, duration());
   }
   renderSidebar();
   reportView.refresh();

@@ -146,6 +146,7 @@
         </button>
         <span class="mono tc" id="tc-now">00:00.000</span>
         <div class="timeline" id="timeline" role="slider" aria-label="播放进度" tabindex="0">
+          <canvas class="timeline-heatmap" id="timeline-heatmap" aria-hidden="true" hidden></canvas>
           <div class="timeline-rail">
             <div class="timeline-fill" id="timeline-fill"></div>
             <div class="timeline-loop" id="timeline-loop" hidden></div>
@@ -455,6 +456,7 @@
   </div>
 
   <div class="guide-menu" id="guide-menu" role="menu" aria-label="画面参考线" hidden></div>
+  <div class="tl-preview" id="tl-preview" aria-hidden="true" hidden></div>
 
   <div class="toast" id="toast" hidden></div>
 
