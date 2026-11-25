@@ -795,21 +795,31 @@ function computeFit() {
   const width = dom.video.videoWidth;
   const height = dom.video.videoHeight;
   if (!width || !height || dom.frame.hidden) return null;
-  const splitDouble = compare?.active && compare.mode === 'split';
-  const ratio = (width / height) * (splitDouble ? 2 : 1);
+  const splitActive = Boolean(compare?.active && compare.mode === 'split');
+  const baseRatio = width / height;
+
+  // 分屏对比时自动对比「左右并排」与「上下堆叠」哪种排法下单支画面更大，避免窄高舞台把横片挤成细条
+  const resolveRatio = (availW, availH) => {
+    if (!splitActive) return { ratio: baseRatio, splitVertical: false };
+    const wLR = Math.min(availW / 2, availH * baseRatio);
+    const wTB = Math.min(availW, (availH / 2) * baseRatio);
+    const splitVertical = wTB > wLR * 1.02;
+    return { ratio: splitVertical ? baseRatio / 2 : baseRatio * 2, splitVertical };
+  };
 
   if (edgeToEdgeQuery.matches && !document.fullscreenElement) {
     const fullW = dom.frame.clientWidth;
     if (fullW < 48) return null;
     // 竖版片子按宽度撑满会太高，封顶到屏幕高度的 80%，超出才两边留一点
-    const maxH = Math.round((window.innerHeight || fullW / ratio) * 0.8);
+    const maxH = Math.round((window.innerHeight || fullW / baseRatio) * 0.8);
+    const { ratio, splitVertical } = resolveRatio(fullW, maxH);
     let w = fullW;
     let h = w / ratio;
     if (h > maxH) {
       h = maxH;
       w = h * ratio;
     }
-    return { w: Math.round(w), h: Math.round(h) };
+    return { w: Math.round(w), h: Math.round(h), splitVertical };
   }
 
   const style = getComputedStyle(dom.frame);
@@ -819,13 +829,14 @@ function computeFit() {
   const boxH = dom.frame.clientHeight - padY;
   if (boxW < 48 || boxH < 48) return null;
 
+  const { ratio, splitVertical } = resolveRatio(boxW, boxH);
   let w = boxW;
   let h = w / ratio;
   if (h > boxH) {
     h = boxH;
     w = h * ratio;
   }
-  return { w: Math.round(w), h: Math.round(h) };
+  return { w: Math.round(w), h: Math.round(h), splitVertical };
 }
 
 /**
@@ -834,9 +845,12 @@ function computeFit() {
 function fitVideoWrap() {
   const size = computeFit();
   if (!size) return;
+  const wasVertical = dom.videoWrap.classList.contains('compare-split-v');
+  const nextVertical = Boolean(size.splitVertical);
+  dom.videoWrap.classList.toggle('compare-split-v', nextVertical);
   const w = `${size.w}px`;
   const h = `${size.h}px`;
-  if (dom.videoWrap.style.width === w && dom.videoWrap.style.height === h) return;
+  if (dom.videoWrap.style.width === w && dom.videoWrap.style.height === h && wasVertical === nextVertical) return;
   dom.videoWrap.style.width = w;
   dom.videoWrap.style.height = h;
   annView.fit();
@@ -1900,9 +1914,10 @@ function initSidebarResizer() {
   const MIN_W = 280;
   const MAX_W = 540;
   const DEFAULT_W = 344;
+  const maxAllowed = () => Math.max(MIN_W, Math.min(MAX_W, window.innerWidth - 460));
 
   const applyWidth = (w, persist = false) => {
-    const clamped = Math.round(Math.min(MAX_W, Math.max(MIN_W, w)));
+    const clamped = Math.round(Math.min(maxAllowed(), Math.max(MIN_W, w)));
     document.documentElement.style.setProperty('--sidebar-w', `${clamped}px`);
     if (persist) {
       try {
@@ -1915,6 +1930,7 @@ function initSidebarResizer() {
 
   const saved = Number(localStorage.getItem(STORE.sidebarW));
   if (Number.isFinite(saved) && saved >= MIN_W && saved <= MAX_W) applyWidth(saved, false);
+  window.addEventListener('resize', () => applyWidth(lastW, false));
 
   let dragging = false;
   let lastW = saved || DEFAULT_W;

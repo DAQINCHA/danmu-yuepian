@@ -530,6 +530,8 @@ body.author-spotlight .toast { z-index: 100; }
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
+  container-type: inline-size;
+  container-name: stage;
 }
 
 .frame {
@@ -1236,6 +1238,37 @@ body.author-spotlight .toast { z-index: 100; }
   border-right: 1px solid rgba(127, 240, 234, 0.55);
 }
 
+/* 窄高舞台或竖屏下自动切上下分屏：上对照版、下当前版，各占 50% 高度，画面更大不挤扁 */
+.video-wrap.compare-split.compare-split-v > #video {
+  top: auto;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 50%;
+}
+.video-wrap.compare-split.compare-split-v .compare-video {
+  top: 0;
+  bottom: auto;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 50%;
+  border-right: 0;
+  border-bottom: 1px solid rgba(127, 240, 234, 0.55);
+}
+.video-wrap.compare-split.compare-split-v .compare-badge.left {
+  top: 10px;
+  left: 10px;
+  max-width: calc(100% - 20px);
+}
+.video-wrap.compare-split.compare-split-v .compare-badge.right {
+  top: calc(50% + 10px);
+  left: 10px;
+  right: auto;
+  max-width: calc(100% - 20px);
+}
+
 /* 卷帘中线拉杆 */
 .compare-handle {
   position: absolute;
@@ -1866,6 +1899,8 @@ body.author-spotlight .toast { z-index: 100; }
   gap: 10px;
   position: relative;
   z-index: 4;
+  min-width: 0;
+  max-width: 100%;
   padding: 8px 16px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-bottom: 0;
@@ -1880,6 +1915,31 @@ body.author-spotlight .toast { z-index: 100; }
   border-radius: 0;
   border-top-color: rgba(255, 255, 255, 0.1);
   box-shadow: none;
+}
+/* 左侧舞台宽度不足以单行容纳进度条+全部按钮时（含拖宽侧栏 / 半屏 / 平板），自动拆成清爽两行，绝不穿出左舱 */
+@container stage (max-width: 840px) {
+  .transport {
+    flex-wrap: wrap;
+    row-gap: 7px;
+  }
+  .transport-right {
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+}
+@container stage (max-width: 560px) {
+  .transport-right {
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .transport-right::-webkit-scrollbar { display: none; }
+  .transport-right > * { flex: none; }
 }
 
 .tc { font-size: 12px; color: #d6fbf8; flex: none; }
@@ -3406,6 +3466,34 @@ body.dragging::after {
   .r-check { display: none !important; }
 }
 
+/* ── 平板 / iPad 竖屏 / 桌面半屏（保留悬浮毛玻璃舱，切换视频在上、评论在下） ── */
+
+@media (max-width: 980px), (max-width: 1024px) and (orientation: portrait) {
+  body { overflow: auto; }
+  .workspace {
+    flex-direction: column;
+  }
+  .stage {
+    flex: 0 0 auto;
+  }
+  .frame {
+    flex: 0 0 auto;
+    height: clamp(260px, 48vh, 540px);
+    min-height: 0;
+  }
+  .stage:fullscreen .frame {
+    height: auto;
+    flex: 1 1 auto;
+  }
+  .sidebar {
+    flex: 1 0 auto;
+    width: 100%;
+    min-height: 240px;
+    max-height: 52vh;
+  }
+  .sidebar-resizer { display: none; }
+}
+
 /* ── 窄屏 ───────────────────────────────────────────────────────────── */
 
 @media (max-width: 860px) {
@@ -3570,6 +3658,7 @@ body.dragging::after {
   .stage { flex: 0 0 auto; }
   .frame {
     flex: 0 0 auto;
+    height: auto;
     min-height: 0;
     padding: 0;
     background: #000;
