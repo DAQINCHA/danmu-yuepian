@@ -21,6 +21,7 @@ const STORE = {
   mute: 'danmu:mute',
   intro: 'danmu:intro',
   guide: 'danmu:guide',
+  sidebarW: 'danmu:sidebar-w',
 };
 
 // 和服务端 config.maxAnnotationSpan 保持一致
@@ -63,6 +64,8 @@ const state = {
   lastTick: -1,
   // 开始输入弹幕那一刻的视频时间；发送时用它，而不是敲完回车时已经播过去的时间
   composeTime: null,
+  // 单行输入栏模式：'frame' 当前帧弹幕 | 'overall' 整体意见（记在第 0 帧）
+  composerMode: 'frame',
   // 这一段连续播放里已经弹过气泡的画笔标注，免得在区间内反复弹
   annShown: new Set(),
   // 时间轴上选中的画笔标注（只有它显示入点/出点手把，标注叠在一起时也不会抢）
@@ -221,7 +224,7 @@ function boot() {
   initGuideMenu();
   initTimeline();
   initComposer();
-  initOverall();
+  initSidebarResizer();
   initDrawToolbar();
   initModals();
   initLockDialogs();
@@ -296,8 +299,8 @@ function cacheDom() {
     'play-btn', 'mute-btn', 'tc-now', 'timeline', 'timeline-heatmap', 'timeline-waveform', 'timeline-fill', 'timeline-loop', 'timeline-marks', 'timeline-head', 'tc-total',
     'transport', 'step-back', 'step-fwd', 'speed-btn', 'loop-btn', 'draw-toggle', 'guide-btn', 'compare-btn', 'guide-menu', 'tl-preview', 'fps-input', 'fps-badge', 'fps-field',
     'danmaku-toggle', 'wave-btn', 'snap-btn', 'help-btn', 'help-modal', 'fullscreen-btn',
-    'composer', 'composer-time', 'composer-input', 'composer-reveal', 'composer-collapse',
-    'overall-form', 'overall-input',
+    'composer', 'composer-time', 'composer-time-text', 'composer-input', 'composer-submit', 'composer-reveal', 'composer-collapse',
+    'sidebar', 'sidebar-resizer',
     'video-title', 'video-meta', 'tabs', 'list', 'count-all', 'count-comment', 'count-annotation',
     'report-open',
     'library-modal', 'library-grid', 'library-page', 'library-crumb', 'home-nav', 'home-back', 'home-tabs', 'project-grid', 'version-list',
@@ -599,7 +602,6 @@ function leaveVideo() {
   dom.frame.hidden = true;
   dom.transport.hidden = true;
   dom.composer.hidden = true;
-  dom.overallForm.hidden = true;
   dom.drawToolbar.hidden = true;
   dom.videoWrap.classList.remove('drawing');
   dom.presence.hidden = true;
@@ -723,7 +725,7 @@ async function openVideo(id) {
   dom.frame.hidden = false;
   dom.transport.hidden = false;
   dom.composer.hidden = false;
-  dom.overallForm.hidden = false;
+  setComposerMode('frame');
   composerExpanded = false;
   syncComposerCollapse();
   syncAuthorSpotlight({ focus: true });
@@ -850,7 +852,7 @@ function expandComposer({ focusInput = false } = {}) {
 
 function blurComposerFields() {
   const active = document.activeElement;
-  if (active === dom.composerInput || active === dom.overallInput || active === dom.authorInput) active.blur();
+  if (active === dom.composerInput || active === dom.authorInput) active.blur();
 }
 
 function collapseComposer() {
@@ -1505,7 +1507,9 @@ function updateTransport(force = false) {
   dom.timelineHead.style.left = `${percent}%`;
   waveform?.setProgress(percent / 100);
   dom.tcNow.textContent = timecode(t);
-  if (state.composeTime === null) dom.composerTime.textContent = timecode(t);
+  if (state.composerMode === 'frame' && state.composeTime === null && dom.composerTimeText) {
+    dom.composerTimeText.textContent = timecode(t);
+  }
   dom.playBtn.textContent = dom.video.paused ? '▶' : '❚❚';
 }
 
@@ -1860,6 +1864,67 @@ function updateCounts() {
   dom.countAll.textContent = String(state.comments.length + state.annotations.length);
   dom.countComment.textContent = String(state.comments.length);
   dom.countAnnotation.textContent = String(state.annotations.length);
+}
+
+/* ── 侧栏拖拽调宽（记住本机偏好，双击复位） ──────────────────────── */
+
+function initSidebarResizer() {
+  const handle = dom.sidebarResizer;
+  if (!handle) return;
+  const MIN_W = 280;
+  const MAX_W = 540;
+  const DEFAULT_W = 344;
+
+  const applyWidth = (w, persist = false) => {
+    const clamped = Math.round(Math.min(MAX_W, Math.max(MIN_W, w)));
+    document.documentElement.style.setProperty('--sidebar-w', `${clamped}px`);
+    if (persist) {
+      try {
+        localStorage.setItem(STORE.sidebarW, String(clamped));
+      } catch {
+        /* 忽略 */
+      }
+    }
+  };
+
+  const saved = Number(localStorage.getItem(STORE.sidebarW));
+  if (Number.isFinite(saved) && saved >= MIN_W && saved <= MAX_W) applyWidth(saved, false);
+
+  let dragging = false;
+  let lastW = saved || DEFAULT_W;
+
+  handle.addEventListener('pointerdown', (event) => {
+    if (mobileListQuery.matches || event.button > 0) return;
+    event.preventDefault();
+    dragging = true;
+    handle.setPointerCapture(event.pointerId);
+    handle.classList.add('dragging');
+    document.body.classList.add('resizing-sidebar');
+  });
+
+  handle.addEventListener('pointermove', (event) => {
+    if (!dragging) return;
+    lastW = window.innerWidth - event.clientX;
+    applyWidth(lastW, false);
+    fitVideoWrap();
+  });
+
+  const stop = () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    document.body.classList.remove('resizing-sidebar');
+    applyWidth(lastW, true);
+    fitVideoWrap();
+  };
+
+  handle.addEventListener('pointerup', stop);
+  handle.addEventListener('pointercancel', stop);
+  handle.addEventListener('dblclick', () => {
+    lastW = DEFAULT_W;
+    applyWidth(DEFAULT_W, true);
+    fitVideoWrap();
+  });
 }
 
 /**
@@ -2444,23 +2509,52 @@ function removeAnnotationLocal(id) {
   renderMarks();
 }
 
-/* ── 弹幕输入 ─────────────────────────────────────────────────────── */
+/* ── 弹幕输入（单行合体：点击左侧胶囊切换 当前帧 / 整体意见） ──────── */
+
+function setComposerMode(mode) {
+  const overall = mode === 'overall';
+  state.composerMode = overall ? 'overall' : 'frame';
+  dom.composer?.classList.toggle('is-overall', overall);
+  if (dom.composerTime) {
+    dom.composerTime.classList.toggle('is-overall', overall);
+    dom.composerTime.classList.toggle('locked', !overall && state.composeTime !== null);
+    dom.composerTime.title = overall
+      ? '当前：整体意见（统一记在第 0 帧）· 点此切回当前帧弹幕'
+      : '当前：当前帧弹幕 · 点此切到「整体意见」';
+  }
+  if (dom.composerTimeText) {
+    dom.composerTimeText.textContent = overall
+      ? '整体意见'
+      : timecode(state.composeTime ?? (dom.video.currentTime || 0));
+  }
+  if (dom.composerInput) {
+    dom.composerInput.placeholder = overall
+      ? '对整支片的总体看法，回车发送（记在第 0 帧，点左侧切回当前帧）…'
+      : '在这一帧说点什么，回车发送（点左侧时间码切「整体意见」）…';
+  }
+  if (dom.composerSubmit) {
+    dom.composerSubmit.textContent = overall ? '发整体' : '发弹幕';
+  }
+}
 
 function lockComposeTime(time) {
   state.composeTime = time;
-  dom.composerTime.textContent = timecode(time);
+  if (state.composerMode === 'overall') return;
+  if (dom.composerTimeText) dom.composerTimeText.textContent = timecode(time);
   dom.composerTime.classList.add('locked');
-  dom.composerTime.title = '开始输入时的时间点，发出去的弹幕就挂在这一帧';
+  dom.composerTime.title = '开始输入时的时间点，发出去的弹幕就挂在这一帧 · 点此切到「整体意见」';
 }
 
 function unlockComposeTime() {
   state.composeTime = null;
   dom.composerTime.classList.remove('locked');
-  dom.composerTime.title = '';
-  dom.composerTime.textContent = timecode(dom.video.currentTime || 0);
+  if (state.composerMode === 'frame' && dom.composerTimeText) {
+    dom.composerTimeText.textContent = timecode(dom.video.currentTime || 0);
+    dom.composerTime.title = '当前：当前帧弹幕 · 点此切到「整体意见」';
+  }
 }
 
-/** 发一条弹幕：主输入框和整体意见共用，接口、数据结构完全一样 */
+/** 发一条弹幕：当前帧与整体意见共用，接口、数据结构完全一样 */
 async function postComment(text, time) {
   const { comment } = await api.addComment(state.video.id, {
     text,
@@ -2472,44 +2566,18 @@ async function postComment(text, time) {
   return comment;
 }
 
-/**
- * 整体意见 = 一条挂在第 0 帧的普通弹幕。不 seek、不碰主输入框锁定的时间；
- * 播放头就在片头附近时直接上屏，否则提示一下挂在哪了。
- */
-function initOverall() {
-  dom.overallForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    if (!state.video) return;
-    if (!requireName('发整体意见前先写个名字')) return;
-
-    const text = dom.overallInput.value.trim();
-    if (!text) {
-      dom.overallInput.focus();
-      return;
-    }
-
-    const button = dom.overallForm.querySelector('button[type="submit"]');
-    button.disabled = true;
-    try {
-      const comment = await postComment(text, 0);
-      dom.overallInput.value = '';
-      if ((dom.video.currentTime || 0) <= 3) showNow(comment);
-      else toast('整体意见已记在第 0 帧');
-      collapseComposer();
-    } catch (err) {
-      toast(err.message, true);
-    } finally {
-      button.disabled = false;
-    }
-  });
-}
-
 function initComposer() {
   // 第一次按键就把时间钉住：边播边打字时，回车那一刻视频早已往后走了好几秒。
   // 中文输入法先触发 compositionstart，拼音还没上屏也算「开始输入」。
   const begin = () => {
-    if (state.video && state.composeTime === null) lockComposeTime(dom.video.currentTime || 0);
+    if (state.composerMode === 'frame' && state.video && state.composeTime === null) {
+      lockComposeTime(dom.video.currentTime || 0);
+    }
   };
+  dom.composerTime.addEventListener('click', () => {
+    setComposerMode(state.composerMode === 'overall' ? 'frame' : 'overall');
+    dom.composerInput.focus();
+  });
   dom.composerInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' || event.key === 'Escape' || event.key === 'Tab') return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -2525,7 +2593,8 @@ function initComposer() {
   dom.composer.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!state.video) return;
-    if (!requireName('发弹幕前先写个名字')) return;
+    const isOverall = state.composerMode === 'overall';
+    if (!requireName(isOverall ? '发整体意见前先写个名字' : '发弹幕前先写个名字')) return;
 
     const text = dom.composerInput.value.trim();
     if (!text) {
@@ -2533,18 +2602,23 @@ function initComposer() {
       return;
     }
 
-    const time = state.composeTime ?? (dom.video.currentTime || 0);
+    const time = isOverall ? 0 : (state.composeTime ?? (dom.video.currentTime || 0));
     dom.composerInput.value = '';
     unlockComposeTime();
 
     try {
       const comment = await postComment(text, time);
-      // 自己刚发的立刻上屏：它的时间点在输入那一刻，播放头早已越过，等时间轴触发就永远等不到
-      showNow(comment);
+      if (isOverall) {
+        if ((dom.video.currentTime || 0) <= 3) showNow(comment);
+        else toast('整体意见已记在第 0 帧');
+      } else {
+        // 自己刚发的立刻上屏：它的时间点在输入那一刻，播放头早已越过，等时间轴触发就永远等不到
+        showNow(comment);
+      }
       collapseComposer();
     } catch (err) {
       dom.composerInput.value = text;
-      lockComposeTime(time);
+      if (!isOverall) lockComposeTime(time);
       toast(err.message, true);
     }
   });
@@ -4220,7 +4294,7 @@ function projectCard(project) {
     const del = projectIconButton('删除项目', 'delete', ICON_PATHS.delete);
     del.addEventListener('click', () => deleteProjectBy(project));
     actions.append(del);
-    body.append(actions);
+    frame.append(actions);
   }
   card.append(frame, body);
   const open = () => {

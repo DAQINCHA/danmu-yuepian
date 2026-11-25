@@ -234,21 +234,19 @@
 
       <form class="composer" id="composer" hidden>
         <button class="btn ghost tiny composer-collapse" id="composer-collapse" type="button">收起</button>
-        <span class="mono composer-time" id="composer-time">00:00.000</span>
+        <button class="composer-time mono" id="composer-time" type="button"
+                title="点击切换：当前帧弹幕 / 整体意见（记在第 0 帧）">
+          <span id="composer-time-text">00:00.000</span>
+          <span class="composer-mode-arrow" aria-hidden="true">⇄</span>
+        </button>
         <input id="composer-input" type="text" maxlength="500" autocomplete="off"
-               placeholder="在这一帧说点什么，回车发送…" />
-        <button class="btn primary" type="submit">发弹幕</button>
-      </form>
-
-      <form class="composer overall" id="overall-form" hidden>
-        <span class="composer-tag" title="整体意见统一挂在第 0 帧，不会跳动播放进度">整体意见</span>
-        <input id="overall-input" type="text" maxlength="500" autocomplete="off"
-               placeholder="对整支片的总体看法，回车发送（记在第 0 帧）…" />
-        <button class="btn" type="submit">发整体意见</button>
+               placeholder="在这一帧说点什么，回车发送（点左侧切整体意见）…" />
+        <button class="btn primary" id="composer-submit" type="submit">发弹幕</button>
       </form>
     </section>
 
     <aside class="sidebar" id="sidebar">
+      <div class="sidebar-resizer" id="sidebar-resizer" title="拖动调节侧栏宽度（双击重置）" aria-hidden="true"></div>
       <div class="sidebar-head">
         <h2 id="video-title">还没有打开片子</h2>
         <p class="meta" id="video-meta">上传后在项目里选一支开始审。</p>

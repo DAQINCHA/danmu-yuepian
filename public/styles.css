@@ -107,15 +107,15 @@ h1, h2, p { margin: 0; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  height: 56px;
-  flex: 0 0 56px;
+  gap: 14px;
+  height: 52px;
+  flex: 0 0 52px;
   padding: 0 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(2, 4, 5, 0.62);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 14px 34px rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(3, 6, 8, 0.78);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
 }
 
 .brand {
@@ -128,10 +128,10 @@ h1, h2, p { margin: 0; }
 
 .brand-mark {
   display: block;
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
-  box-shadow: 0 0 0 1px rgba(127, 240, 234, 0.45), 0 0 22px rgba(34, 193, 195, 0.45);
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  box-shadow: 0 0 0 1px rgba(127, 240, 234, 0.35), 0 0 14px rgba(34, 193, 195, 0.28);
 }
 
 .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
@@ -179,10 +179,10 @@ h1, h2, p { margin: 0; }
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
-  padding: 0 5px 0 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
+  height: 30px;
+  padding: 0 4px 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 9px;
   background: rgba(255, 255, 255, 0.04);
   color: #86a3a4;
   font-size: 12px;
@@ -192,14 +192,14 @@ h1, h2, p { margin: 0; }
 .author-label { font-size: 12px; white-space: nowrap; }
 
 .author-field input {
-  width: 104px;
-  height: 24px;
+  width: 100px;
+  height: 22px;
   padding: 0 6px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: rgba(34, 193, 195, 0.1);
   color: #f0ffff;
-  font-size: 12.5px;
+  font-size: 12px;
   outline: none;
 }
 
@@ -228,10 +228,10 @@ h1, h2, p { margin: 0; }
   gap: 6px;
   flex: 0 1 200px;
   min-width: 0;
-  height: 32px;
+  height: 30px;
   padding: 0 4px 0 9px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 9px;
   background: rgba(255, 255, 255, 0.04);
   color: #86a3a4;
   transition: border-color 0.15s, background 0.15s;
@@ -414,38 +414,36 @@ body.author-spotlight .toast { z-index: 100; }
   gap: 6px;
   height: 30px;
   padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.045);
   color: #dff6f5;
   font-size: 13px;
   white-space: nowrap;
   cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
 }
 
 .btn:hover {
-  border-color: rgba(127, 240, 234, 0.55);
-  background: linear-gradient(100deg, rgba(34, 193, 195, 0.2), rgba(127, 240, 234, 0.1));
+  border-color: rgba(127, 240, 234, 0.45);
+  background: rgba(34, 193, 195, 0.14);
   color: #f4ffff;
-  box-shadow: 0 0 18px rgba(34, 193, 195, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  box-shadow: 0 0 14px rgba(34, 193, 195, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 .btn:active { transform: translateY(0.5px); }
 .btn.primary {
-  background-image: linear-gradient(100deg, #22c1c3, #7ff0e2 55%, #5fd8d6);
-  background-size: 220% 100%;
-  border-color: rgba(190, 255, 250, 0.65);
-  color: #032a2c;
+  background-image: linear-gradient(105deg, #22c1c3, #6be7dd 65%, #55d4d2);
+  border-color: rgba(180, 255, 250, 0.5);
+  color: #032628;
   font-weight: 650;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
-  box-shadow: 0 0 24px rgba(34, 193, 195, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  animation: flow-shift 9s ease-in-out infinite;
+  text-shadow: none;
+  box-shadow: 0 2px 12px rgba(34, 193, 195, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 .btn.primary:hover {
-  background-image: linear-gradient(100deg, #22c1c3, #7ff0e2 55%, #5fd8d6);
-  color: #032a2c;
-  box-shadow: 0 0 32px rgba(34, 193, 195, 0.5), inset 0 1px 0 #fff;
+  background-image: linear-gradient(105deg, #28cfd1, #7ff4ea 60%, #64e0de);
+  color: #022022;
+  box-shadow: 0 0 22px rgba(34, 193, 195, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 .btn.ghost { background: transparent; box-shadow: none; }
 .btn.ghost:hover { background: rgba(34, 193, 195, 0.1); }
@@ -527,11 +525,11 @@ body.author-spotlight .toast { z-index: 100; }
   justify-content: center;
   flex: 1 1 auto;
   min-height: 220px;
-  padding: 14px 16px;
-  /* 画面四周一圈极淡的青色辉光，画面本身仍是纯黑 */
+  padding: 12px 16px;
+  /* 极克制的暗房深底 + 一丝几乎察觉不到的青色环境呼吸，让视频色彩本身做主角 */
   background:
-    radial-gradient(58% 58% at 50% 46%, rgba(34, 193, 195, 0.14), rgba(127, 240, 234, 0.03) 46%, transparent 74%),
-    #000;
+    radial-gradient(56% 56% at 50% 48%, rgba(34, 193, 195, 0.065), transparent 72%),
+    #020405;
 }
 
 /* ── 片库首页 ───────────────────────────────────────────────────────── */
@@ -559,19 +557,17 @@ body.author-spotlight .toast { z-index: 100; }
   justify-content: center;
   width: max-content;
   max-width: min(760px, 100%);
-  min-height: 40px;
+  min-height: 38px;
   margin: 0;
-  padding: 6px 42px;
+  padding: 6px 40px;
   box-sizing: border-box;
-  border: 1px solid transparent;
+  border: 1px solid rgba(127, 240, 234, 0.24);
   border-radius: 999px;
-  background-image:
-    linear-gradient(#05080a, #05080a),
-    linear-gradient(90deg, rgba(34, 193, 195, 0.9), rgba(127, 240, 234, 0.55), rgba(34, 193, 195, 0.35));
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5), 0 0 30px rgba(34, 193, 195, 0.1);
-  color: #a9cfd0;
+  background: rgba(6, 12, 14, 0.78);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #a4c6c7;
   font-size: 13px;
   font-weight: 400;
   line-height: 1.4;
@@ -740,8 +736,8 @@ body.author-spotlight .toast { z-index: 100; }
 
 .project-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(256px, 1fr));
+  gap: 18px;
 }
 .project-card {
   display: flex;
@@ -749,32 +745,21 @@ body.author-spotlight .toast { z-index: 100; }
   position: relative;
   width: 100%;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.018) 55%, rgba(34, 193, 195, 0.04));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 16px 36px rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.085);
+  border-radius: 15px;
+  background: rgba(10, 15, 17, 0.78);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.48);
   overflow: hidden;
   cursor: pointer;
   text-align: left;
   font: inherit;
   color: inherit;
-  transition: opacity 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-}
-/* 卡片顶沿一道青色细线，像光从上面扫过 */
-.project-card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 14px;
-  right: 14px;
-  height: 1px;
-  z-index: 3;
-  pointer-events: none;
-  background: linear-gradient(90deg, transparent, rgba(127, 240, 234, 0.55), rgba(34, 193, 195, 0.4), transparent);
+  transition: opacity 0.16s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 .project-card:hover {
-  border-color: rgba(127, 240, 234, 0.45);
-  box-shadow: 0 0 0 1px rgba(34, 193, 195, 0.18), 0 0 32px rgba(34, 193, 195, 0.16), 0 20px 44px rgba(0, 0, 0, 0.62);
+  border-color: rgba(127, 240, 234, 0.42);
+  box-shadow: 0 0 0 1px rgba(34, 193, 195, 0.14), 0 18px 42px rgba(0, 0, 0, 0.62);
+  transform: translateY(-2px);
 }
 /* 搜索：命中的项目描一圈强调色，落选的压暗但仍能点 */
 .project-card.search-dim { opacity: 0.36; }
@@ -791,17 +776,16 @@ body.author-spotlight .toast { z-index: 100; }
   width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  border-radius: 13px 13px 0 0;
-  background: #05080a;
-  box-shadow: inset 0 0 60px rgba(34, 193, 195, 0.12);
+  border-radius: 14px 14px 0 0;
+  background: #06090b;
 }
-/* 封面掠光：一条极淡的斜向高光，只在片库安静区域出现 */
+/* 封面底部柔和暗角，让画面和下方标题自然衔接，不再用硬斜光把调色蒙灰 */
 .project-cover-frame::after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(115deg, transparent 42%, rgba(180, 255, 250, 0.09) 50%, transparent 58%);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.42) 0%, transparent 42%);
 }
 .project-cover {
   position: absolute;
@@ -812,43 +796,47 @@ body.author-spotlight .toast { z-index: 100; }
   outline: none;
   object-fit: cover;
   object-position: center;
-  /* 空图的细边框用当前文字色，圆角裁切后会在角上断开 */
   color: transparent;
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
+.project-card:hover .project-cover { transform: scale(1.04); }
 .project-cover:not([src]) { visibility: hidden; }
 .project-add {
   align-items: center;
   justify-content: center;
   min-height: 200px;
-  border: 1.5px dashed rgba(34, 193, 195, 0.5);
-  background:
-    radial-gradient(70% 70% at 50% 45%, rgba(34, 193, 195, 0.14), transparent 70%),
-    linear-gradient(165deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
-  color: #7ff0e2;
-  box-shadow: inset 0 0 50px rgba(34, 193, 195, 0.08);
+  border: 1.5px dashed rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.018);
+  color: rgba(166, 194, 195, 0.7);
+  box-shadow: none;
 }
 .project-add-mark {
   display: block;
-  width: 80px;
-  height: 80px;
+  width: 64px;
+  height: 64px;
+  opacity: 0.85;
+  transition: transform 0.2s ease, opacity 0.2s ease;
 }
 .project-add:hover {
-  border-color: rgba(180, 255, 250, 0.9);
-  background: radial-gradient(70% 70% at 50% 45%, rgba(34, 193, 195, 0.24), rgba(127, 240, 234, 0.05) 70%);
-  color: #eaffff;
-  box-shadow: inset 0 0 60px rgba(34, 193, 195, 0.16), 0 0 26px rgba(34, 193, 195, 0.16);
+  border-color: rgba(127, 240, 234, 0.55);
+  background: rgba(34, 193, 195, 0.06);
+  color: #b9fffa;
+  box-shadow: 0 0 24px rgba(34, 193, 195, 0.12);
 }
-.project-body { position: relative; padding: 12px 14px 14px; }
+.project-add:hover .project-add-mark { transform: scale(1.06); opacity: 1; }
+.project-body { position: relative; padding: 12px 14px 13px; }
 .project-copy { min-width: 0; }
+/* 操作图标收进封面右上角毛玻璃层，文字区干干净净不拥挤 */
 .project-actions {
   position: absolute;
-  right: 10px;
-  bottom: 12px;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
   display: flex;
-  gap: 6px;
+  gap: 5px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.16s ease;
 }
 .project-card:hover .project-actions,
 .project-card:focus-within .project-actions {
@@ -857,20 +845,20 @@ body.author-spotlight .toast { z-index: 100; }
 }
 @media (hover: none) {
   .project-actions { opacity: 1; pointer-events: auto; }
-  .project-body:has(.project-actions) { padding-right: 86px; }
 }
 .project-icon {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 8px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  background: rgba(4, 9, 11, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   color: #dff6f5;
   cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 .project-icon svg { display: block; width: 16px; height: 16px; }
 .project-icon-edit { color: #cfd6dd; }
@@ -922,7 +910,9 @@ body.author-spotlight .toast { z-index: 100; }
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
+.project-card:hover .personal-tile img { transform: scale(1.04); }
 .personal-fallback {
   position: absolute;
   inset: 0;
@@ -943,15 +933,17 @@ body.author-spotlight .toast { z-index: 100; }
 .project-lock-badge {
   position: absolute;
   top: 8px;
-  right: 8px;
+  left: 8px;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 4px 8px 4px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.62);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(4, 9, 11, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   color: #fff;
   font-size: 11px;
   line-height: 1;
@@ -1119,14 +1111,14 @@ body.author-spotlight .toast { z-index: 100; }
   width: 640px;
   height: 360px;
   max-width: 100%;
-  border-radius: 14px;
+  border-radius: 12px;
   overflow: hidden;
   /* 本体不带任何边框：尺寸由 JS 按视频真实比例算出，边框会吃掉内容区 2px */
   background: #000;
-  box-shadow: 0 0 42px rgba(34, 193, 195, 0.2), 0 0 130px rgba(34, 193, 195, 0.09), 0 30px 80px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.85), 0 0 36px rgba(34, 193, 195, 0.1);
 }
 
-/* 一圈 1px 青色渐变描边：盖在画面上、不占布局，里面镂空 */
+/* 克制的 1px 细腻玻璃边：不抢画面色彩，又让黑底影片有清晰边界 */
 .video-wrap::after {
   content: "";
   position: absolute;
@@ -1135,7 +1127,7 @@ body.author-spotlight .toast { z-index: 100; }
   pointer-events: none;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(120deg, rgba(34, 193, 195, 0.85), rgba(127, 240, 234, 0.35) 50%, rgba(34, 193, 195, 0.55));
+  background: linear-gradient(135deg, rgba(127, 240, 234, 0.36), rgba(255, 255, 255, 0.12) 50%, rgba(34, 193, 195, 0.24));
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -2161,84 +2153,151 @@ body.author-spotlight .toast { z-index: 100; }
 .fps-field input::-webkit-inner-spin-button { appearance: none; margin: 0; }
 .fps-field input:focus { border-color: var(--accent); }
 
-/* ── 弹幕输入 ───────────────────────────────────────────────────────── */
+/* ── 弹幕输入（单行智能合体：当前帧弹幕 / 整体意见一键切换） ──────────── */
 
 .composer {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   position: relative;
-  padding: 10px 16px 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.09);
-  /* 输入区背后保持干净：不透出背景光影，只留一层深色玻璃 */
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(0, 0, 0, 0.55)), #040506;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  padding: 9px 16px 11px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(5, 9, 11, 0.94);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .composer-time {
   flex: none;
-  padding: 3px 8px;
-  border-radius: 8px;
-  background: linear-gradient(100deg, rgba(34, 193, 195, 0.22), rgba(127, 240, 234, 0.08));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 108px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(127, 240, 234, 0.24);
+  border-radius: 9px;
+  background: rgba(34, 193, 195, 0.12);
   color: #b9fffa;
   font-size: 12px;
-  box-shadow: inset 0 0 0 1px rgba(127, 240, 234, 0.22);
-}
-/* 整体意见：紧贴在弹幕输入下面，复用同一套样式 */
-.composer.overall { padding-top: 0; border-top: 0; }
-.composer-tag {
-  flex: none;
-  padding: 3px 8px;
-  border-radius: 8px;
-  background: linear-gradient(100deg, rgba(34, 193, 195, 0.16), rgba(255, 255, 255, 0.04));
-  color: #a9cfd0;
-  font-size: 12px;
   white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
 }
-
-/* 两行左侧标签、右侧按钮等宽，中间输入框自然对齐 */
-.composer-time, .composer-tag { box-sizing: border-box; width: 96px; text-align: center; }
-.composer > .btn { flex: none; box-sizing: border-box; width: 104px; justify-content: center; text-align: center; white-space: nowrap; }
+.composer-time:hover {
+  background: rgba(34, 193, 195, 0.2);
+  border-color: rgba(127, 240, 234, 0.48);
+}
+.composer-mode-arrow {
+  font-size: 10px;
+  opacity: 0.6;
+}
+.composer-time:hover .composer-mode-arrow { opacity: 1; }
 
 /* 开始输入后时间点锁定在那一刻，不再跟着播放走 */
-.composer-time.locked { background: rgba(224, 196, 106, 0.16); box-shadow: inset 0 0 0 1px rgba(224, 196, 106, 0.45); }
+.composer-time.locked {
+  border-color: rgba(224, 196, 106, 0.45);
+  background: rgba(224, 196, 106, 0.14);
+  color: var(--gold-text);
+}
+/* 切到「整体意见」模式：暖金区分，一眼明辨 */
+.composer-time.is-overall {
+  border-color: rgba(240, 215, 154, 0.48);
+  background: rgba(224, 196, 106, 0.16);
+  color: var(--gold-text);
+}
+
+.composer > .btn[type="submit"] {
+  flex: none;
+  height: 32px;
+  min-width: 78px;
+  padding: 0 14px;
+  justify-content: center;
+  white-space: nowrap;
+}
 
 .composer input {
   flex: 1 1 auto;
   min-width: 0;
-  height: 34px;
+  height: 32px;
   padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
   outline: none;
+  transition: border-color 0.14s, box-shadow 0.14s, background 0.14s;
 }
 .composer input:focus {
-  border-color: rgba(127, 240, 234, 0.7);
-  box-shadow: 0 0 0 3px rgba(34, 193, 195, 0.16), 0 0 20px rgba(34, 193, 195, 0.16);
+  border-color: rgba(127, 240, 234, 0.55);
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow: 0 0 0 2px rgba(34, 193, 195, 0.14);
+}
+
+/* 整体意见模式：整条输入栏（左侧胶囊 + 输入框描边 + 发送按钮）统一切换为暖金色 */
+.composer.is-overall input {
+  border-color: rgba(240, 215, 154, 0.45);
+}
+.composer.is-overall input:focus {
+  border-color: rgba(240, 215, 154, 0.8);
+  background: rgba(224, 196, 106, 0.06);
+  box-shadow: 0 0 0 2px rgba(224, 196, 106, 0.18);
+}
+.composer.is-overall > .btn[type="submit"] {
+  background-image: linear-gradient(105deg, #d8a94c, #f3d68a 65%, #e5be64);
+  border-color: rgba(255, 236, 179, 0.62);
+  color: #291d05;
+  box-shadow: 0 2px 12px rgba(224, 196, 106, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+.composer.is-overall > .btn[type="submit"]:hover {
+  background-image: linear-gradient(105deg, #e4b658, #fae09c 60%, #eed07c);
+  color: #211603;
+  box-shadow: 0 0 22px rgba(224, 196, 106, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 /* 竖屏才出现：收起后的「发弹幕」和展开后的「收起」。桌面不占位 */
 .composer-reveal,
 .composer-collapse { display: none; }
 
-/* ── 侧栏 ───────────────────────────────────────────────────────────── */
+/* ── 侧栏（线性审片评论流 + 进度微条 + 拖拽调宽） ────────────────────── */
+
+body.resizing-sidebar {
+  cursor: col-resize;
+  user-select: none;
+}
 
 .sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 0 0 var(--sidebar-w);
   width: var(--sidebar-w);
   min-height: 0;
-  border-left: 1px solid rgba(255, 255, 255, 0.09);
-  /* 顶部一缕青光往下散，越往下越黑，像光打在半透明的审片台上 */
-  background:
-    linear-gradient(180deg, rgba(34, 193, 195, 0.09), rgba(0, 0, 0, 0.45) 280px),
-    #000;
-  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.04);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(12, 22, 24, 0.45), rgba(3, 6, 8, 0.96) 240px), #030607;
 }
+
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  z-index: 6;
+  width: 6px;
+  cursor: col-resize;
+}
+.sidebar-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+  background: rgba(127, 240, 234, 0.65);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.sidebar-resizer:hover::after,
+.sidebar-resizer.dragging::after { opacity: 1; }
 
 .sidebar-head {
   padding: 14px 16px 10px;
@@ -2261,51 +2320,58 @@ body.author-spotlight .toast { z-index: 100; }
 .tabs {
   display: flex;
   gap: 4px;
-  padding: 8px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 7px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .tab {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 26px;
-  padding: 0 10px;
+  height: 25px;
+  padding: 0 9px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 7px;
   background: transparent;
-  color: #9db8b9;
-  font-size: 12.5px;
+  color: #8ea9aa;
+  font-size: 12px;
   cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
-.tab:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
+.tab:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
 .tab.active {
-  background: linear-gradient(100deg, rgba(34, 193, 195, 0.28), rgba(127, 240, 234, 0.1));
+  background: rgba(34, 193, 195, 0.18);
   color: #eaffff;
-  border-color: rgba(127, 240, 234, 0.55);
-  box-shadow: 0 0 14px rgba(34, 193, 195, 0.18);
+  border-color: rgba(127, 240, 234, 0.38);
 }
 
 .count {
-  min-width: 16px;
+  min-width: 15px;
   padding: 0 4px;
   border-radius: 999px;
-  background: rgba(34, 193, 195, 0.18);
-  color: #b9fffa;
-  font-size: 10.5px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-dim);
+  font-size: 10px;
   text-align: center;
+}
+.tab.active .count {
+  background: rgba(127, 240, 234, 0.2);
+  color: #c8fffa;
 }
 
 .list {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 8px;
+  padding: 4px 0;
   scrollbar-width: thin;
+  scrollbar-color: rgba(127, 240, 234, 0.2) transparent;
 }
 
-.list::-webkit-scrollbar { width: 8px; }
-.list::-webkit-scrollbar-thumb { background: rgba(34, 193, 195, 0.28); border-radius: 4px; }
+.list::-webkit-scrollbar { width: 5px; }
+.list::-webkit-scrollbar-track { background: transparent; }
+.list::-webkit-scrollbar-thumb { background: rgba(127, 240, 234, 0.2); border-radius: 999px; }
+.list:hover::-webkit-scrollbar-thumb { background: rgba(127, 240, 234, 0.38); }
 
 .list-empty {
   padding: 32px 16px;
@@ -2315,30 +2381,45 @@ body.author-spotlight .toast { z-index: 100; }
   line-height: 1.8;
 }
 
+/* 线性时间轴评论流：去掉满屏碎框，用左侧 2.5px 作者色竖线建立干净层次 */
 .item {
+  position: relative;
   display: block;
   width: 100%;
-  padding: 9px 10px;
-  margin-bottom: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 11px;
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.018));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  padding: 10px 14px 10px 16px;
+  margin-bottom: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
+  transition: background 0.12s ease;
+}
+.item::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 11px;
+  bottom: 11px;
+  width: 2.5px;
+  border-radius: 999px;
+  background: var(--dm-color, #8ab4ff);
+  opacity: 0.72;
+  transition: opacity 0.12s, box-shadow 0.12s;
 }
 .item:hover {
-  border-color: rgba(127, 240, 234, 0.34);
-  background: linear-gradient(150deg, rgba(34, 193, 195, 0.1), rgba(255, 255, 255, 0.025));
+  background: rgba(255, 255, 255, 0.032);
 }
-/* 当前播放到的这条：渐变描边，一眼能认出来 */
+.item:hover::before { opacity: 1; }
+/* 当前播放到的这条：柔和青色底 + 亮起左侧色条 */
 .item.current {
-  border: 1px solid transparent;
-  background:
-    linear-gradient(150deg, rgba(34, 193, 195, 0.18), rgba(127, 240, 234, 0.05)) padding-box,
-    linear-gradient(120deg, rgba(34, 193, 195, 0.9), rgba(127, 240, 234, 0.45), rgba(34, 193, 195, 0.3)) border-box;
-  box-shadow: 0 0 22px rgba(34, 193, 195, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  background: linear-gradient(90deg, rgba(34, 193, 195, 0.14), rgba(34, 193, 195, 0.03) 75%);
+}
+.item.current::before {
+  opacity: 1;
+  box-shadow: 0 0 10px var(--dm-color, #7ff0e2);
 }
 
 .item-head {
@@ -2388,17 +2469,11 @@ body.author-spotlight .toast { z-index: 100; }
 
 .item-sub { color: #7e9a9b; font-size: 11.5px; }
 
-/* 按 [ / ] 跳到某条待改意见时，侧栏对应卡片闪一下青光 */
+/* 按 [ / ] 跳到某条待改意见时，侧栏对应条目闪一下青光 */
 .item.flash { animation: item-flash 1.1s ease-out; }
 @keyframes item-flash {
-  0% {
-    border-color: rgba(127, 240, 234, 0.9);
-    box-shadow: 0 0 0 2px rgba(34, 193, 195, 0.35), 0 0 24px rgba(34, 193, 195, 0.3);
-  }
-  100% {
-    border-color: rgba(255, 255, 255, 0.08);
-    box-shadow: none;
-  }
+  0% { background: rgba(34, 193, 195, 0.24); }
+  100% { background: transparent; }
 }
 
 /* ── 模态框 ─────────────────────────────────────────────────────────── */
@@ -2410,9 +2485,9 @@ body.author-spotlight .toast { z-index: 100; }
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(0, 0, 0, 0.74);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .modal-box {
@@ -2420,12 +2495,17 @@ body.author-spotlight .toast { z-index: 100; }
   max-height: 100%;
   overflow-y: auto;
   padding: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.11);
   border-radius: 16px;
   background:
-    linear-gradient(165deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02) 55%, rgba(34, 193, 195, 0.04)),
-    #05070a;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 24px 64px rgba(0, 0, 0, 0.7), 0 0 60px rgba(34, 193, 195, 0.08);
+    linear-gradient(165deg, rgba(255, 255, 255, 0.055), rgba(4, 9, 11, 0.95) 55%),
+    #05080a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 24px 64px rgba(0, 0, 0, 0.72);
+  animation: modal-in 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
 }
 
 .modal-box.wide { width: min(760px, 100%); }
@@ -3103,6 +3183,7 @@ body.dragging::after {
   /* 搜索框跟着收窄，但保留可用宽度，别把署名框和按钮挤掉 */
   .project-search-field { flex: 0 1 132px; }
   /* 手机端侧栏不显示片名、上传信息和筛选标签，列表直接顶上来，不留空档 */
+  .sidebar-resizer,
   .sidebar-head,
   .tabs { display: none; }
   /* 手机端不提供审片报告：唯一入口是侧栏这个按钮 */
