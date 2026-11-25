@@ -540,22 +540,27 @@ body.author-spotlight .toast { z-index: 100; }
   flex: 1 1 auto;
   min-height: 220px;
   margin-bottom: 10px;
-  padding: 12px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  /* 半透明暗房玻璃舞台：让背后流动极光柔和渗进画面外围，视频本体仍保持纯黑高对比 */
-  background: rgba(4, 10, 13, 0.34);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  padding: 2px 0;
+  /* 透明居中舞台：去掉外层套框，让按比例 1:1 裁切的 .video-wrap 成为唯一悬浮画框 */
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .stage:fullscreen {
   background: #000;
 }
 .stage:fullscreen .frame {
   margin-bottom: 0;
-  border: 0;
-  border-radius: 0;
+  padding: 0;
   background: #000;
+}
+.stage:fullscreen .video-wrap {
+  border-radius: 0;
   box-shadow: none;
+}
+.stage:fullscreen .video-wrap::after {
+  display: none;
 }
 .stage:fullscreen .toolbar,
 .stage:fullscreen .transport,
@@ -1153,14 +1158,14 @@ body.author-spotlight .toast { z-index: 100; }
   width: 640px;
   height: 360px;
   max-width: 100%;
-  border-radius: 12px;
+  border-radius: 14px;
   overflow: hidden;
   /* 本体不带任何边框：尺寸由 JS 按视频真实比例算出，边框会吃掉内容区 2px */
   background: #000;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.85), 0 0 36px rgba(34, 193, 195, 0.1);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.68);
 }
 
-/* 克制的 1px 细腻玻璃边：不抢画面色彩，又让黑底影片有清晰边界 */
+/* 克制的 1px 细腻玻璃边：让视频成为唯一的悬浮画框，黑底影片也有清晰边界 */
 .video-wrap::after {
   content: "";
   position: absolute;
@@ -1169,7 +1174,7 @@ body.author-spotlight .toast { z-index: 100; }
   pointer-events: none;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(135deg, rgba(127, 240, 234, 0.36), rgba(255, 255, 255, 0.12) 50%, rgba(34, 193, 195, 0.24));
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.24), rgba(127, 240, 234, 0.28) 42%, rgba(255, 255, 255, 0.1) 75%, rgba(34, 193, 195, 0.22));
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -1638,7 +1643,7 @@ body.author-spotlight .toast { z-index: 100; }
   line-height: 1.4;
   white-space: normal;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.85);
-  box-shadow: 0 0 24px rgba(34, 193, 195, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  box-shadow: 0 2px 10px rgba(34, 193, 195, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.14);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   animation-name: dm-pop;
@@ -1654,7 +1659,7 @@ body.author-spotlight .toast { z-index: 100; }
   background-color: rgba(34, 193, 195, 0.34);
   background-image: linear-gradient(100deg, rgba(34, 193, 195, 0.52), rgba(34, 193, 195, 0.16));
   border-color: rgba(185, 255, 250, 0.8);
-  box-shadow: 0 0 34px rgba(34, 193, 195, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: 0 2px 11px rgba(34, 193, 195, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 /* 作者分红 / 金 / 青三色：气泡和描边跟着 --dm-color 走 */
@@ -1662,12 +1667,12 @@ body.author-spotlight .toast { z-index: 100; }
   .dm {
     border-color: color-mix(in srgb, var(--dm-color, #22c1c3) 45%, transparent);
     background-image: linear-gradient(100deg, color-mix(in srgb, var(--dm-color, #22c1c3) 32%, rgba(5, 10, 12, 0.6)), rgba(6, 14, 16, 0.62) 62%);
-    box-shadow: 0 0 24px color-mix(in srgb, var(--dm-color, #22c1c3) 22%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    box-shadow: 0 2px 10px color-mix(in srgb, var(--dm-color, #22c1c3) 18%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.14);
   }
   .dm.is-mine {
     border-color: rgba(185, 255, 250, 0.8);
     background-image: linear-gradient(100deg, rgba(34, 193, 195, 0.52), rgba(34, 193, 195, 0.16));
-    box-shadow: 0 0 34px rgba(34, 193, 195, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    box-shadow: 0 2px 11px rgba(34, 193, 195, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.25);
   }
 }
 
@@ -3563,6 +3568,7 @@ body.dragging::after {
     border-radius: 0;
     box-shadow: none;
   }
+  .video-wrap::after { display: none; }
   .stage:fullscreen .frame { flex: 1 1 auto; }
 
   body.composer-collapsed .composer-reveal {

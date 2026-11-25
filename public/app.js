@@ -1324,6 +1324,8 @@ function syncWaveButton(status = waveform?.status || 'idle') {
     dom.waveBtn.title = '当前片源超过 160MB，已自动跳过整片波形解码以省内存';
   } else if (status === 'no-audio') {
     dom.waveBtn.title = '当前片子没有可解码的音轨';
+  } else if (status === 'error') {
+    dom.waveBtn.title = '音频波形加载失败（点击重试）';
   } else if (status === 'loading') {
     dom.waveBtn.title = '正在后台提取音频波形…';
   } else {
@@ -1397,6 +1399,11 @@ function initTransport() {
 
   syncWaveButton();
   dom.waveBtn?.addEventListener('click', () => {
+    if (state.waveOn && waveform.status === 'error') {
+      waveform.retry();
+      syncWaveButton();
+      return;
+    }
     state.waveOn = !state.waveOn;
     localStorage.setItem(STORE.wave, state.waveOn ? 'on' : 'off');
     waveform.setEnabled(state.waveOn);

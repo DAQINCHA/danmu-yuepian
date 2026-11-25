@@ -1,7 +1,7 @@
 /**
  * 纯前端 Web Audio 音频波形轨（第 6 期）：
- *  · 后台低优先级解码视频音轨，抽取 220 根 Peak+RMS 混合包络柱并存入 IndexedDB；
- *  · 二次打开同一支片 0ms 秒出，零网络流量、零重复解码；
+ *  · 后台独立请求（绕开与 <video> 同 URL 的 HTTP 缓存锁），用 OfflineAudioContext 离线解码音轨；
+ *  · 抽取 220 根 Peak+RMS 混合包络柱并存入 IndexedDB，二次打开同一支片 0ms 秒出；
  *  · 超过 160MB 的超大原片自动跳过整片下载解码，避免占满浏览器内存；
  *  · 切视频/离开页面时立即 AbortController 掐断请求，绝不拖慢播放。
  */
@@ -60,6 +60,38 @@ async function idbSet(key, peaks) {
   }
 }
 
+/** 兼容现代 Promise 与旧版 Safari 回调式 decodeAudioData */
+function decodeWithContext(ctx, arrayBuffer) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const ok = (val) => { if (!settled) { settled = true; resolve(val); } };
+    const fail = (err) => { if (!settled) { settled = true; reject(err); } };
+    try {
+      const ret = ctx.decodeAudioData(arrayBuffer, ok, fail);
+      if (ret && typeof ret.then === 'function') ret.then(ok, fail);
+    } catch (err) {
+      fail(err);
+    }
+  });
+}
+
+/** 优先用 OfflineAudioContext 离线解码，不占声卡通道、不受自动播放挂起与并发上下文数限制 */
+async function decodeAudioBuffer(arrayBuffer) {
+  const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if (OfflineCtx) {
+    const offline = new OfflineCtx(1, 1, 44100);
+    return decodeWithContext(offline, arrayBuffer);
+  }
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) throw new Error('Web Audio unavailable');
+  const ctx = new AudioCtx();
+  try {
+    return await decodeWithContext(ctx, arrayBuffer);
+  } finally {
+    ctx.close?.().catch(() => {});
+  }
+}
+
 /** 把解码后的 AudioBuffer 压缩成 0~255 的单字节峰值数组，存储极轻（仅 ~220 字节） */
 function extractPeaks(audioBuffer, barCount = WAVE_BARS) {
   const channels = Math.min(2, audioBuffer.numberOfChannels || 0);
@@ -108,6 +140,7 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
   if (!canvas) {
     return {
       load() {},
+      retry() {},
       setProgress() {},
       setEnabled() {},
       clear() {},
@@ -122,10 +155,13 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
   let peaks = null;
   let progress = 0;
   let lastProgressPx = -1;
+  let hasDrawn = false;
+  let layoutRetryRaf = 0;
+  let layoutRetryCount = 0;
   let abortCtrl = null;
   let delayTimer = 0;
   let runEpoch = 0;
-  /** idle | loading | ready | too-large | no-audio */
+  /** idle | loading | ready | too-large | no-audio | error */
   let status = 'idle';
 
   function setStatus(next) {
@@ -137,23 +173,43 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
   function cancelPending() {
     clearTimeout(delayTimer);
     delayTimer = 0;
+    if (layoutRetryRaf) {
+      cancelAnimationFrame(layoutRetryRaf);
+      layoutRetryRaf = 0;
+    }
+    layoutRetryCount = 0;
     if (abortCtrl) {
       abortCtrl.abort();
       abortCtrl = null;
     }
   }
 
+  function scheduleLayoutDraw() {
+    if (layoutRetryRaf || layoutRetryCount >= 12) return;
+    layoutRetryCount += 1;
+    layoutRetryRaf = requestAnimationFrame(() => {
+      layoutRetryRaf = 0;
+      draw(true);
+    });
+  }
+
   function draw(force = false) {
     if (!enabled || !peaks || !peaks.length) {
       canvas.hidden = true;
+      hasDrawn = false;
       return;
     }
     canvas.hidden = false;
     const rect = canvas.getBoundingClientRect();
-    if (rect.width < 24 || rect.height < 6) return;
+    // 刚切入看片页时进度条可能尚未完成首帧排版，下一帧自动补画
+    if (rect.width < 24 || rect.height < 6) {
+      scheduleLayoutDraw();
+      return;
+    }
+    layoutRetryCount = 0;
 
     const splitPx = Math.round(progress * rect.width);
-    if (!force && splitPx === lastProgressPx && canvas.width > 0) return;
+    if (!force && hasDrawn && splitPx === lastProgressPx) return;
     lastProgressPx = splitPx;
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -182,6 +238,67 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
         : 'rgba(127, 240, 234, 0.2)';
       ctx.fillRect(x, midY - amp, barW, amp * 2);
     }
+    hasDrawn = true;
+  }
+
+  function fetchAndDecode(video, key, epoch, attempt = 0) {
+    if (epoch !== runEpoch || !enabled) return;
+    const delayMs = attempt === 0 ? 180 : 900;
+    delayTimer = setTimeout(async () => {
+      delayTimer = 0;
+      if (epoch !== runEpoch || !enabled) return;
+      const ctrl = new AbortController();
+      abortCtrl = ctrl;
+      let stage = 'fetch';
+      try {
+        // 带独立查询参数 + cache:'no-store'，彻底避开与 <video> 同 URL 的浏览器 HTTP 缓存排他锁
+        const url = `/api/videos/${encodeURIComponent(video.id)}/file?purpose=waveform`;
+        const res = await fetch(url, { signal: ctrl.signal, cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const len = Number(res.headers.get('content-length') || 0);
+        if (len > MAX_DECODE_BYTES) {
+          ctrl.abort();
+          if (epoch === runEpoch) setStatus('too-large');
+          return;
+        }
+        const buf = await res.arrayBuffer();
+        if (epoch !== runEpoch || !enabled) return;
+        if (buf.byteLength > MAX_DECODE_BYTES) {
+          setStatus('too-large');
+          return;
+        }
+
+        stage = 'decode';
+        const decoded = await decodeAudioBuffer(buf);
+        if (epoch !== runEpoch || !enabled) return;
+
+        const extracted = extractPeaks(decoded, WAVE_BARS);
+        memCache.set(key, extracted);
+        if (extracted) {
+          peaks = extracted;
+          idbSet(key, extracted);
+          setStatus('ready');
+          draw(true);
+        } else {
+          peaks = null;
+          setStatus('no-audio');
+          canvas.hidden = true;
+        }
+      } catch (err) {
+        if (err?.name === 'AbortError' || epoch !== runEpoch) return;
+        // 拉流偶发失败时自动静默重试一次，避免误判为「无音轨」
+        if (stage === 'fetch' && attempt < 1) {
+          fetchAndDecode(video, key, epoch, attempt + 1);
+          return;
+        }
+        console.warn(`[waveform] ${stage} failed:`, err);
+        peaks = null;
+        canvas.hidden = true;
+        setStatus(stage === 'decode' ? 'no-audio' : 'error');
+      } finally {
+        if (abortCtrl === ctrl) abortCtrl = null;
+      }
+    }, delayMs);
   }
 
   async function startLoad(video) {
@@ -215,72 +332,24 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
       return;
     }
 
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) {
+    if (!(window.OfflineAudioContext || window.webkitOfflineAudioContext || window.AudioContext || window.webkitAudioContext)) {
       setStatus('no-audio');
       return;
     }
 
-    // 稍作延迟，让主视频的首帧元数据与缓冲先跑完，不抢带宽
-    delayTimer = setTimeout(async () => {
-      if (epoch !== runEpoch || !enabled) return;
-      const ctrl = new AbortController();
-      abortCtrl = ctrl;
-      let audioCtx = null;
-      try {
-        const url = `/api/videos/${video.id}/file`;
-        const res = await fetch(url, { signal: ctrl.signal });
-        if (!res.ok) throw new Error('fetch failed');
-        const len = Number(res.headers.get('content-length') || 0);
-        if (len > MAX_DECODE_BYTES) {
-          ctrl.abort();
-          if (epoch === runEpoch) setStatus('too-large');
-          return;
-        }
-        const buf = await res.arrayBuffer();
-        if (epoch !== runEpoch || !enabled) return;
-        if (buf.byteLength > MAX_DECODE_BYTES) {
-          setStatus('too-large');
-          return;
-        }
-
-        audioCtx = new AudioCtx();
-        const decoded = await audioCtx.decodeAudioData(buf);
-        if (epoch !== runEpoch || !enabled) return;
-
-        const extracted = extractPeaks(decoded, WAVE_BARS);
-        memCache.set(key, extracted);
-        if (extracted) {
-          peaks = extracted;
-          idbSet(key, extracted);
-          setStatus('ready');
-          draw(true);
-        } else {
-          peaks = null;
-          setStatus('no-audio');
-          canvas.hidden = true;
-        }
-      } catch (err) {
-        if (err?.name === 'AbortError' || epoch !== runEpoch) return;
-        peaks = null;
-        setStatus('no-audio');
-        canvas.hidden = true;
-      } finally {
-        if (abortCtrl === ctrl) abortCtrl = null;
-        audioCtx?.close().catch(() => {});
-      }
-    }, 380);
+    fetchAndDecode(video, key, epoch, 0);
   }
 
   if (typeof ResizeObserver === 'function') {
     let raf = 0;
-    new ResizeObserver(() => {
+    const observer = new ResizeObserver(() => {
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
         draw(true);
       });
-    }).observe(canvas);
+    });
+    observer.observe(canvas.parentElement || canvas);
   }
 
   return {
@@ -291,6 +360,7 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
       currentVideo = video || null;
       peaks = null;
       lastProgressPx = -1;
+      hasDrawn = false;
       canvas.hidden = true;
       cancelPending();
       if (!currentVideo) {
@@ -299,6 +369,10 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
       }
       if (enabled) startLoad(currentVideo);
       else setStatus('idle');
+    },
+    retry() {
+      if (!enabled || !currentVideo) return;
+      startLoad(currentVideo);
     },
     setProgress(nextRatio) {
       const clamped = Math.min(1, Math.max(0, Number(nextRatio) || 0));
@@ -312,6 +386,7 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
       if (!enabled) {
         cancelPending();
         canvas.hidden = true;
+        hasDrawn = false;
         return;
       }
       if (peaks) draw(true);
@@ -324,6 +399,7 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
       peaks = null;
       progress = 0;
       lastProgressPx = -1;
+      hasDrawn = false;
       setStatus('idle');
       canvas.hidden = true;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
