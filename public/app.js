@@ -605,7 +605,8 @@ function syncTopbarNav() {
   // 收起搜索时把小屏的展开态也清掉，下次进来重新从放大镜开始
   if (dom.projectSearchField.hidden) setProjectSearchExpanded(false);
   dom.uploadOpen.hidden = onVideo;
-  if (dom.homeDock) dom.homeDock.hidden = !onHome;
+  // 窄屏底部胶囊在主页和项目页都保留，只在看片页收起
+  if (dom.homeDock) dom.homeDock.hidden = onVideo;
 }
 
 function leaveVideo() {
@@ -3775,12 +3776,13 @@ function applyProjectSearch() {
   dom.projectSearchField?.classList.toggle('is-filtering', Boolean(query));
 }
 
-/** 首页「项目 / 个人」标签（桌面顶栏 + 窄屏底部胶囊共用）。状态留在前端，地址栏还是原来的 /、/p/...、/v/... */
+/** 首页「项目 / 个人」标签（桌面顶栏 + 窄屏底部胶囊共用）。在项目页点击时直接回到对应的主页标签 */
 function initHomeTabs() {
   for (const tab of document.querySelectorAll('[data-home-tab]')) {
     tab.addEventListener('click', () => {
       const next = tab.dataset.homeTab;
-      if (state.homeTab === next && !state.personalUploader && !state.finalFolderOpen) return;
+      const onHome = state.libraryPage !== 'project' && currentRoute() === '/';
+      if (onHome && state.homeTab === next && !state.personalUploader && !state.finalFolderOpen) return;
       state.homeTab = next;
       state.personalUploader = null;
       state.finalFolderOpen = false;
@@ -3789,8 +3791,12 @@ function initHomeTabs() {
         state.projectSearch = '';
         if (dom.projectSearch) dom.projectSearch.value = '';
       }
-      syncTopbarNav();
-      renderLibraryView();
+      if (!onHome) {
+        go('/');
+      } else {
+        syncTopbarNav();
+        renderLibraryView();
+      }
       if (dom.empty) dom.empty.scrollTop = 0;
       window.scrollTo(0, 0);
     });
@@ -4049,6 +4055,12 @@ function renderProjectActions(project) {
 
 function renderCrumb() {
   dom.libraryCrumb.replaceChildren();
+  for (const tab of document.querySelectorAll('[data-home-tab]')) {
+    const active = tab.dataset.homeTab === state.homeTab;
+    tab.classList.toggle('active', active);
+    if (active) tab.setAttribute('aria-current', 'page');
+    else tab.removeAttribute('aria-current');
+  }
   if (state.libraryPage !== 'project') {
     // 首页用「项目 / 个人」标签取代原来那行静态的「项目」标题
     dom.libraryCrumb.hidden = true;
@@ -4057,12 +4069,6 @@ function renderCrumb() {
       (state.homeTab === 'personal' && state.personalUploader) ||
       (state.homeTab === 'project' && state.finalFolderOpen)
     );
-    for (const tab of document.querySelectorAll('[data-home-tab]')) {
-      const active = tab.dataset.homeTab === state.homeTab;
-      tab.classList.toggle('active', active);
-      if (active) tab.setAttribute('aria-current', 'page');
-      else tab.removeAttribute('aria-current');
-    }
     return;
   }
   dom.libraryCrumb.hidden = false;

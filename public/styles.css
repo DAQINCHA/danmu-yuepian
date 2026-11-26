@@ -3513,7 +3513,7 @@ body.dragging::after {
   /* 窄屏主页顶部的「项目 / 个人」标签收到底部悬浮胶囊，原顶部条整行收掉避免留白 */
   .home-nav { display: none; }
   .library-bar:has(#home-nav:not([hidden])) { display: none; }
-  .empty.library-view:has(#home-nav:not([hidden])) .library-page {
+  .empty.library-view .library-page {
     padding-bottom: calc(84px + env(safe-area-inset-bottom));
   }
   body:has(#home-dock:not([hidden])) .toast {
