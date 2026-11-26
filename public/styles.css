@@ -3514,22 +3514,23 @@ body.dragging::after {
   .home-nav { display: none; }
   .library-bar:has(#home-nav:not([hidden])) { display: none; }
   .empty.library-view:has(#home-nav:not([hidden])) .library-page {
-    padding-bottom: calc(78px + env(safe-area-inset-bottom));
+    padding-bottom: calc(84px + env(safe-area-inset-bottom));
   }
   body:has(#home-dock:not([hidden])) .toast {
-    bottom: calc(68px + env(safe-area-inset-bottom));
+    bottom: calc(74px + env(safe-area-inset-bottom));
   }
-  /* iOS 悬浮液态玻璃胶囊底栏（参考 make-a-reservation，适配两枚主页标签并收紧高度） */
+  /* iOS 悬浮液态玻璃胶囊底栏：52px 高，图标在文字左侧 */
   .mobile-dock {
     display: flex;
     position: fixed;
     left: 50%;
     right: auto;
     transform: translateX(-50%);
-    width: min(204px, calc(100vw - 36px));
+    width: min(224px, calc(100vw - 36px));
+    height: 52px;
     bottom: max(12px, calc(env(safe-area-inset-bottom) - 14px));
     z-index: 35;
-    padding: 3px;
+    padding: 4px;
     border-radius: 999px;
     border: 1px solid rgba(255, 255, 255, 0.24);
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(11, 22, 26, 0.18));
@@ -3541,24 +3542,25 @@ body.dragging::after {
     backdrop-filter: blur(6px) saturate(185%);
     -webkit-backdrop-filter: blur(6px) saturate(185%);
     justify-content: space-between;
-    gap: 2px;
+    gap: 4px;
   }
   .mobile-dock-btn {
     flex: 1;
-    height: 38px;
+    height: 100%;
     min-height: 0;
-    padding: 3px 4px;
+    padding: 0 12px;
     border: 0;
     border-radius: 999px;
     background: transparent;
     display: inline-flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: 1px;
-    font-size: 10px;
+    gap: 6px;
+    font-size: 14px;
     font-weight: 500;
-    line-height: 1.1;
+    line-height: 1;
+    white-space: nowrap;
     color: var(--text-dim);
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
     cursor: pointer;
@@ -3566,12 +3568,12 @@ body.dragging::after {
     transition: background 0.18s ease, color 0.18s ease, transform 0.14s ease;
   }
   .mobile-dock-btn svg {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     flex: none;
     fill: none;
     stroke: currentColor;
-    stroke-width: 1.8;
+    stroke-width: 1.85;
     stroke-linecap: round;
     stroke-linejoin: round;
   }
