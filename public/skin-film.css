@@ -23,6 +23,14 @@
   --cyan-text: #e8bc6b;
   --red-text: #f6a69f;
   --radius: 10px;
+  --text-strong: #f8f3ea;
+  --on-accent: #1c1408;
+  --accent-hi: #f0ca7d;
+  --accent-rgb: 226, 168, 75;
+  --accent-hi-rgb: 240, 202, 125;
+  --glass-rgb: 21, 19, 17;
+  --gold-rgb: 240, 202, 125;
+  --gold-soft-rgb: 240, 202, 125;
 
   /* 时间轴 Canvas 联动色板（供 waveform.js 与 timeline-fx.js 读取） */
   --wave-played: rgba(235, 185, 100, 0.56);
