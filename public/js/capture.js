@@ -173,6 +173,15 @@ export function drawOverlayBoxes(ctx, boxes, scale) {
       ctx.stroke();
     }
 
+    if (box.bar) {
+      ctx.save();
+      roundRectPath(ctx, x, y, w, h, box.radius * scale);
+      ctx.clip();
+      ctx.fillStyle = box.bar.color;
+      ctx.fillRect(x, y, box.bar.width * scale, h);
+      ctx.restore();
+    }
+
     for (const span of box.spans) {
       if (!span.text) continue;
       ctx.save();

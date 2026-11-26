@@ -1683,21 +1683,20 @@ body.author-spotlight .toast { z-index: 100; }
   align-items: flex-start;
   max-width: calc(100% - 24px);
   gap: 2px;
-  padding: 4px 14px;
-  border: 1px solid rgba(var(--accent-rgb), 0.45);
-  border-radius: var(--r-pill);
-  /* background-color 留给截图重画用（画布读不到渐变），渐变负责屏幕上的光感 */
-  background-color: rgba(8, 18, 20, 0.55);
-  background-image: linear-gradient(100deg, rgba(var(--accent-rgb), 0.3), rgba(6, 14, 16, 0.6) 62%);
-  color: var(--text-strong);
+  padding: 4px 14px 4px 11px;
+  border: 0;
+  border-left: 3px solid var(--dm-color, var(--accent));
+  border-radius: 8px;
+  /* 截图重画直接读 background-color 和左侧竖条 */
+  background-color: rgba(0, 0, 0, 0.55);
+  background-image: none;
+  color: #fff;
   font-size: 22.4px;
   font-weight: 500;
   line-height: 1.4;
   white-space: normal;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.85);
-  box-shadow: 0 2px 10px rgba(var(--accent-rgb), 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  box-shadow: none;
   animation-name: dm-pop;
   animation-timing-function: linear;
   animation-fill-mode: forwards;
@@ -1708,28 +1707,15 @@ body.author-spotlight .toast { z-index: 100; }
 .danmaku-layer.paused .dm { animation-play-state: paused; }
 
 .dm.is-mine {
-  background-color: rgba(var(--accent-rgb), 0.52);
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-left: 3px solid var(--dm-color, var(--accent));
+  background-color: rgba(0, 0, 0, 0.6);
   background-image: none;
-  border-color: rgba(185, 255, 250, 0.8);
-  box-shadow: 0 2px 11px rgba(var(--accent-rgb), 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-}
-
-/* 作者分红 / 金 / 青三色：气泡和描边跟着 --dm-color 走 */
-@supports (background: color-mix(in srgb, #fff 50%, transparent)) {
-  .dm {
-    border-color: color-mix(in srgb, var(--dm-color, var(--accent)) 45%, transparent);
-    background-image: linear-gradient(100deg, color-mix(in srgb, var(--dm-color, var(--accent)) 32%, rgba(5, 10, 12, 0.6)), rgba(6, 14, 16, 0.62) 62%);
-    box-shadow: 0 2px 10px color-mix(in srgb, var(--dm-color, var(--accent)) 18%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  }
-  .dm.is-mine {
-    border-color: rgba(185, 255, 250, 0.8);
-    background-image: none;
-    box-shadow: 0 2px 11px rgba(var(--accent-rgb), 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  }
+  box-shadow: none;
 }
 
 /* 带回复的弹幕是多行气泡，药丸形圆角会把角上的字切掉 */
-.dm.has-replies { border-radius: var(--r-lg); padding-bottom: 6px; }
+.dm.has-replies { padding-bottom: 6px; }
 
 /* 画笔标注的回复气泡：正文是「（画笔）」占位，弱化一点 */
 .dm.is-annotation .dm-text { color: rgba(255, 255, 255, 0.72); font-size: 17.6px; }
@@ -1780,9 +1766,6 @@ body.author-spotlight .toast { z-index: 100; }
   overflow-wrap: anywhere;
 }
 
-/* 长弹幕自动换行：多行时药丸圆角会切字，改成圆角矩形 */
-.dm.is-wrapped { border-radius: var(--r-lg); }
-
 /* 直接在原地出现：快速淡入，停留，最后一小段淡出 */
 @keyframes dm-pop {
   0% { opacity: 0; transform: translateY(-3px); }
@@ -1809,15 +1792,11 @@ body.author-spotlight .toast { z-index: 100; }
   align-items: baseline;
   gap: 8px;
   padding: 6px 11px;
-  border-radius: var(--r-md);
-  /* 当前弹幕卡片：深色玻璃 + 青色渐变描边 */
-  border: 1px solid transparent;
-  background:
-    linear-gradient(120deg, rgba(8, 14, 16, 0.92), rgba(4, 10, 12, 0.88)) padding-box,
-    linear-gradient(120deg, rgba(var(--accent-rgb), 0.8), rgba(var(--accent-hi-rgb), 0.42) 62%, rgba(var(--accent-rgb), 0.32)) border-box;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: none;
+  border: 0;
+  border-left: 3px solid var(--dm-color, var(--accent));
+  border-radius: 8px;
+  /* 当前弹幕卡片：深色底 + 左侧作者色竖条 */
+  background: rgba(0, 0, 0, 0.72);
   font-size: var(--fs-md);
   line-height: 1.5;
   animation: focus-in var(--dur-fast) var(--ease-out);
@@ -2577,6 +2556,19 @@ body.resizing-sidebar {
 }
 
 .item-author { font-weight: 650; color: var(--dm-color, #8ab4ff); }
+.item-avatar {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--dm-color, var(--accent));
+  color: #0b0b0b;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 1;
+}
 .item-time { margin-left: auto; color: var(--cyan-text); font-size: var(--fs-sm); }
 
 .item-del {

@@ -2084,6 +2084,16 @@ function jumpTo(time) {
   setTimeout(updateFocus, 80);
 }
 
+/** 侧栏署名前的首字圆头像，底色就是作者色 */
+function buildAvatar(name) {
+  const el = document.createElement('span');
+  el.className = 'item-avatar';
+  el.setAttribute('aria-hidden', 'true');
+  const first = Array.from(String(name || '').trim())[0] || '匿';
+  el.textContent = first.toUpperCase();
+  return el;
+}
+
 function buildCommentItem(comment) {
   const item = document.createElement('div');
   item.className = 'item' + (comment.done ? ' done' : '');
@@ -2115,7 +2125,7 @@ function buildCommentItem(comment) {
   const mine = Boolean(state.author) && comment.author === state.author;
   const editing = mine && state.editOpen === comment.id;
 
-  head.append(author, time);
+  head.append(buildAvatar(comment.author), author, time);
   if (comment.editedAt) head.append(editedFlag(comment));
   if (comment.done) head.append(doneFlag());
   if (mine) head.append(buildEditButton(comment, editing));
@@ -2555,7 +2565,7 @@ function buildAnnotationItem(annotation) {
     removeAnnotation(annotation);
   });
 
-  head.append(author, time);
+  head.append(buildAvatar(annotation.author), author, time);
   if (annotation.done) head.append(doneFlag());
   head.append(buildReplyButton('annotation', annotation), del);
 

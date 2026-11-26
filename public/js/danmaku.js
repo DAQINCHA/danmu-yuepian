@@ -318,12 +318,14 @@ export function createDanmaku(layer, options = {}) {
       });
 
       const borderWidth = parseFloat(style.borderTopWidth) || 0;
+      const barWidth = parseFloat(style.borderLeftWidth) || 0;
       boxes.push({
         ...rel(rect),
         opacity,
         radius: Math.min(parseFloat(style.borderTopLeftRadius) || 0, rect.height / 2),
         background: style.backgroundColor,
         border: borderWidth > 0 ? { width: borderWidth, color: style.borderTopColor } : null,
+        bar: barWidth > borderWidth ? { width: barWidth, color: style.borderLeftColor } : null,
         spans,
       });
     }

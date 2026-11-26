@@ -41,10 +41,10 @@ export function relativeTime(timestamp) {
   return new Date(Number(timestamp)).toLocaleDateString('zh-CN');
 }
 
-// 同一支片里按署名先后轮着分三色，同名同色；气泡、侧栏、报告的署名色都跟着走。
-// 切到「胶片剪辑台」皮肤时自动切为暖琥珀 / 银盐白 / 柔珊瑚三色，保持暗房观感统一。
-export const PALETTE = ['#7ff0e2', '#e0c46a', '#ff9b8f'];
-export const PALETTE_FILM = ['#e8b55f', '#dfd4c0', '#eb7d72'];
+// 同一支片里按署名先后轮着分八色，同名同色；气泡、侧栏、报告的署名色都跟着走。
+// 切到「胶片剪辑台」皮肤时自动切为暖琥珀 / 银盐白 / 柔珊瑚等八色，保持暗房观感统一。
+export const PALETTE = ['#7ff0e2', '#e0c46a', '#ff9b8f', '#9db8ff', '#c9a2ff', '#8fe39a', '#ffb36b', '#f58fc8'];
+export const PALETTE_FILM = ['#e8b55f', '#dfd4c0', '#eb7d72', '#9fb8d8', '#c4a3d9', '#a8c98a', '#e09a5a', '#d98fb0'];
 
 function activePalette() {
   if (typeof document !== 'undefined' && document.documentElement?.dataset.skin === 'film') {
@@ -53,7 +53,7 @@ function activePalette() {
   return PALETTE;
 }
 
-// 同一个视频内按署名先后分配颜色：同名同色，三色轮着来；不同视频互不影响。
+// 同一个视频内按署名先后分配颜色：同名同色，八色轮着来；不同视频互不影响。
 const roster = new Map();
 
 export function setAuthorRoster(comments = [], annotations = []) {
