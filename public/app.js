@@ -31,18 +31,9 @@ const STORE = {
 // 和服务端 config.maxAnnotationSpan 保持一致
 const MAX_ANN_SPAN = 12;
 
-const SAVED_SKIN = localStorage.getItem(STORE.skin);
-
-// 三套皮肤按这个顺序轮换：毛玻璃座舱 → 胶片剪辑台 → 中性灰 · 校色 → 回到毛玻璃座舱
-const SKINS = {
-  default: { label: '毛玻璃座舱', next: 'film', theme: '#000000' },
-  film: { label: '胶片剪辑台', next: 'neutral', theme: '#0a0908' },
-  neutral: { label: '中性灰 · 校色', next: 'default', theme: '#141414' },
-};
-
 const state = {
   author: (localStorage.getItem(STORE.author) || '').trim(),
-  skin: SAVED_SKIN === 'film' || SAVED_SKIN === 'neutral' ? SAVED_SKIN : 'default',
+  skin: localStorage.getItem(STORE.skin) === 'film' ? 'film' : 'default',
   fps: 25,
   // default = 还没识别过的猜测值；auto = 从视频里量出来的；manual = 用户手改过
   fpsSource: 'default',
@@ -369,22 +360,25 @@ function cacheDom() {
 /* ── 皮肤切换 ─────────────────────────────────────────────────────── */
 
 function applySkin(next, { notify = false } = {}) {
-  const skin = next === 'film' || next === 'neutral' ? next : 'default';
+  const skin = next === 'film' ? 'film' : 'default';
   state.skin = skin;
-  if (skin === 'default') delete document.documentElement.dataset.skin;
-  else document.documentElement.dataset.skin = skin;
+  const isFilm = skin === 'film';
+  if (isFilm) document.documentElement.dataset.skin = 'film';
+  else delete document.documentElement.dataset.skin;
 
   try {
-    if (skin === 'default') localStorage.removeItem(STORE.skin);
-    else localStorage.setItem(STORE.skin, skin);
+    if (isFilm) localStorage.setItem(STORE.skin, 'film');
+    else localStorage.removeItem(STORE.skin);
   } catch {}
 
   const themeMeta = document.querySelector('meta[name="theme-color"]');
-  if (themeMeta) themeMeta.content = SKINS[skin].theme;
+  if (themeMeta) themeMeta.content = isFilm ? '#0a0908' : '#000000';
 
   if (dom.skinToggle) {
-    dom.skinToggle.setAttribute('aria-pressed', String(skin !== 'default'));
-    dom.skinToggle.title = `皮肤：${SKINS[skin].label}（点击切换${SKINS[SKINS[skin].next].label}）`;
+    dom.skinToggle.setAttribute('aria-pressed', String(isFilm));
+    dom.skinToggle.title = isFilm
+      ? '皮肤：胶片剪辑台（点击切回毛玻璃座舱）'
+      : '皮肤：毛玻璃座舱（点击切换胶片剪辑台）';
   }
 
   // 让 Canvas 轨道、在场弹幕、侧栏作者色与新皮肤立刻同步
@@ -394,14 +388,14 @@ function applySkin(next, { notify = false } = {}) {
   if (state.video) renderSidebar();
 
   if (notify) {
-    toast(`已切换为「${SKINS[skin].label}」皮肤`);
+    toast(isFilm ? '已切换为「胶片剪辑台」皮肤' : '已切换为「毛玻璃座舱」皮肤');
   }
 }
 
 function initSkin() {
   applySkin(state.skin, { notify: false });
   dom.skinToggle?.addEventListener('click', () => {
-    applySkin(SKINS[state.skin].next, { notify: true });
+    applySkin(state.skin === 'film' ? 'default' : 'film', { notify: true });
   });
 }
 

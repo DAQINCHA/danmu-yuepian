@@ -158,7 +158,7 @@ h1, h2, p { margin: 0; }
   display: block;
   width: 28px;
   height: 28px;
-  border-radius: var(--r-md);
+  border-radius: 7px;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
 }
 

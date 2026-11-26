@@ -45,13 +45,11 @@ export function relativeTime(timestamp) {
 // 切到「胶片剪辑台」皮肤时自动切为暖琥珀 / 银盐白 / 柔珊瑚等八色，保持暗房观感统一。
 export const PALETTE = ['#7ff0e2', '#e0c46a', '#ff9b8f', '#9db8ff', '#c9a2ff', '#8fe39a', '#ffb36b', '#f58fc8'];
 export const PALETTE_FILM = ['#e8b55f', '#dfd4c0', '#eb7d72', '#9fb8d8', '#c4a3d9', '#a8c98a', '#e09a5a', '#d98fb0'];
-// 中性灰皮肤：低饱和柔和色，分得清人又不抢画面
-export const PALETTE_NEUTRAL = ['#a8c4e0', '#d8c28e', '#dc9e96', '#9ec9ad', '#beaad8', '#d9b18e', '#96c5c7', '#d4a3be'];
 
 function activePalette() {
-  const skin = typeof document !== 'undefined' ? document.documentElement?.dataset.skin : '';
-  if (skin === 'film') return PALETTE_FILM;
-  if (skin === 'neutral') return PALETTE_NEUTRAL;
+  if (typeof document !== 'undefined' && document.documentElement?.dataset.skin === 'film') {
+    return PALETTE_FILM;
+  }
   return PALETTE;
 }
 

@@ -18,11 +18,10 @@
   <meta name="theme-color" content="#000000" />
   <script>
     try {
-      var s = localStorage.getItem('danmu:skin');
-      if (s === 'film' || s === 'neutral') {
-        document.documentElement.dataset.skin = s;
+      if (localStorage.getItem('danmu:skin') === 'film') {
+        document.documentElement.dataset.skin = 'film';
         var m = document.querySelector('meta[name="theme-color"]');
-        if (m) m.content = s === 'neutral' ? '#141414' : '#0a0908';
+        if (m) m.content = '#0a0908';
       }
     } catch {}
   </script>
@@ -31,7 +30,6 @@
   <link rel="apple-touch-icon" sizes="180x180" href="./assets/icons/apple-touch-icon.png" />
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./skin-film.css" />
-  <link rel="stylesheet" href="./skin-neutral.css" />
 </head>
 <body>
   <header class="topbar">
