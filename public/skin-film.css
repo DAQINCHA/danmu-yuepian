@@ -117,6 +117,18 @@ html[data-skin="film"] .presence {
   background: rgba(12, 11, 10, 0.65);
   color: #c8beae;
 }
+/* 正在观看的角色：方正场记牌，暖纸色胶囊 */
+html[data-skin="film"] .presence-roster {
+  border-left-color: rgba(255, 244, 224, 0.12);
+}
+html[data-skin="film"] .presence-role {
+  border-radius: 4px;
+  background: rgba(255, 246, 232, 0.06);
+  color: #ebe4d7;
+}
+html[data-skin="film"] .presence-role.is-me {
+  border-color: rgba(226, 168, 75, 0.45);
+}
 html[data-skin="film"] .live-dot {
   background: #e25347;
   box-shadow:

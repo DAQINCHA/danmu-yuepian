@@ -65,6 +65,8 @@ const state = {
   draw: null,
   color: DRAW_COLORS[0],
   es: null,
+  // 顶栏「正在观看」：连接数 / 去重后的署名 / 未署名连接数
+  presence: { count: 0, viewers: [], anon: 0 },
   lastTime: 0,
   lastTick: -1,
   // 开始输入弹幕那一刻的视频时间；发送时用它，而不是敲完回车时已经播过去的时间
@@ -322,7 +324,7 @@ function boot() {
 
 function cacheDom() {
   const ids = [
-    'author-field', 'author-input', 'author-veil', 'author-hint', 'skin-toggle', 'presence', 'presence-count', 'library-open', 'home-open', 'project-new', 'upload-open',
+    'author-field', 'author-input', 'author-veil', 'author-hint', 'skin-toggle', 'presence', 'presence-count', 'presence-roster', 'library-open', 'home-open', 'project-new', 'upload-open',
     'project-search-field', 'project-search', 'project-search-clear', 'project-search-toggle',
     'empty-state', 'frame', 'video-wrap', 'video', 'compare-layer', 'compare-video', 'compare-handle',
     'compare-badge-left', 'compare-badge-right', 'compare-toolbar', 'compare-select', 'compare-modes',
@@ -386,6 +388,7 @@ function applySkin(next, { notify = false } = {}) {
   heatmap?.redraw();
   danmaku?.refreshColors();
   if (state.video) renderSidebar();
+  if (state.video) renderPresence();
 
   if (notify) {
     toast(isFilm ? '已切换为「胶片剪辑台」皮肤' : '已切换为「毛玻璃座舱」皮肤');
@@ -419,6 +422,8 @@ function initAuthor() {
       renderSidebar();
       maybeBeginUpload();
       if (state.author) notice?.maybeShow();
+      // 改了署名：在看片页重新握一次手，把新名字同步进顶栏的「正在观看」
+      if (state.video?.id) connectEvents(state.video.id);
     });
   }
 
@@ -3002,15 +3007,80 @@ function initPresence() {
   dom.presence.hidden = true;
 }
 
-function setPresence(count) {
-  const n = Number(count) || 0;
+function setPresence(data) {
+  // 兼容旧格式：只发一个数字就是纯人数
+  if (typeof data === 'number') {
+    state.presence = { count: Number(data) || 0, viewers: [], anon: 0 };
+  } else {
+    state.presence = {
+      count: Number(data?.count) || 0,
+      viewers: Array.isArray(data?.viewers) ? data.viewers.filter(Boolean) : [],
+      anon: Number(data?.anon) || 0,
+    };
+  }
+  renderPresence();
+}
+
+/** 顶栏「N 人正在看」+ 前 3 位署名角色的首字头像胶囊 */
+function renderPresence() {
   dom.presence.hidden = !state.video;
-  dom.presenceCount.textContent = String(n);
+  const { count = 0, viewers = [], anon = 0 } = state.presence || {};
+  dom.presenceCount.textContent = String(count);
+
+  const roster = dom.presenceRoster;
+  if (!roster) return;
+
+  // 自己排在第一个，其余保持进入房间的先后顺序
+  const me = state.author;
+  const ordered = me && viewers.includes(me)
+    ? [me, ...viewers.filter((name) => name !== me)]
+    : [...viewers];
+
+  const shown = ordered.slice(0, 3);
+  const rest = ordered.length - shown.length + anon;
+
+  roster.replaceChildren();
+  roster.hidden = shown.length === 0;
+
+  for (const name of shown) {
+    const role = document.createElement('span');
+    role.className = 'presence-role' + (name === me ? ' is-me' : '');
+    role.style.setProperty('--role-color', authorColor(name));
+
+    const avatar = document.createElement('span');
+    avatar.className = 'presence-avatar';
+    avatar.setAttribute('aria-hidden', 'true');
+    avatar.textContent = (Array.from(String(name).trim())[0] || '匿').toUpperCase();
+
+    const label = document.createElement('span');
+    label.className = 'presence-name';
+    label.textContent = name;
+
+    role.append(avatar, label);
+    roster.append(role);
+  }
+
+  if (shown.length && rest > 0) {
+    const more = document.createElement('span');
+    more.className = 'presence-more';
+    more.textContent = `+${rest}`;
+    roster.append(more);
+  }
+
+  // 悬浮看完整名单
+  if (ordered.length) {
+    const who = `正在观看：${ordered.join('、')}`;
+    dom.presence.title = anon > 0 ? `${who}（另有 ${anon} 人未署名）` : who;
+  } else {
+    dom.presence.title = `${count} 人正在观看（尚未署名）`;
+  }
 }
 
 function connectEvents(videoId) {
   state.es?.close();
-  const es = new EventSource(`/api/events?video=${encodeURIComponent(videoId || '')}`);
+  const params = new URLSearchParams({ video: videoId || '' });
+  if (state.author) params.set('author', state.author);
+  const es = new EventSource(`/api/events?${params}`);
   state.es = es;
 
   const on = (name, handler) => es.addEventListener(name, (event) => {
@@ -3023,9 +3093,9 @@ function connectEvents(videoId) {
     handler(data);
   });
 
-  on('hello', (data) => setPresence(data.count));
+  on('hello', (data) => setPresence(data));
   on('presence', (data) => {
-    if (data.videoId === state.video?.id) setPresence(data.count);
+    if (data.videoId === state.video?.id) setPresence(data);
   });
   on('comment:new', (data) => {
     if (data.comment?.videoId === state.video?.id) upsertComment(data.comment, { live: true });
