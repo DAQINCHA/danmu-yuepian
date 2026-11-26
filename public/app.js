@@ -25,6 +25,7 @@ const STORE = {
   sidebarW: 'danmu:sidebar-w',
   notice: 'danmu:seen-notice',
   skin: 'danmu:skin',
+  autopause: 'danmu:autopause',
 };
 
 // 和服务端 config.maxAnnotationSpan 保持一致
@@ -70,6 +71,8 @@ const state = {
   composeTime: null,
   // 单行输入栏模式：'frame' 当前帧弹幕 | 'overall' 整体意见（记在第 0 帧）
   composerMode: 'frame',
+  // 边播边打字时顺手暂停画面；个人偏好，记在本机
+  autopause: localStorage.getItem(STORE.autopause) !== 'off',
   // 这一段连续播放里已经弹过气泡的画笔标注，免得在区间内反复弹
   annShown: new Set(),
   // 时间轴上选中的画笔标注（只有它显示入点/出点手把，标注叠在一起时也不会抢）
@@ -331,7 +334,7 @@ function cacheDom() {
     'transport', 'step-back', 'step-fwd', 'speed-btn', 'loop-btn', 'draw-toggle', 'guide-btn', 'compare-btn', 'guide-menu', 'tl-preview', 'fps-input', 'fps-badge', 'fps-field',
     'danmaku-toggle', 'wave-btn', 'snap-btn', 'help-btn', 'help-modal', 'fullscreen-btn',
     'notice-modal', 'notice-badge', 'notice-ver', 'notice-title', 'notice-lead', 'notice-body', 'notice-tip', 'notice-ok',
-    'composer', 'composer-time', 'composer-time-text', 'composer-input', 'composer-submit', 'composer-reveal', 'composer-collapse',
+    'composer', 'composer-time', 'composer-time-text', 'composer-autopause', 'composer-input', 'composer-submit', 'composer-reveal', 'composer-collapse',
     'sidebar', 'sidebar-resizer',
     'video-title', 'video-meta', 'tabs', 'list', 'count-all', 'count-comment', 'count-annotation',
     'report-open',
@@ -2651,6 +2654,7 @@ function setComposerMode(mode) {
   if (dom.composerSubmit) {
     dom.composerSubmit.textContent = overall ? '发整体' : '发弹幕';
   }
+  if (dom.composerAutopause) dom.composerAutopause.hidden = overall;
 }
 
 function lockComposeTime(time) {
@@ -2659,6 +2663,14 @@ function lockComposeTime(time) {
   if (dom.composerTimeText) dom.composerTimeText.textContent = timecode(time);
   dom.composerTime.classList.add('locked');
   dom.composerTime.title = '开始输入时的时间点，发出去的弹幕就挂在这一帧 · 点此切到「整体意见」';
+}
+
+function renderAutopause() {
+  if (!dom.composerAutopause) return;
+  const on = state.autopause;
+  dom.composerAutopause.setAttribute('aria-pressed', String(on));
+  dom.composerAutopause.classList.toggle('on', on);
+  dom.composerAutopause.title = on ? '打字时自动暂停：开（点击关闭）' : '打字时自动暂停：关（点击开启）';
 }
 
 function unlockComposeTime() {
@@ -2683,11 +2695,21 @@ async function postComment(text, time) {
 }
 
 function initComposer() {
+  renderAutopause();
+  dom.composerAutopause?.addEventListener('click', () => {
+    state.autopause = !state.autopause;
+    try { localStorage.setItem(STORE.autopause, state.autopause ? 'on' : 'off'); } catch {}
+    renderAutopause();
+    toast(state.autopause ? '打字时会自动暂停' : '打字时不再自动暂停');
+    dom.composerInput.focus();
+  });
+
   // 第一次按键就把时间钉住：边播边打字时，回车那一刻视频早已往后走了好几秒。
   // 中文输入法先触发 compositionstart，拼音还没上屏也算「开始输入」。
   const begin = () => {
     if (state.composerMode === 'frame' && state.video && state.composeTime === null) {
       lockComposeTime(dom.video.currentTime || 0);
+      if (state.autopause && !dom.video.paused) dom.video.pause();
     }
   };
   dom.composerTime.addEventListener('click', () => {

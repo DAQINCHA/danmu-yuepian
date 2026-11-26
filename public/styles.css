@@ -2312,6 +2312,24 @@ body.author-spotlight .toast { z-index: 100; }
   opacity: 0.6;
 }
 .composer-time:hover .composer-mode-arrow { opacity: 1; }
+.composer-autopause {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+.composer-autopause svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.composer-autopause:hover { color: var(--text); border-color: rgba(255, 255, 255, 0.24); }
+.composer-autopause.on { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.4); background: rgba(var(--accent-rgb), 0.1); }
+.composer-autopause[hidden] { display: none; }
 
 /* 开始输入后时间点锁定在那一刻，不再跟着播放走 */
 .composer-time.locked {
