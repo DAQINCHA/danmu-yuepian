@@ -138,7 +138,17 @@ function applySiteTitle() {
     // 项目页 / 看片页的标题由各自页面设，晚到的站点名别抢回去
     if (currentRoute() === '/') document.title = title;
     const brand = document.getElementById('brand-name');
-    if (brand) brand.textContent = title;
+    if (brand) {
+      const sep = title.indexOf(' · ');
+      if (sep > 0) {
+        const group = document.createElement('span');
+        group.className = 'brand-group';
+        group.textContent = title.slice(sep);
+        brand.replaceChildren(title.slice(0, sep), group);
+      } else {
+        brand.textContent = title;
+      }
+    }
   }).catch(() => {
     /* 拿不到就保持默认名字 */
   });
