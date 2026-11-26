@@ -184,7 +184,7 @@ h1, h2, p { margin: 0; }
   gap: 7px;
   height: 30px;
   min-width: 0;
-  max-width: 420px;
+  max-width: 320px;
   padding: 0 8px 0 10px;
   border: 1px solid rgba(var(--accent-hi-rgb), 0.28);
   border-radius: var(--r-pill);
@@ -205,52 +205,32 @@ h1, h2, p { margin: 0; }
 .presence-label { display: none; }
 @media (min-width: 900px) { .presence-label { display: inline; } }
 
-/* 正在观看的角色：前三位署名的圆头像胶囊，多的收进 +N */
+/* 正在观看的角色：前五位只露首字圆头像，多的收进 +N */
 .presence-summary { display: inline-flex; align-items: center; gap: 3px; flex: none; }
 .presence-roster {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding-left: 7px;
+  gap: 4px;
+  padding: 1px 0 1px 7px;
   border-left: 1px solid rgba(255, 255, 255, 0.14);
   min-width: 0;
-  overflow: hidden;
 }
 .presence-roster[hidden] { display: none; }
-.presence-role {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 20px;
-  padding: 0 6px 0 2px;
-  border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text);
-  font-size: var(--fs-xs);
-  max-width: 96px;
-  min-width: 0;
-}
-.presence-role.is-me {
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  background: rgba(255, 255, 255, 0.1);
-}
 .presence-avatar {
   flex: none;
   display: inline-grid;
   place-items: center;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: var(--role-color, var(--accent));
   color: #0b0b0b;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   line-height: 1;
 }
-.presence-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.presence-avatar.is-me {
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.85);
 }
 .presence-more {
   flex: none;
@@ -261,11 +241,6 @@ h1, h2, p { margin: 0; }
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-dim);
   font-size: var(--fs-xs);
-}
-/* 窄一点的桌面 / 平板：只留圆头像，把顶栏空间让给按钮 */
-@media (max-width: 1100px) {
-  .presence-role { padding: 0 2px; }
-  .presence-role .presence-name { display: none; }
 }
 
 .author-field {

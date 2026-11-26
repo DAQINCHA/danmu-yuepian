@@ -3036,28 +3036,19 @@ function renderPresence() {
     ? [me, ...viewers.filter((name) => name !== me)]
     : [...viewers];
 
-  const shown = ordered.slice(0, 3);
+  const shown = ordered.slice(0, 5);
   const rest = ordered.length - shown.length + anon;
 
   roster.replaceChildren();
   roster.hidden = shown.length === 0;
 
   for (const name of shown) {
-    const role = document.createElement('span');
-    role.className = 'presence-role' + (name === me ? ' is-me' : '');
-    role.style.setProperty('--role-color', authorColor(name));
-
     const avatar = document.createElement('span');
-    avatar.className = 'presence-avatar';
-    avatar.setAttribute('aria-hidden', 'true');
+    avatar.className = 'presence-avatar' + (name === me ? ' is-me' : '');
+    avatar.style.setProperty('--role-color', authorColor(name));
+    avatar.title = name === me ? `${name}（我）` : name;
     avatar.textContent = (Array.from(String(name).trim())[0] || '匿').toUpperCase();
-
-    const label = document.createElement('span');
-    label.className = 'presence-name';
-    label.textContent = name;
-
-    role.append(avatar, label);
-    roster.append(role);
+    roster.append(avatar);
   }
 
   if (shown.length && rest > 0) {
