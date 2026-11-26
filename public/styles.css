@@ -3411,6 +3411,7 @@ body.dragging::after {
 
   .topbar,
   .workspace,
+  .mobile-dock,
   .toast,
   .author-veil,
   .author-hint,
@@ -3496,6 +3497,8 @@ body.dragging::after {
 
 /* ── 窄屏 ───────────────────────────────────────────────────────────── */
 
+.mobile-dock { display: none; }
+
 @media (max-width: 860px) {
   .topbar {
     margin: 0;
@@ -3503,6 +3506,86 @@ body.dragging::after {
     border-top: 0;
     border-left: 0;
     border-right: 0;
+  }
+  /* 窄屏以审片为主，隐藏顶栏「新建项目」与「上传影片」 */
+  #project-new,
+  #upload-open { display: none !important; }
+  /* 窄屏主页顶部的「项目 / 个人」标签收到底部悬浮胶囊，原顶部条整行收掉避免留白 */
+  .home-nav { display: none; }
+  .library-bar:has(#home-nav:not([hidden])) { display: none; }
+  .empty.library-view:has(#home-nav:not([hidden])) .library-page {
+    padding-bottom: calc(92px + env(safe-area-inset-bottom));
+  }
+  body:has(#home-dock:not([hidden])) .toast {
+    bottom: calc(82px + env(safe-area-inset-bottom));
+  }
+  /* iOS 悬浮液态玻璃胶囊底栏（参考 make-a-reservation，适配两枚主页标签） */
+  .mobile-dock {
+    display: flex;
+    position: fixed;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: min(232px, calc(100vw - 36px));
+    bottom: max(12px, calc(env(safe-area-inset-bottom) - 14px));
+    z-index: 35;
+    padding: 4px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(11, 22, 26, 0.28));
+    box-shadow:
+      0 16px 40px rgba(0, 0, 0, 0.52),
+      0 2px 8px rgba(0, 0, 0, 0.24),
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.30),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.10);
+    backdrop-filter: blur(12px) saturate(185%);
+    -webkit-backdrop-filter: blur(12px) saturate(185%);
+    justify-content: space-between;
+    gap: 2px;
+  }
+  .mobile-dock-btn {
+    flex: 1;
+    min-height: 48px;
+    padding: 3px 4px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    font-size: 10.5px;
+    font-weight: 500;
+    line-height: 1.15;
+    color: var(--text-dim);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.18s ease, color 0.18s ease, transform 0.14s ease;
+  }
+  .mobile-dock-btn svg {
+    width: 18px;
+    height: 18px;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .mobile-dock-btn:active { transform: scale(0.96); }
+  .mobile-dock-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .mobile-dock-btn.active {
+    background: linear-gradient(100deg, rgba(34, 193, 195, 0.28), rgba(127, 240, 234, 0.14));
+    color: #eaffff;
+    font-weight: 600;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.28),
+      0 2px 10px rgba(34, 193, 195, 0.18);
   }
   .project-grid { grid-template-columns: 1fr; }
   .version-row { flex-wrap: wrap; }

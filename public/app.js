@@ -322,7 +322,7 @@ function cacheDom() {
     'sidebar', 'sidebar-resizer',
     'video-title', 'video-meta', 'tabs', 'list', 'count-all', 'count-comment', 'count-annotation',
     'report-open',
-    'library-modal', 'library-grid', 'library-page', 'library-crumb', 'home-nav', 'home-back', 'home-tabs', 'project-grid', 'version-list',
+    'library-modal', 'library-grid', 'library-page', 'library-crumb', 'home-nav', 'home-back', 'home-tabs', 'home-dock', 'project-grid', 'version-list',
     'library-actions', 'intro-card', 'intro-close',
     'personal-folder-head', 'personal-folder-title', 'personal-folder-rename',
     'upload-modal', 'dropzone', 'file-input', 'title-label', 'title-input', 'upload-project', 'upload-project-select', 'upload-new-project',
@@ -595,6 +595,7 @@ function syncTopbarNav() {
   // 收起搜索时把小屏的展开态也清掉，下次进来重新从放大镜开始
   if (dom.projectSearchField.hidden) setProjectSearchExpanded(false);
   dom.uploadOpen.hidden = onVideo;
+  if (dom.homeDock) dom.homeDock.hidden = !onHome;
 }
 
 function leaveVideo() {
@@ -3764,9 +3765,9 @@ function applyProjectSearch() {
   dom.projectSearchField?.classList.toggle('is-filtering', Boolean(query));
 }
 
-/** 首页「项目 / 个人」标签。状态留在前端，地址栏还是原来的 /、/p/...、/v/... */
+/** 首页「项目 / 个人」标签（桌面顶栏 + 窄屏底部胶囊共用）。状态留在前端，地址栏还是原来的 /、/p/...、/v/... */
 function initHomeTabs() {
-  for (const tab of dom.homeTabs.querySelectorAll('.home-tab')) {
+  for (const tab of document.querySelectorAll('[data-home-tab]')) {
     tab.addEventListener('click', () => {
       const next = tab.dataset.homeTab;
       if (state.homeTab === next && !state.personalUploader && !state.finalFolderOpen) return;
@@ -3780,6 +3781,8 @@ function initHomeTabs() {
       }
       syncTopbarNav();
       renderLibraryView();
+      if (dom.empty) dom.empty.scrollTop = 0;
+      window.scrollTo(0, 0);
     });
   }
   dom.homeBack?.addEventListener('click', () => {
@@ -4044,8 +4047,11 @@ function renderCrumb() {
       (state.homeTab === 'personal' && state.personalUploader) ||
       (state.homeTab === 'project' && state.finalFolderOpen)
     );
-    for (const tab of dom.homeTabs.querySelectorAll('.home-tab')) {
-      tab.classList.toggle('active', tab.dataset.homeTab === state.homeTab);
+    for (const tab of document.querySelectorAll('[data-home-tab]')) {
+      const active = tab.dataset.homeTab === state.homeTab;
+      tab.classList.toggle('active', active);
+      if (active) tab.setAttribute('aria-current', 'page');
+      else tab.removeAttribute('aria-current');
     }
     return;
   }
