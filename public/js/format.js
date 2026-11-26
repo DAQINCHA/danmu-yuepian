@@ -41,11 +41,19 @@ export function relativeTime(timestamp) {
   return new Date(Number(timestamp)).toLocaleDateString('zh-CN');
 }
 
-// 「弹幕流光」皮肤只留青 / 金 / 红三色：同一支片里按署名先后轮着分，
-// 同名同色。气泡、侧栏、报告的署名色都跟着走。
+// 同一支片里按署名先后轮着分三色，同名同色；气泡、侧栏、报告的署名色都跟着走。
+// 切到「胶片剪辑台」皮肤时自动切为暖琥珀 / 银盐白 / 柔珊瑚三色，保持暗房观感统一。
 export const PALETTE = ['#7ff0e2', '#e0c46a', '#ff9b8f'];
+export const PALETTE_FILM = ['#e8b55f', '#dfd4c0', '#eb7d72'];
 
-// 同一个视频内按署名先后分配颜色：同名同色，青 / 金 / 红轮着来；不同视频互不影响。
+function activePalette() {
+  if (typeof document !== 'undefined' && document.documentElement?.dataset.skin === 'film') {
+    return PALETTE_FILM;
+  }
+  return PALETTE;
+}
+
+// 同一个视频内按署名先后分配颜色：同名同色，三色轮着来；不同视频互不影响。
 const roster = new Map();
 
 export function setAuthorRoster(comments = [], annotations = []) {
@@ -63,5 +71,6 @@ export function setAuthorRoster(comments = [], annotations = []) {
 export function authorColor(name) {
   const key = String(name || '匿名');
   if (!roster.has(key)) roster.set(key, roster.size);
-  return PALETTE[roster.get(key) % PALETTE.length];
+  const palette = activePalette();
+  return palette[roster.get(key) % palette.length];
 }

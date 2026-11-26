@@ -16,10 +16,20 @@
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="theme-color" content="#000000" />
+  <script>
+    try {
+      if (localStorage.getItem('danmu:skin') === 'film') {
+        document.documentElement.dataset.skin = 'film';
+        var m = document.querySelector('meta[name="theme-color"]');
+        if (m) m.content = '#0a0908';
+      }
+    } catch {}
+  </script>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" sizes="180x180" href="./assets/icons/apple-touch-icon.png" />
   <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./skin-film.css" />
 </head>
 <body>
   <header class="topbar">
@@ -52,6 +62,13 @@
         <span class="author-label">署名</span>
         <input id="author-input" type="text" maxlength="16" autocomplete="off" spellcheck="false" />
       </label>
+      <button class="icon-btn skin-toggle" id="skin-toggle" type="button"
+              aria-label="切换皮肤" aria-pressed="false" title="皮肤：毛玻璃座舱（点击切换胶片剪辑台）">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <rect x="2" y="2.6" width="12" height="10.8" rx="1.5" />
+          <path d="M4.8 2.6v10.8M11.2 2.6v10.8M2 5.4h2.8M2 8h2.8M2 10.6h2.8M11.2 5.4H14M11.2 8H14M11.2 10.6H14" />
+        </svg>
+      </button>
       <button class="btn ghost" id="library-open" type="button" hidden>返回主页</button>
       <button class="btn ghost" id="home-open" type="button" hidden>返回项目</button>
       <button class="btn" id="project-new" type="button">新建项目</button>

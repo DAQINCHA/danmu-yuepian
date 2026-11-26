@@ -24,6 +24,7 @@ const STORE = {
   guide: 'danmu:guide',
   sidebarW: 'danmu:sidebar-w',
   notice: 'danmu:seen-notice',
+  skin: 'danmu:skin',
 };
 
 // 和服务端 config.maxAnnotationSpan 保持一致
@@ -31,6 +32,7 @@ const MAX_ANN_SPAN = 12;
 
 const state = {
   author: (localStorage.getItem(STORE.author) || '').trim(),
+  skin: localStorage.getItem(STORE.skin) === 'film' ? 'film' : 'default',
   fps: 25,
   // default = 还没识别过的猜测值；auto = 从视频里量出来的；manual = 用户手改过
   fpsSource: 'default',
@@ -243,6 +245,7 @@ function boot() {
   }, { storeKey: STORE.notice });
 
   initAuthor();
+  initSkin();
   initProjectSearch();
   initHomeTabs();
   initTransport();
@@ -316,7 +319,7 @@ function boot() {
 
 function cacheDom() {
   const ids = [
-    'author-field', 'author-input', 'author-veil', 'author-hint', 'presence', 'presence-count', 'library-open', 'home-open', 'project-new', 'upload-open',
+    'author-field', 'author-input', 'author-veil', 'author-hint', 'skin-toggle', 'presence', 'presence-count', 'library-open', 'home-open', 'project-new', 'upload-open',
     'project-search-field', 'project-search', 'project-search-clear', 'project-search-toggle',
     'empty-state', 'frame', 'video-wrap', 'video', 'compare-layer', 'compare-video', 'compare-handle',
     'compare-badge-left', 'compare-badge-right', 'compare-toolbar', 'compare-select', 'compare-modes',
@@ -349,6 +352,48 @@ function cacheDom() {
   for (const id of ids) dom[camel(id)] = $(id);
   dom.empty = dom.emptyState;
   dom.stage = $('stage');
+}
+
+/* ── 皮肤切换 ─────────────────────────────────────────────────────── */
+
+function applySkin(next, { notify = false } = {}) {
+  const skin = next === 'film' ? 'film' : 'default';
+  state.skin = skin;
+  const isFilm = skin === 'film';
+  if (isFilm) document.documentElement.dataset.skin = 'film';
+  else delete document.documentElement.dataset.skin;
+
+  try {
+    if (isFilm) localStorage.setItem(STORE.skin, 'film');
+    else localStorage.removeItem(STORE.skin);
+  } catch {}
+
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeMeta) themeMeta.content = isFilm ? '#0a0908' : '#000000';
+
+  if (dom.skinToggle) {
+    dom.skinToggle.setAttribute('aria-pressed', String(isFilm));
+    dom.skinToggle.title = isFilm
+      ? '皮肤：胶片剪辑台（点击切回毛玻璃座舱）'
+      : '皮肤：毛玻璃座舱（点击切换胶片剪辑台）';
+  }
+
+  // 让 Canvas 轨道、在场弹幕、侧栏作者色与新皮肤立刻同步
+  waveform?.redraw();
+  heatmap?.redraw();
+  danmaku?.refreshColors();
+  if (state.video) renderSidebar();
+
+  if (notify) {
+    toast(isFilm ? '已切换为「胶片剪辑台」皮肤' : '已切换为「毛玻璃座舱」皮肤');
+  }
+}
+
+function initSkin() {
+  applySkin(state.skin, { notify: false });
+  dom.skinToggle?.addEventListener('click', () => {
+    applySkin(state.skin === 'film' ? 'default' : 'film', { notify: true });
+  });
 }
 
 /* ── 身份 ─────────────────────────────────────────────────────────── */

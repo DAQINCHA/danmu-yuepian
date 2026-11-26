@@ -1,0 +1,2356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>胶片剪辑台 · 皮肤优化预览对比</title>
+  <link rel="stylesheet" href="../public/styles.css" />
+  <style>
+    /* ═══════════════════════════════════════════════════════════════════
+       预览对比控制条（独立于应用皮肤，中性暗灰，不干扰色彩判断）
+       ═══════════════════════════════════════════════════════════════════ */
+    .preview-bar {
+      position: relative;
+      z-index: 120;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex: 0 0 auto;
+      min-height: 44px;
+      padding: 6px 14px;
+      background: #141416;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      color: #d4d4d8;
+      font-size: 12px;
+      user-select: none;
+    }
+    .preview-bar-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .preview-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding-right: 10px;
+      margin-right: 4px;
+      border-right: 1px solid rgba(255, 255, 255, 0.12);
+      color: #fafafa;
+      font-weight: 650;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+    .preview-title-badge {
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(226, 168, 75, 0.18);
+      color: #f2c97d;
+      font-size: 10.5px;
+      font-weight: 600;
+    }
+    .preview-seg {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 2px;
+      border-radius: 7px;
+      background: #0c0c0e;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+    }
+    .preview-seg button {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 26px;
+      padding: 0 10px;
+      border: 1px solid transparent;
+      border-radius: 5px;
+      background: transparent;
+      color: #a1a1aa;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.14s, color 0.14s, border-color 0.14s;
+    }
+    .preview-seg button:hover {
+      color: #f4f4f5;
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .preview-seg button.is-on {
+      background: #27272a;
+      border-color: rgba(255, 255, 255, 0.16);
+      color: #ffffff;
+      font-weight: 600;
+    }
+    .preview-seg button[data-skin-pick="film-refined"].is-on {
+      background: rgba(226, 168, 75, 0.2);
+      border-color: rgba(226, 168, 75, 0.55);
+      color: #fce2ab;
+    }
+    .preview-kbd {
+      display: inline-grid;
+      place-items: center;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #a1a1aa;
+      font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .preview-seg button.is-on .preview-kbd {
+      background: rgba(255, 255, 255, 0.16);
+      color: #fff;
+    }
+    .preview-peek {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 28px;
+      padding: 0 10px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 6px;
+      background: #1f1f23;
+      color: #e4e4e7;
+      font-size: 11.5px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .preview-peek:hover { border-color: rgba(255, 255, 255, 0.28); color: #fff; }
+    .preview-peek.is-peeking {
+      background: rgba(224, 85, 77, 0.22);
+      border-color: rgba(224, 85, 77, 0.6);
+      color: #ffd0cc;
+    }
+    .preview-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 28px;
+      padding: 0 9px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      background: transparent;
+      color: #a1a1aa;
+      font-size: 11.5px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .preview-toggle:hover { color: #f4f4f5; background: rgba(255, 255, 255, 0.05); }
+    .preview-toggle.is-on {
+      border-color: rgba(255, 255, 255, 0.24);
+      background: rgba(255, 255, 255, 0.09);
+      color: #fff;
+    }
+
+    /* 预览静态弹幕定格 */
+    .preview-dm .dm {
+      animation: none !important;
+      opacity: 1 !important;
+    }
+    .preview-mock-frame {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      user-select: none;
+      pointer-events: none;
+    }
+    /* 预览专用：详情页（弹窗 / 浮层 / 优化对照） */
+    .showcase-view {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 20px clamp(16px, 3vw, 36px) 44px;
+    }
+    .showcase-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .showcase-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 20px;
+      align-items: start;
+    }
+    .showcase-block {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .showcase-label {
+      color: var(--text-dim);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    .showcase-inline-modal {
+      position: static !important;
+      inset: auto !important;
+      padding: 0 !important;
+      background: transparent !important;
+      backdrop-filter: none !important;
+      display: block !important;
+    }
+    .showcase-inline-modal .modal-box {
+      width: 100%;
+      max-height: none;
+      animation: none;
+    }
+    .showcase-popovers {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 16px;
+    }
+    .showcase-popovers .tl-preview,
+    .showcase-popovers .guide-menu,
+    .showcase-popovers .toast {
+      position: static !important;
+      transform: none !important;
+      animation: none !important;
+    }
+    .diff-panel {
+      padding: 18px 20px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(20, 20, 22, 0.72);
+      backdrop-filter: blur(16px);
+    }
+    .diff-panel h3 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      font-weight: 650;
+      color: var(--text);
+    }
+    .diff-table {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+      gap: 12px;
+    }
+    .diff-card {
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.025);
+    }
+    .diff-card b {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 12.5px;
+      color: var(--text);
+    }
+    .diff-card p {
+      margin: 0;
+      color: var(--text-dim);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .diff-tag-old {
+      color: #f08a80;
+      font-weight: 600;
+    }
+    .diff-tag-new {
+      color: #f2c97d;
+      font-weight: 600;
+    }
+
+    /* 预览里的项目封面直接可见（不依赖 src 属性） */
+    .project-cover.mock-cover { visibility: visible !important; }
+    .item-annotation canvas.mock-ann {
+      display: block;
+      width: 92px;
+      height: 52px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 92 52'%3E%3Crect width='92' height='52' fill='%23100f0d'/%3E%3Cpath d='M6 43 L25 17 H52' fill='none' stroke='%23e25347' stroke-width='1.5' opacity='.55'/%3E%3Cellipse cx='59' cy='27' rx='19' ry='12' fill='none' stroke='%23e25347' stroke-width='2'/%3E%3Cpath d='M76 14 L86 8' stroke='%23e25347' stroke-width='1.5'/%3E%3C/svg%3E");
+      background-size: cover;
+      background-position: center;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       皮肤 B：原版 02 胶片剪辑台（旧稿直接套用当前布局，用作客观对比基准）
+       ═══════════════════════════════════════════════════════════════════ */
+    body[data-skin="film-legacy"] {
+      --bg: #000000;
+      --bg-soft: #070604;
+      --panel: rgba(255, 255, 255, 0.05);
+      --panel-2: rgba(255, 255, 255, 0.08);
+      --line: rgba(224, 169, 79, 0.18);
+      --line-soft: rgba(255, 255, 255, 0.05);
+      --text: #efe7d6;
+      --text-dim: #b3a68c;
+      --text-faint: #7c7160;
+      --accent: #e0a94f;
+      --accent-soft: rgba(224, 169, 79, 0.14);
+      --warn: #e0554d;
+      --gold-text: #f0d79a;
+      --cyan-text: #e0a94f;
+      --radius: 4px;
+      background-color: #000;
+    }
+    body[data-skin="film-legacy"]::after {
+      inset: 0;
+      filter: none;
+      opacity: 1;
+      animation: none;
+      background:
+        radial-gradient(78% 50% at 50% 0%, rgba(224, 169, 79, 0.06), transparent 70%),
+        radial-gradient(60% 40% at 50% 100%, rgba(224, 85, 77, 0.03), transparent 70%),
+        #000;
+    }
+    body[data-skin="film-legacy"] .topbar {
+      border-radius: 4px;
+      background: linear-gradient(180deg, #0b0906, #000);
+      border-color: rgba(224, 169, 79, 0.26);
+      box-shadow: inset 0 2px 0 #e0554d, inset 0 3px 0 rgba(255, 255, 255, 0.05), 0 12px 30px rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+    body[data-skin="film-legacy"] .brand-mark {
+      filter: sepia(0.85) saturate(0.9) brightness(1.02);
+      border-radius: 4px;
+      box-shadow: 0 0 0 1px rgba(224, 169, 79, 0.4), 0 0 16px rgba(224, 169, 79, 0.2);
+    }
+    body[data-skin="film-legacy"] .brand-text strong { color: #f5ead4; letter-spacing: 0.08em; }
+    body[data-skin="film-legacy"] .brand-text small { color: #8c7d62; letter-spacing: 0.12em; }
+    body[data-skin="film-legacy"] .presence {
+      border-color: rgba(224, 169, 79, 0.24);
+      background: rgba(224, 169, 79, 0.05);
+      color: #c9b791;
+      border-radius: 4px;
+    }
+    body[data-skin="film-legacy"] .live-dot {
+      border-radius: 1px;
+      background: #e0554d;
+      box-shadow: 0 0 0 3px rgba(224, 85, 77, 0.14), 0 0 10px rgba(224, 85, 77, 0.8);
+    }
+    body[data-skin="film-legacy"] .project-search-field,
+    body[data-skin="film-legacy"] .author-field {
+      border-color: rgba(224, 169, 79, 0.24);
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 4px;
+      color: #8c7d62;
+    }
+    body[data-skin="film-legacy"] .author-field input {
+      border-radius: 3px;
+      background: #141108;
+      color: #f0e4cc;
+    }
+    body[data-skin="film-legacy"] .btn,
+    body[data-skin="film-legacy"] .icon-btn,
+    body[data-skin="film-legacy"] .step-buttons {
+      border-radius: 4px;
+      border-color: rgba(224, 169, 79, 0.24);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015));
+      color: #e7dcc6;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.9);
+    }
+    body[data-skin="film-legacy"] .btn:hover,
+    body[data-skin="film-legacy"] .icon-btn:hover {
+      border-color: rgba(224, 169, 79, 0.6);
+      background: linear-gradient(180deg, rgba(224, 169, 79, 0.16), rgba(255, 255, 255, 0.02));
+      color: #ffe0a8;
+    }
+    body[data-skin="film-legacy"] .btn.ghost { background: transparent; box-shadow: none; }
+    body[data-skin="film-legacy"] .btn.ghost:hover { background: rgba(224, 169, 79, 0.1); }
+    body[data-skin="film-legacy"] .btn.primary,
+    body[data-skin="film-legacy"] .report-open {
+      background-image: linear-gradient(180deg, #f4cd86, #e0a94f 55%, #b9822f);
+      border-color: rgba(255, 226, 176, 0.7);
+      color: #241704;
+      font-weight: 650;
+      box-shadow: 0 0 18px rgba(224, 169, 79, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+      animation: none;
+    }
+    body[data-skin="film-legacy"] .btn.primary:hover,
+    body[data-skin="film-legacy"] .report-open:hover {
+      background-image: linear-gradient(180deg, #ffe1a6, #eebd6c 55%, #cb913a);
+      box-shadow: 0 0 26px rgba(224, 169, 79, 0.42), inset 0 1px 0 #ffedc9;
+    }
+    body[data-skin="film-legacy"] .btn.active {
+      background-image: linear-gradient(180deg, rgba(224, 169, 79, 0.22), rgba(224, 169, 79, 0.06));
+      border-color: rgba(224, 169, 79, 0.6);
+      color: #ffdfa5;
+      box-shadow: inset 0 0 0 1px rgba(224, 169, 79, 0.15);
+    }
+    body[data-skin="film-legacy"] .intro-banner {
+      border-radius: 4px;
+      border-color: rgba(224, 169, 79, 0.28);
+      background: #0c0a07;
+      color: #b3a68c;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.7);
+    }
+    body[data-skin="film-legacy"] .intro-banner strong {
+      background: none;
+      color: #e0a94f;
+    }
+    body[data-skin="film-legacy"] .home-tabs {
+      border-radius: 4px;
+      border-color: rgba(224, 169, 79, 0.22);
+      background: #0a0806;
+    }
+    body[data-skin="film-legacy"] .home-tab { border-radius: 3px; color: #a8987c; }
+    body[data-skin="film-legacy"] .home-tab.active {
+      background: rgba(224, 169, 79, 0.16);
+      border-color: rgba(224, 169, 79, 0.5);
+      color: #ffd99a;
+      box-shadow: none;
+    }
+    body[data-skin="film-legacy"] .project-card,
+    body[data-skin="film-legacy"] .version-row {
+      border-radius: 7px;
+      border: 1px solid rgba(224, 169, 79, 0.16);
+      background: linear-gradient(180deg, #0d0b08, #070604);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 32px rgba(0, 0, 0, 0.6);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    body[data-skin="film-legacy"] .project-card:hover,
+    body[data-skin="film-legacy"] .version-row:hover {
+      border-color: rgba(224, 169, 79, 0.55);
+      box-shadow: 0 0 0 1px rgba(224, 169, 79, 0.16), 0 18px 40px rgba(0, 0, 0, 0.7);
+    }
+    body[data-skin="film-legacy"] .project-cover-frame {
+      background: #070604;
+      border-radius: 6px 6px 0 0;
+    }
+    body[data-skin="film-legacy"] .personal-cover { border-radius: 6px 6px 0 0; }
+    /* 旧稿：上下各一条 10px 胶片齿孔（会压到封面上下边缘和角标） */
+    body[data-skin="film-legacy"] .project-cover-frame::before,
+    body[data-skin="film-legacy"] .project-cover-frame::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 10px;
+      z-index: 2;
+      pointer-events: none;
+      background-color: rgba(4, 3, 2, 0.82);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='10'%3E%3Crect x='5' y='2.6' width='8' height='4.8' rx='1.4' fill='%23efe2c4' opacity='.55'/%3E%3C/svg%3E");
+      background-repeat: repeat-x;
+      background-size: 20px 10px;
+      border-top: 1px solid rgba(224, 169, 79, 0.22);
+      border-bottom: 1px solid rgba(224, 169, 79, 0.22);
+    }
+    body[data-skin="film-legacy"] .project-cover-frame::before { top: 0; bottom: auto; }
+    body[data-skin="film-legacy"] .project-cover-frame::after { top: auto; bottom: 0; }
+    body[data-skin="film-legacy"] .project-name { color: #f2e8d2; }
+    body[data-skin="film-legacy"] .project-meta,
+    body[data-skin="film-legacy"] .version-meta { color: #a2947a; }
+    body[data-skin="film-legacy"] .project-add {
+      border: 1.5px dashed rgba(224, 169, 79, 0.5);
+      background:
+        repeating-linear-gradient(-45deg, rgba(224, 169, 79, 0.11) 0 6px, transparent 6px 15px),
+        linear-gradient(180deg, #0c0a07, #050403);
+      color: #e0a94f;
+      border-radius: 7px;
+    }
+    body[data-skin="film-legacy"] .ver-badge {
+      border-radius: 3px;
+      background: rgba(224, 169, 79, 0.16);
+      color: #f0c477;
+    }
+    body[data-skin="film-legacy"] .video-wrap {
+      border-radius: 4px;
+      box-shadow: 0 0 0 1px rgba(224, 169, 79, 0.28), 0 0 0 8px #050403, 0 0 0 9px rgba(224, 169, 79, 0.12), 0 26px 70px rgba(0, 0, 0, 0.95);
+    }
+    /* 旧稿：画面内部四角黄色取景刻线 */
+    body[data-skin="film-legacy"] .video-wrap::after {
+      inset: 12px;
+      padding: 0;
+      opacity: 0.65;
+      -webkit-mask: none;
+      mask: none;
+      background:
+        linear-gradient(#e0a94f, #e0a94f) left top / 22px 1px no-repeat,
+        linear-gradient(#e0a94f, #e0a94f) left top / 1px 22px no-repeat,
+        linear-gradient(#e0a94f, #e0a94f) right top / 22px 1px no-repeat,
+        linear-gradient(#e0a94f, #e0a94f) right top / 1px 22px no-repeat,
+        linear-gradient(#e0a94f, #e0a94f) left bottom / 22px 1px no-repeat,
+        linear-gradient(#e0a94f, #e0a94f) left bottom / 1px 22px no-repeat,
+        linear-gradient(#e0a94f, #e0a94f) right bottom / 22px 1px no-repeat,
+        linear-gradient(#e0a94f, #e0a94f) right bottom / 1px 22px no-repeat;
+    }
+    body[data-skin="film-legacy"] .paused-badge {
+      border-radius: 3px;
+      background: rgba(34, 7, 5, 0.82);
+      border-color: rgba(224, 85, 77, 0.55);
+      color: #f4bdb8;
+      box-shadow: none;
+    }
+    body[data-skin="film-legacy"] .paused-badge::before {
+      background: #e0554d;
+      box-shadow: 0 0 8px rgba(224, 85, 77, 0.9);
+    }
+    body[data-skin="film-legacy"] .dm {
+      border-radius: 5px;
+      border: 1px solid rgba(224, 169, 79, 0.34);
+      border-left: 3px solid #e0a94f;
+      background: rgba(12, 10, 7, 0.82);
+      background-image: none;
+      color: #f7efe0;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+    }
+    body[data-skin="film-legacy"] .dm.is-mine {
+      border-left-color: #e0554d;
+      border-color: rgba(224, 169, 79, 0.55);
+      background-image: linear-gradient(180deg, rgba(224, 169, 79, 0.2), rgba(90, 40, 30, 0.2));
+    }
+    body[data-skin="film-legacy"] .dm-name { color: #f0c477; }
+    body[data-skin="film-legacy"] .toolbar,
+    body[data-skin="film-legacy"] .transport,
+    body[data-skin="film-legacy"] .composer {
+      border-radius: 4px;
+      border-color: rgba(224, 169, 79, 0.22);
+      background-color: #080705;
+      background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(0, 0, 0, 0.6));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    body[data-skin="film-legacy"] .draw-toolbar {
+      border-top-color: rgba(224, 169, 79, 0.45);
+      box-shadow: inset 0 2px 0 rgba(224, 169, 79, 0.3), inset 0 3px 0 rgba(0, 0, 0, 0.7);
+      background-image:
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 5px),
+        linear-gradient(180deg, rgba(224, 169, 79, 0.07), rgba(0, 0, 0, 0.6));
+    }
+    body[data-skin="film-legacy"] .draw-toolbar::before,
+    body[data-skin="film-legacy"] .compare-toolbar::before { display: none; }
+    body[data-skin="film-legacy"] .tag,
+    body[data-skin="film-legacy"] .fps-badge {
+      border-radius: 2px;
+      background: rgba(224, 169, 79, 0.13);
+      color: #d3b57c;
+    }
+    body[data-skin="film-legacy"] .tc { color: #e0a94f; }
+    body[data-skin="film-legacy"] .tc.dim { color: #857754; }
+    body[data-skin="film-legacy"] .timeline { height: 32px; align-items: flex-end; padding-bottom: 6px; }
+    body[data-skin="film-legacy"] .timeline::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 11px;
+      pointer-events: none;
+      border-bottom: 1px solid rgba(224, 169, 79, 0.22);
+      background-image:
+        repeating-linear-gradient(90deg, rgba(224, 169, 79, 0.9) 0 1.5px, transparent 1.5px 25%),
+        repeating-linear-gradient(90deg, rgba(224, 169, 79, 0.4) 0 1px, transparent 1px 10px);
+      background-size: 100% 9px, 100% 4px;
+      background-position: left top, left bottom;
+      background-repeat: repeat-x;
+    }
+    body[data-skin="film-legacy"] .timeline-rail { height: 6px; border-radius: 1px; background: rgba(255, 255, 255, 0.08); }
+    body[data-skin="film-legacy"] .timeline-fill {
+      border-radius: 1px;
+      background: linear-gradient(90deg, #8a5a1f, #e0a94f 70%, #ffd99a);
+      box-shadow: 0 0 10px rgba(224, 169, 79, 0.45);
+    }
+    body[data-skin="film-legacy"] .timeline-head {
+      top: -6px;
+      height: 18px;
+      width: 1px;
+      border-radius: 0;
+      transform: translateX(-50%);
+      background: #ffd99a;
+      box-shadow: 0 0 8px rgba(224, 169, 79, 0.9);
+    }
+    body[data-skin="film-legacy"] .mark.comment { background: #e0a94f; }
+    body[data-skin="film-legacy"] .mark.annotation { background: #e0554d; }
+    body[data-skin="film-legacy"] .mark.annotation.span { background: rgba(224, 85, 77, 0.5); }
+    body[data-skin="film-legacy"] .fps-field input,
+    body[data-skin="film-legacy"] .composer input,
+    body[data-skin="film-legacy"] .compare-select {
+      border-radius: 3px;
+      background: #0a0806;
+      border-color: rgba(224, 169, 79, 0.22);
+    }
+    body[data-skin="film-legacy"] .composer-time {
+      border-radius: 3px;
+      border-color: rgba(224, 169, 79, 0.28);
+      background: rgba(224, 169, 79, 0.12);
+      color: #e0a94f;
+    }
+    body[data-skin="film-legacy"] .sidebar {
+      border-radius: 4px;
+      background: linear-gradient(180deg, #0b0906, #000 260px), #000;
+      border-color: rgba(224, 169, 79, 0.2);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    body[data-skin="film-legacy"] .sidebar-head {
+      border-bottom-color: rgba(224, 169, 79, 0.2);
+      background: linear-gradient(180deg, rgba(224, 169, 79, 0.06), transparent);
+    }
+    body[data-skin="film-legacy"] .sidebar-head h2 { color: #f5ead4; }
+    body[data-skin="film-legacy"] .sidebar-head h2::before {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      margin-right: 7px;
+      vertical-align: 2px;
+      border-radius: 50%;
+      background: #e0554d;
+      box-shadow: 0 0 8px rgba(224, 85, 77, 0.85);
+    }
+    body[data-skin="film-legacy"] .sidebar-head .meta { color: #8c7d62; }
+    body[data-skin="film-legacy"] .tabs { border-bottom-color: rgba(224, 169, 79, 0.16); }
+    body[data-skin="film-legacy"] .tab { border-radius: 3px; color: #a2947a; }
+    body[data-skin="film-legacy"] .tab.active {
+      background: rgba(224, 169, 79, 0.15);
+      border-color: rgba(224, 169, 79, 0.5);
+      color: #ffd99a;
+    }
+    body[data-skin="film-legacy"] .count { border-radius: 2px; background: rgba(224, 169, 79, 0.14); color: #d9bd86; }
+    body[data-skin="film-legacy"] .item.current {
+      background: linear-gradient(100deg, rgba(224, 169, 79, 0.14), rgba(224, 169, 79, 0.03));
+    }
+    body[data-skin="film-legacy"] .item-time { color: #e0a94f; }
+    body[data-skin="film-legacy"] .item-text { color: #e5dcc9; }
+    body[data-skin="film-legacy"] .item-sub { color: #8c7d62; }
+    body[data-skin="film-legacy"] .item-replies { border-left-color: rgba(224, 169, 79, 0.22); }
+    body[data-skin="film-legacy"] .reply-text { color: #cfc2a8; }
+    body[data-skin="film-legacy"] .modal-box,
+    body[data-skin="film-legacy"] .tl-preview,
+    body[data-skin="film-legacy"] .guide-menu,
+    body[data-skin="film-legacy"] .toast {
+      border-radius: 5px;
+      border-color: rgba(224, 169, 79, 0.3);
+      background: #0c0a07;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
+      backdrop-filter: none;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       皮肤 C（推荐优化方案）：胶片暗房剪辑台 · Film Grading Desk
+       复用当前布局，零位移；以「阳极氧化炭黑控制台 + 柯达钨丝琥珀 + 克制 Tally 红」重构质感
+       ═══════════════════════════════════════════════════════════════════ */
+    body[data-skin="film-refined"] {
+      --bg: #0a0908;
+      --bg-soft: #11100e;
+      --panel: rgba(255, 246, 232, 0.045);
+      --panel-2: rgba(255, 246, 232, 0.085);
+      --line: rgba(255, 244, 224, 0.095);
+      --line-soft: rgba(255, 244, 224, 0.055);
+      --text: #f2ece1;
+      --text-dim: #a89f91;
+      --text-faint: #70685d;
+      --accent: #e2a84b;
+      --accent-soft: rgba(226, 168, 75, 0.15);
+      --warn: #e25347;
+      --ok: #52b788;
+      --gold-text: #f0ca7d;
+      --cyan-text: #e8bc6b;
+      --red-text: #f6a69f;
+      --radius: 10px;
+      background-color: #0a0908;
+    }
+
+    /* 暗房环境光：去掉青色极光，改为极其克制的顶部台灯暗房微光，不干扰画面校色 */
+    body[data-skin="film-refined"]::after {
+      inset: 0;
+      filter: none;
+      opacity: 1;
+      animation: none;
+      background:
+        radial-gradient(64% 42% at 50% -6%, rgba(226, 168, 75, 0.068), transparent 68%),
+        radial-gradient(48% 36% at 15% 100%, rgba(168, 120, 62, 0.03), transparent 70%),
+        #0a0908;
+    }
+    body[data-skin="film-refined"]::before {
+      opacity: 0.026;
+    }
+
+    /* ── 顶栏：精密阳极氧化石墨控制台，去掉过重的全宽红条，改用极细暖银倒角边 ── */
+    body[data-skin="film-refined"] .topbar {
+      border-radius: 10px;
+      border: 1px solid rgba(255, 244, 224, 0.095);
+      background: rgba(21, 19, 17, 0.84);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 246, 230, 0.08),
+        0 12px 32px rgba(0, 0, 0, 0.56);
+      backdrop-filter: blur(20px) saturate(120%);
+      -webkit-backdrop-filter: blur(20px) saturate(120%);
+    }
+    body[data-skin="film-refined"] .brand-mark {
+      border-radius: 7px;
+      filter: sepia(0.72) saturate(1.18) hue-rotate(-6deg) brightness(0.98);
+      box-shadow:
+        0 0 0 1px rgba(226, 168, 75, 0.34),
+        0 2px 10px rgba(0, 0, 0, 0.45);
+    }
+    body[data-skin="film-refined"] .brand-text strong {
+      color: #f6efe2;
+      letter-spacing: 0.05em;
+    }
+    body[data-skin="film-refined"] .brand-text small {
+      color: #857b6d;
+      letter-spacing: 0.09em;
+    }
+    /* 在线人数：保留真正有语义的一颗 Tally 红灯 */
+    body[data-skin="film-refined"] .presence {
+      border-radius: 6px;
+      border-color: rgba(255, 244, 224, 0.09);
+      background: rgba(12, 11, 10, 0.65);
+      color: #c8beae;
+    }
+    body[data-skin="film-refined"] .live-dot {
+      border-radius: 50%;
+      background: #e25347;
+      box-shadow: 0 0 0 3px rgba(226, 83, 71, 0.16), 0 0 8px rgba(226, 83, 71, 0.75);
+    }
+    /* 搜索与署名：内凹炭黑槽，聚焦才点亮钨丝琥珀 */
+    body[data-skin="film-refined"] .project-search-field,
+    body[data-skin="film-refined"] .author-field {
+      border-radius: 6px;
+      border-color: rgba(255, 244, 224, 0.095);
+      background: rgba(10, 9, 8, 0.68);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45);
+      color: #8f8576;
+    }
+    body[data-skin="film-refined"] .project-search-field:focus-within {
+      border-color: rgba(226, 168, 75, 0.58);
+      background: rgba(226, 168, 75, 0.07);
+      box-shadow: 0 0 0 2px rgba(226, 168, 75, 0.14);
+      color: var(--text-dim);
+    }
+    body[data-skin="film-refined"] .author-field input {
+      border-radius: 4px;
+      background: rgba(255, 246, 232, 0.06);
+      color: #f4ede0;
+    }
+    body[data-skin="film-refined"] .author-field input:focus {
+      box-shadow: 0 0 0 2px rgba(226, 168, 75, 0.24);
+    }
+
+    /* ── 按钮体系：哑光机械键帽，去掉廉价金属高光，仅主操作与激活态点亮琥珀 ── */
+    body[data-skin="film-refined"] .btn,
+    body[data-skin="film-refined"] .icon-btn {
+      border-radius: 6px;
+      border-color: rgba(255, 244, 224, 0.105);
+      background: linear-gradient(180deg, rgba(255, 246, 232, 0.065), rgba(255, 246, 232, 0.02));
+      color: #e7dfd1;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 246, 232, 0.075),
+        0 1px 2px rgba(0, 0, 0, 0.45);
+    }
+    body[data-skin="film-refined"] .btn:hover,
+    body[data-skin="film-refined"] .icon-btn:hover {
+      border-color: rgba(226, 168, 75, 0.46);
+      background: linear-gradient(180deg, rgba(226, 168, 75, 0.14), rgba(226, 168, 75, 0.05));
+      color: #fdf6e9;
+      box-shadow: inset 0 1px 0 rgba(255, 236, 198, 0.12), 0 2px 8px rgba(0, 0, 0, 0.35);
+    }
+    body[data-skin="film-refined"] .btn.ghost {
+      background: transparent;
+      border-color: transparent;
+      box-shadow: none;
+      color: #b7ad9d;
+    }
+    body[data-skin="film-refined"] .btn.ghost:hover {
+      border-color: rgba(255, 244, 224, 0.1);
+      background: rgba(255, 246, 232, 0.055);
+      color: #f4ede0;
+    }
+    body[data-skin="film-refined"] .btn.tiny,
+    body[data-skin="film-refined"] .btn.tool-icon {
+      border-radius: 5px;
+    }
+    /* 缎面钨丝琥珀主按钮：克制、厚实、无 2011 塑料高光 */
+    body[data-skin="film-refined"] .btn.primary,
+    body[data-skin="film-refined"] .report-open {
+      background-image: linear-gradient(180deg, #ebb964, #d6983b);
+      border-color: rgba(250, 221, 164, 0.48);
+      color: #1b1204;
+      font-weight: 650;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 244, 218, 0.38),
+        0 2px 10px rgba(214, 152, 59, 0.22);
+      animation: none;
+    }
+    body[data-skin="film-refined"] .btn.primary:hover,
+    body[data-skin="film-refined"] .report-open:hover {
+      background-image: linear-gradient(180deg, #f4c878, #e0a344);
+      border-color: rgba(255, 232, 184, 0.68);
+      color: #160e03;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 248, 228, 0.5),
+        0 4px 16px rgba(226, 168, 75, 0.32);
+    }
+    /* 激活态：琥珀背光键 */
+    body[data-skin="film-refined"] .btn.active {
+      background-image: linear-gradient(180deg, rgba(226, 168, 75, 0.22), rgba(226, 168, 75, 0.09));
+      border-color: rgba(226, 168, 75, 0.55);
+      color: #fce2ab;
+      box-shadow: inset 0 1px 0 rgba(255, 232, 184, 0.14);
+    }
+    body[data-skin="film-refined"] .step-buttons {
+      border-radius: 5px;
+      border-color: rgba(255, 244, 224, 0.105);
+      background: linear-gradient(180deg, rgba(255, 246, 232, 0.06), rgba(255, 246, 232, 0.02));
+      box-shadow: inset 0 1px 0 rgba(255, 246, 232, 0.07);
+    }
+    body[data-skin="film-refined"] .step-btn { color: #e7dfd1; }
+    body[data-skin="film-refined"] .step-btn:hover {
+      background: rgba(226, 168, 75, 0.18);
+      color: #fce2ab;
+    }
+    body[data-skin="film-refined"] .step-label { color: #8c8273; }
+
+    /* ── 首页片库 & 版本列表：印样看片台（Contact Sheet）质感 ── */
+    body[data-skin="film-refined"] .intro-banner {
+      border-radius: 8px;
+      border-color: rgba(226, 168, 75, 0.22);
+      background: rgba(22, 20, 17, 0.88);
+      box-shadow: inset 0 1px 0 rgba(255, 244, 224, 0.06), 0 10px 28px rgba(0, 0, 0, 0.45);
+      color: #b4aa9a;
+    }
+    body[data-skin="film-refined"] .intro-banner strong {
+      background: none;
+      -webkit-background-clip: initial;
+      background-clip: initial;
+      color: #f2c97d;
+    }
+    body[data-skin="film-refined"] .intro-close { color: #7e7466; }
+    body[data-skin="film-refined"] .intro-close:hover {
+      background: rgba(226, 168, 75, 0.14);
+      color: #f2c97d;
+    }
+    body[data-skin="film-refined"] .home-tabs {
+      border-radius: 7px;
+      border-color: rgba(255, 244, 224, 0.09);
+      background: #12110f;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+    body[data-skin="film-refined"] .home-tab {
+      border-radius: 5px;
+      color: #9c9284;
+    }
+    body[data-skin="film-refined"] .home-tab:hover {
+      background: rgba(255, 246, 232, 0.05);
+      color: #f2ece1;
+    }
+    body[data-skin="film-refined"] .home-tab.active {
+      background: linear-gradient(180deg, rgba(226, 168, 75, 0.22), rgba(226, 168, 75, 0.1));
+      border-color: rgba(226, 168, 75, 0.46);
+      color: #fce2ab;
+      box-shadow: inset 0 1px 0 rgba(255, 235, 194, 0.14);
+    }
+    body[data-skin="film-refined"] .library-crumb button,
+    body[data-skin="film-refined"] .home-back {
+      color: #e2a84b;
+    }
+    body[data-skin="film-refined"] .library-crumb button:hover,
+    body[data-skin="film-refined"] .home-back:hover {
+      color: #f5ce86;
+    }
+    body[data-skin="film-refined"] .project-card {
+      border-radius: 9px;
+      border: 1px solid rgba(255, 244, 224, 0.09);
+      background: linear-gradient(180deg, #171513, #12100e);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 246, 230, 0.065),
+        0 12px 28px rgba(0, 0, 0, 0.48);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    body[data-skin="film-refined"] .project-card:hover {
+      border-color: rgba(226, 168, 75, 0.48);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 240, 210, 0.12),
+        0 0 0 1px rgba(226, 168, 75, 0.14),
+        0 18px 38px rgba(0, 0, 0, 0.62);
+    }
+    body[data-skin="film-refined"] .project-cover-frame {
+      border-radius: 8px 8px 0 0;
+      background: #090807;
+    }
+    /* 关键优化：彻底去掉压住封面顶部和角标的厚齿孔！
+       改为封面与文字区接缝处一条 6px 极细 35mm 暗房微齿条，保留胶片基因但零遮挡、不裁画面 */
+    body[data-skin="film-refined"] .project-cover-frame::before {
+      content: none;
+    }
+    body[data-skin="film-refined"] .project-cover-frame::after {
+      top: auto;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 6px;
+      z-index: 2;
+      background-color: rgba(12, 11, 9, 0.88);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='6'%3E%3Crect x='4.5' y='1.6' width='5.5' height='2.8' rx='0.8' fill='%23e8d8b8' opacity='.28'/%3E%3C/svg%3E");
+      background-repeat: repeat-x;
+      background-size: 16px 6px;
+      border-top: 1px solid rgba(255, 244, 224, 0.08);
+    }
+    body[data-skin="film-refined"] .project-card:hover .project-cover-frame::after {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='6'%3E%3Crect x='4.5' y='1.6' width='5.5' height='2.8' rx='0.8' fill='%23e8bc6b' opacity='.52'/%3E%3C/svg%3E");
+    }
+    body[data-skin="film-refined"] .personal-cover {
+      border-radius: 8px 8px 0 0;
+      background: #0a0908;
+    }
+    body[data-skin="film-refined"] .personal-fallback {
+      color: #f3e6cc;
+      text-shadow: 0 2px 18px rgba(226, 168, 75, 0.35);
+    }
+    body[data-skin="film-refined"] .project-lock-badge {
+      border-radius: 5px;
+      border-color: rgba(255, 244, 224, 0.14);
+      background: rgba(12, 11, 9, 0.78);
+    }
+    body[data-skin="film-refined"] .project-icon {
+      border-radius: 5px;
+      border-color: rgba(255, 244, 224, 0.16);
+      background: rgba(14, 12, 10, 0.8);
+      color: #e7dfd1;
+    }
+    body[data-skin="film-refined"] .project-icon-edit:hover {
+      background: rgba(226, 168, 75, 0.18);
+      border-color: rgba(226, 168, 75, 0.5);
+      color: #fce2ab;
+    }
+    body[data-skin="film-refined"] .project-name { color: #f4eee2; }
+    body[data-skin="film-refined"] .project-meta { color: #8f8576; }
+    /* 关键优化：去掉旧稿施工警戒斜纹，改用干净的胶片空白待冲印槽位 */
+    body[data-skin="film-refined"] .project-add {
+      border: 1.5px dashed rgba(255, 244, 224, 0.18);
+      background: rgba(255, 246, 232, 0.015);
+      color: #8f8576;
+      box-shadow: none;
+    }
+    body[data-skin="film-refined"] .project-add:hover {
+      border-color: rgba(226, 168, 75, 0.62);
+      background: rgba(226, 168, 75, 0.055);
+      color: #f2c97d;
+      box-shadow: 0 0 24px rgba(226, 168, 75, 0.09);
+    }
+    body[data-skin="film-refined"] .version-row {
+      border-radius: 9px;
+      border-color: rgba(255, 244, 224, 0.09);
+      background: linear-gradient(180deg, #171513, #12100e);
+      box-shadow: inset 0 1px 0 rgba(255, 246, 230, 0.06), 0 8px 22px rgba(0, 0, 0, 0.36);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    body[data-skin="film-refined"] .version-row:hover {
+      border-color: rgba(226, 168, 75, 0.45);
+      background: linear-gradient(180deg, #1c1916, #151310);
+    }
+    body[data-skin="film-refined"] .version-row.is-final {
+      border-color: rgba(226, 168, 75, 0.55);
+      box-shadow: inset 3px 0 0 #e2a84b, 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+    body[data-skin="film-refined"] .version-cover { border-radius: 5px; background: #0a0908; }
+    body[data-skin="film-refined"] .ver-badge {
+      border-radius: 4px;
+      background: rgba(255, 244, 224, 0.09);
+      color: #e7dfd1;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    body[data-skin="film-refined"] .final-badge {
+      border-radius: 4px;
+      background: rgba(226, 168, 75, 0.18);
+      color: #f5ce86;
+    }
+    body[data-skin="film-refined"] .version-meta { color: #8f8576; }
+    body[data-skin="film-refined"] .version-move select {
+      border-radius: 5px;
+      border-color: rgba(255, 244, 224, 0.11);
+      background: #100f0d;
+    }
+
+    /* ── 看片舞台：专业调色参考暗房，零画面遮挡，让影片成为唯一光源 ── */
+    body[data-skin="film-refined"] .video-wrap {
+      border-radius: 6px;
+      background: #000;
+      box-shadow:
+        0 0 0 1px rgba(255, 244, 224, 0.09),
+        0 24px 64px rgba(0, 0, 0, 0.82);
+    }
+    /* 极细光学镜框边，不遮挡任何画面像素（修复旧稿 inset:12px 挡字幕问题） */
+    body[data-skin="film-refined"] .video-wrap::after {
+      inset: 0;
+      padding: 1px;
+      background: linear-gradient(
+        150deg,
+        rgba(255, 245, 228, 0.2),
+        rgba(226, 168, 75, 0.24) 44%,
+        rgba(255, 245, 228, 0.07) 75%,
+        rgba(226, 168, 75, 0.18)
+      );
+    }
+    body[data-skin="film-refined"] .paused-badge {
+      border-radius: 4px;
+      background: rgba(18, 15, 13, 0.84);
+      border-color: rgba(226, 83, 71, 0.42);
+      color: #f3d5d1;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+    }
+    body[data-skin="film-refined"] .paused-badge::before {
+      width: 6px;
+      height: 6px;
+      background: #e25347;
+      box-shadow: 0 0 7px rgba(226, 83, 71, 0.85);
+    }
+    body[data-skin="film-refined"] .compare-handle::before {
+      background: linear-gradient(180deg, #f5ce86, #e2a84b, #f5ce86);
+      box-shadow: 0 0 10px rgba(226, 168, 75, 0.75);
+    }
+    body[data-skin="film-refined"] .compare-knob {
+      background: linear-gradient(180deg, #f2c97d, #d6983b);
+      color: #1a1104;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.65);
+    }
+    body[data-skin="film-refined"] .compare-badge {
+      border-radius: 4px;
+      background: rgba(14, 12, 10, 0.84);
+    }
+    body[data-skin="film-refined"] .compare-badge.right {
+      border-color: rgba(226, 168, 75, 0.5);
+      color: #f5ce86;
+    }
+
+    /* 弹幕：场记板式字幕签，克制半透炭黑 + 左侧 3px 作者色竖条，清晰读字不抢戏 */
+    body[data-skin="film-refined"] .dm {
+      border-radius: 6px;
+      border: 1px solid rgba(255, 244, 224, 0.14);
+      border-left: 3px solid var(--dm-color, #e2a84b);
+      background-color: rgba(15, 13, 11, 0.78);
+      background-image: linear-gradient(96deg, color-mix(in srgb, var(--dm-color, #e2a84b) 14%, rgba(16, 14, 12, 0.82)), rgba(14, 12, 10, 0.78) 58%);
+      color: #f6f0e4;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 246, 232, 0.08);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    body[data-skin="film-refined"] .dm.is-mine {
+      border-color: rgba(226, 168, 75, 0.42);
+      border-left: 3px solid #e2a84b;
+      background-image: linear-gradient(96deg, rgba(226, 168, 75, 0.24), rgba(20, 16, 11, 0.82) 64%);
+      box-shadow: 0 6px 22px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 236, 198, 0.16);
+    }
+    body[data-skin="film-refined"] .dm.has-replies,
+    body[data-skin="film-refined"] .dm.is-wrapped {
+      border-radius: 7px;
+    }
+    body[data-skin="film-refined"] .dm-name {
+      color: var(--dm-color, #f0ca7d);
+      font-weight: 650;
+    }
+
+    /* ── 底部控制台（画笔条 / 对比条 / 播放条 / 弹幕输入）：精密硬件机架感 ── */
+    body[data-skin="film-refined"] .toolbar,
+    body[data-skin="film-refined"] .transport,
+    body[data-skin="film-refined"] .composer {
+      border-color: rgba(255, 244, 224, 0.095);
+      background: rgba(21, 19, 17, 0.88);
+      box-shadow: inset 0 1px 0 rgba(255, 246, 230, 0.065);
+      backdrop-filter: blur(22px) saturate(120%);
+      -webkit-backdrop-filter: blur(22px) saturate(120%);
+    }
+    body[data-skin="film-refined"] .toolbar,
+    body[data-skin="film-refined"] .transport {
+      border-radius: 10px 10px 0 0;
+    }
+    body[data-skin="film-refined"] .stage:has(.toolbar:not([hidden])) .transport,
+    body[data-skin="film-refined"] .toolbar:not([hidden]) + .toolbar:not([hidden]) {
+      border-radius: 0;
+      border-top-color: rgba(255, 244, 224, 0.07);
+      box-shadow: none;
+    }
+    body[data-skin="film-refined"] .composer {
+      border-radius: 0 0 10px 10px;
+      border-top-color: rgba(255, 244, 224, 0.075);
+      background: rgba(18, 16, 14, 0.92);
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.56);
+    }
+    body[data-skin="film-refined"] .draw-toolbar {
+      background: rgba(25, 22, 18, 0.92);
+      border-top-color: rgba(226, 168, 75, 0.28);
+    }
+    body[data-skin="film-refined"] .draw-toolbar::before {
+      background: linear-gradient(90deg, rgba(226, 168, 75, 0.75), rgba(242, 201, 125, 0.32) 42%, transparent 82%);
+    }
+    body[data-skin="film-refined"] .compare-toolbar::before {
+      background: linear-gradient(90deg, rgba(226, 168, 75, 0.72), rgba(226, 83, 71, 0.4) 48%, transparent 84%);
+    }
+    body[data-skin="film-refined"] .range-field {
+      border-right-color: rgba(255, 244, 224, 0.08);
+    }
+    body[data-skin="film-refined"] .tag {
+      border-radius: 4px;
+      background: rgba(226, 168, 75, 0.14);
+      color: #ecc173;
+      letter-spacing: 0.04em;
+    }
+    body[data-skin="film-refined"] .range-field b { color: #f6efe2; }
+    body[data-skin="film-refined"] .range-summary { color: #8f8576; }
+    body[data-skin="film-refined"] .swatch { border-radius: 4px; }
+    body[data-skin="film-refined"] .swatch.on {
+      border-color: #fff6e5;
+      box-shadow: 0 0 0 2px #e2a84b, 0 0 10px rgba(226, 168, 75, 0.45);
+    }
+    body[data-skin="film-refined"] .tc { color: #f0ca7d; letter-spacing: 0.02em; }
+    body[data-skin="film-refined"] .tc.dim { color: #756c5f; }
+
+    /* 时间轴核心签名细节：精密胶片刻度标尺 + 刀锋指针 + 暖琥珀进度轨 */
+    body[data-skin="film-refined"] .timeline {
+      height: 28px;
+      align-items: flex-end;
+      padding-bottom: 6px;
+    }
+    body[data-skin="film-refined"] .timeline::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 8px;
+      pointer-events: none;
+      opacity: 0.72;
+      background-image:
+        repeating-linear-gradient(90deg, rgba(226, 168, 75, 0.65) 0 1px, transparent 1px 20%),
+        repeating-linear-gradient(90deg, rgba(255, 244, 224, 0.22) 0 1px, transparent 1px 12px);
+      background-size: 100% 7px, 100% 3.5px;
+      background-position: left top, left top;
+      background-repeat: repeat-x;
+    }
+    body[data-skin="film-refined"] .timeline-waveform {
+      top: auto;
+      bottom: 1px;
+      height: 16px;
+      transform: none;
+      opacity: 0.85;
+    }
+    body[data-skin="film-refined"] .timeline-heatmap {
+      bottom: 9px;
+      height: 18px;
+    }
+    body[data-skin="film-refined"] .timeline-rail {
+      height: 5px;
+      border-radius: 2px;
+      background: rgba(255, 246, 232, 0.11);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.75);
+    }
+    body[data-skin="film-refined"] .timeline:hover .timeline-rail { height: 7px; }
+    body[data-skin="film-refined"] .timeline-fill {
+      border-radius: 2px;
+      background: linear-gradient(90deg, #a67123, #e2a84b 62%, #f5ce86);
+      box-shadow: 0 0 10px rgba(226, 168, 75, 0.34);
+    }
+    body[data-skin="film-refined"] .timeline-loop {
+      border-radius: 2px;
+      background: rgba(226, 168, 75, 0.24);
+      box-shadow: inset 2px 0 0 #f5ce86, inset -2px 0 0 #f5ce86;
+    }
+    /* 刀锋型剪辑播放指针：细竖针 + 顶部小菱帽 */
+    body[data-skin="film-refined"] .timeline-head {
+      top: -8px;
+      width: 2px;
+      height: 18px;
+      border-radius: 1px;
+      transform: translateX(-50%);
+      background: #fae2ae;
+      box-shadow: 0 0 8px rgba(226, 168, 75, 0.72);
+    }
+    body[data-skin="film-refined"] .timeline-head::before {
+      content: "";
+      position: absolute;
+      top: -3px;
+      left: 50%;
+      width: 7px;
+      height: 4px;
+      border-radius: 1px 1px 2px 2px;
+      background: #f5ce86;
+      transform: translateX(-50%);
+    }
+    body[data-skin="film-refined"] .mark { border-radius: 1px; }
+    body[data-skin="film-refined"] .mark.comment { background: #f0ca7d; opacity: 0.88; }
+    body[data-skin="film-refined"] .mark.annotation { background: #e25347; opacity: 0.95; }
+    body[data-skin="film-refined"] .mark.annotation.span { background: rgba(226, 83, 71, 0.56); }
+    body[data-skin="film-refined"] .fps-badge {
+      border-radius: 4px;
+      background: rgba(255, 244, 224, 0.08);
+      color: #c2b7a7;
+    }
+    body[data-skin="film-refined"] .fps-badge.auto {
+      background: rgba(82, 183, 136, 0.16);
+      color: #77d4a8;
+    }
+    body[data-skin="film-refined"] .fps-field input,
+    body[data-skin="film-refined"] .compare-select {
+      border-radius: 5px;
+      border-color: rgba(255, 244, 224, 0.1);
+      background: #0f0e0c;
+      color: #f2ece1;
+    }
+    body[data-skin="film-refined"] .fps-field input:focus,
+    body[data-skin="film-refined"] .compare-select:focus {
+      border-color: rgba(226, 168, 75, 0.6);
+    }
+    body[data-skin="film-refined"] .composer-time {
+      border-radius: 6px;
+      border-color: rgba(226, 168, 75, 0.28);
+      background: rgba(226, 168, 75, 0.1);
+      color: #f0ca7d;
+    }
+    body[data-skin="film-refined"] .composer-time:hover {
+      background: rgba(226, 168, 75, 0.18);
+      border-color: rgba(226, 168, 75, 0.52);
+    }
+    body[data-skin="film-refined"] .composer input {
+      border-radius: 6px;
+      border-color: rgba(255, 244, 224, 0.1);
+      background: #0f0e0c;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45);
+      color: #f2ece1;
+    }
+    body[data-skin="film-refined"] .composer input:focus {
+      border-color: rgba(226, 168, 75, 0.62);
+      background: #13110e;
+      box-shadow: 0 0 0 2px rgba(226, 168, 75, 0.14);
+    }
+    /* 整体意见模式：切换为暖赤陶/琥珀高亮提示，语义依然清晰 */
+    body[data-skin="film-refined"] .composer-time.is-overall {
+      border-color: rgba(226, 83, 71, 0.52);
+      background: rgba(226, 83, 71, 0.15);
+      color: #f7b4ad;
+    }
+    body[data-skin="film-refined"] .composer.is-overall input {
+      border-color: rgba(226, 83, 71, 0.42);
+    }
+    body[data-skin="film-refined"] .composer.is-overall > .btn[type="submit"] {
+      background-image: linear-gradient(180deg, #e96a5f, #cf483c);
+      border-color: rgba(255, 196, 190, 0.4);
+      color: #fff6f5;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 10px rgba(226, 83, 71, 0.28);
+    }
+
+    /* ── 侧栏：EDL 审片场记单（复用线性流，去掉无意义的标题红点） ── */
+    body[data-skin="film-refined"] .sidebar {
+      border-radius: 10px;
+      border: 1px solid rgba(255, 244, 224, 0.095);
+      background: rgba(20, 18, 16, 0.88);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 246, 230, 0.07),
+        0 14px 36px rgba(0, 0, 0, 0.54);
+      backdrop-filter: blur(20px) saturate(120%);
+      -webkit-backdrop-filter: blur(20px) saturate(120%);
+    }
+    body[data-skin="film-refined"] .sidebar-resizer::after {
+      background: rgba(226, 168, 75, 0.65);
+    }
+    body[data-skin="film-refined"] .sidebar-head {
+      border-bottom-color: rgba(255, 244, 224, 0.08);
+      background: linear-gradient(180deg, rgba(226, 168, 75, 0.045), transparent);
+    }
+    body[data-skin="film-refined"] .sidebar-head h2 {
+      color: #f5efe3;
+      letter-spacing: 0.01em;
+    }
+    body[data-skin="film-refined"] .sidebar-head .meta { color: #8c8273; }
+    body[data-skin="film-refined"] .tabs {
+      border-bottom-color: rgba(255, 244, 224, 0.07);
+    }
+    body[data-skin="film-refined"] .tab {
+      border-radius: 5px;
+      color: #9c9284;
+    }
+    body[data-skin="film-refined"] .tab:hover {
+      background: rgba(255, 246, 232, 0.05);
+      color: #f2ece1;
+    }
+    body[data-skin="film-refined"] .tab.active {
+      background: rgba(226, 168, 75, 0.16);
+      border-color: rgba(226, 168, 75, 0.44);
+      color: #fce2ab;
+    }
+    body[data-skin="film-refined"] .count {
+      border-radius: 4px;
+      background: rgba(255, 244, 224, 0.07);
+      color: #a89f91;
+    }
+    body[data-skin="film-refined"] .tab.active .count {
+      background: rgba(226, 168, 75, 0.22);
+      color: #fce2ab;
+    }
+    body[data-skin="film-refined"] .list {
+      scrollbar-color: rgba(226, 168, 75, 0.22) transparent;
+    }
+    body[data-skin="film-refined"] .list::-webkit-scrollbar-thumb {
+      background: rgba(226, 168, 75, 0.22);
+      border-radius: 3px;
+    }
+    body[data-skin="film-refined"] .item {
+      border-bottom-color: rgba(255, 244, 224, 0.055);
+    }
+    body[data-skin="film-refined"] .item:hover {
+      background: rgba(255, 246, 232, 0.03);
+    }
+    body[data-skin="film-refined"] .item.current {
+      background: linear-gradient(90deg, rgba(226, 168, 75, 0.13), rgba(226, 168, 75, 0.02) 78%);
+    }
+    body[data-skin="film-refined"] .item.current::before {
+      box-shadow: 0 0 8px color-mix(in srgb, var(--dm-color, #e2a84b) 75%, transparent);
+    }
+    body[data-skin="film-refined"] .item-time { color: #e8bc6b; }
+    body[data-skin="film-refined"] .item-text { color: #ebe4d7; }
+    body[data-skin="film-refined"] .item-sub { color: #8c8273; }
+    body[data-skin="film-refined"] .item-replies {
+      border-left-color: rgba(226, 168, 75, 0.26);
+    }
+    body[data-skin="film-refined"] .reply-text { color: #cfc6b6; }
+    body[data-skin="film-refined"] .item-flag {
+      border-radius: 3px;
+      background: rgba(226, 83, 71, 0.15);
+      color: #f4a49c;
+    }
+    body[data-skin="film-refined"] .item-annotation canvas {
+      border-radius: 4px;
+      border-color: rgba(255, 244, 224, 0.14);
+      background: #0d0c0a;
+    }
+
+    /* ── 弹窗 / 浮层 / Toast：一致的暗房石墨金属面 ── */
+    body[data-skin="film-refined"] .modal-box,
+    body[data-skin="film-refined"] .tl-preview,
+    body[data-skin="film-refined"] .guide-menu {
+      border-radius: 10px;
+      border-color: rgba(255, 244, 224, 0.12);
+      background: rgba(22, 20, 18, 0.94);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 246, 232, 0.08),
+        0 24px 60px rgba(0, 0, 0, 0.72);
+      backdrop-filter: blur(24px) saturate(120%);
+      -webkit-backdrop-filter: blur(24px) saturate(120%);
+    }
+    body[data-skin="film-refined"] .field input,
+    body[data-skin="film-refined"] #upload-project select,
+    body[data-skin="film-refined"] .report-gap {
+      border-radius: 6px;
+      border-color: rgba(255, 244, 224, 0.11);
+      background: #0f0e0c;
+    }
+    body[data-skin="film-refined"] .field input:focus {
+      border-color: rgba(226, 168, 75, 0.65);
+      box-shadow: 0 0 0 3px rgba(226, 168, 75, 0.14);
+    }
+    body[data-skin="film-refined"] .dropzone {
+      border-radius: 8px;
+      border-color: rgba(255, 244, 224, 0.16);
+      background:
+        radial-gradient(70% 70% at 50% 45%, rgba(226, 168, 75, 0.055), transparent 72%),
+        rgba(12, 11, 9, 0.6);
+    }
+    body[data-skin="film-refined"] .dropzone:hover {
+      border-color: rgba(226, 168, 75, 0.65);
+      background:
+        radial-gradient(70% 70% at 50% 45%, rgba(226, 168, 75, 0.14), transparent 72%),
+        rgba(14, 12, 10, 0.75);
+      box-shadow: 0 0 22px rgba(226, 168, 75, 0.12);
+    }
+    body[data-skin="film-refined"] .bar-fill {
+      background: linear-gradient(90deg, #a67123, #e2a84b 55%, #f5ce86);
+      box-shadow: 0 0 12px rgba(226, 168, 75, 0.42);
+    }
+    body[data-skin="film-refined"] .guide-option { border-radius: 6px; }
+    body[data-skin="film-refined"] .guide-option:hover {
+      background: rgba(226, 168, 75, 0.1);
+      border-color: rgba(226, 168, 75, 0.24);
+    }
+    body[data-skin="film-refined"] .guide-option.on {
+      background: rgba(226, 168, 75, 0.16);
+      border-color: rgba(226, 168, 75, 0.5);
+    }
+    body[data-skin="film-refined"] .guide-option-check { color: #f2c97d; }
+    body[data-skin="film-refined"] .tl-preview-media { border-radius: 5px; }
+    body[data-skin="film-refined"] .tl-preview-tc {
+      border-radius: 4px;
+      color: #f5ce86;
+      border-color: rgba(226, 168, 75, 0.24);
+    }
+    body[data-skin="film-refined"] .toast {
+      border-radius: 7px;
+      border-color: rgba(226, 168, 75, 0.36);
+      background: rgba(22, 20, 17, 0.92);
+      box-shadow: inset 0 1px 0 rgba(255, 246, 232, 0.08), 0 12px 32px rgba(0, 0, 0, 0.56);
+    }
+    body[data-skin="film-refined"] .help-list kbd,
+    body[data-skin="film-refined"] .notice-list kbd {
+      border-radius: 4px;
+      border-color: rgba(226, 168, 75, 0.28);
+      background: linear-gradient(180deg, rgba(226, 168, 75, 0.14), rgba(255, 246, 232, 0.03));
+      color: #fae2ae;
+    }
+
+    /* 皮肤下作者色：让优化版的评论/弹幕色板和暗房暖调更协调 */
+    body[data-skin="film-refined"] .author-c1 { --dm-color: #e8b55f; }
+    body[data-skin="film-refined"] .author-c2 { --dm-color: #d7ccb8; }
+    body[data-skin="film-refined"] .author-c3 { --dm-color: #eb7d72; }
+    body[data-skin="film-legacy"] .author-c1 { --dm-color: #e0a94f; }
+    body[data-skin="film-legacy"] .author-c2 { --dm-color: #f2e3c4; }
+    body[data-skin="film-legacy"] .author-c3 { --dm-color: #ff9b8f; }
+    body[data-skin="default"] .author-c1 { --dm-color: #7ff0e2; }
+    body[data-skin="default"] .author-c2 { --dm-color: #f0d79a; }
+    body[data-skin="default"] .author-c3 { --dm-color: #ff9b8f; }
+
+    @media (max-width: 960px) {
+      .preview-bar { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body data-skin="film-refined">
+  <!-- 顶部预览切换栏（独立于应用本体） -->
+  <div class="preview-bar" role="region" aria-label="皮肤预览控制器">
+    <div class="preview-bar-group">
+      <span class="preview-title">
+        皮肤预览对比
+        <span class="preview-title-badge" id="skin-status-badge">优化方案</span>
+      </span>
+      <div class="preview-seg" role="tablist" aria-label="选择皮肤">
+        <button type="button" data-skin-pick="default">
+          <span class="preview-kbd">1</span>当前默认 · 毛玻璃
+        </button>
+        <button type="button" data-skin-pick="film-legacy">
+          <span class="preview-kbd">2</span>原版 02 · 旧稿
+        </button>
+        <button type="button" data-skin-pick="film-refined" class="is-on">
+          <span class="preview-kbd">3</span>优化版 · 胶片暗房（推荐）
+        </button>
+      </div>
+      <button type="button" class="preview-peek" id="peek-legacy-btn" title="按住鼠标或按住空格键，临时切回原版 02 对比">
+        按住对比原版 02
+      </button>
+    </div>
+
+    <div class="preview-bar-group">
+      <div class="preview-seg" role="tablist" aria-label="切换页面视图">
+        <button type="button" data-view-pick="watch" class="is-on">看片舞台</button>
+        <button type="button" data-view-pick="library">首页片库</button>
+        <button type="button" data-view-pick="versions">项目版本</button>
+        <button type="button" data-view-pick="details">弹窗与细节</button>
+      </div>
+      <button type="button" class="preview-toggle is-on" id="toggle-draw-btn">画笔条</button>
+      <button type="button" class="preview-toggle" id="toggle-compare-btn">对比条</button>
+    </div>
+  </div>
+
+  <!-- ═══ 以下 100% 复用 public/index.html 的真实布局结构 ═══ -->
+  <header class="topbar">
+    <a class="brand" href="#preview" onclick="return false;" title="回到项目">
+      <img class="brand-mark" src="../public/assets/favicon.svg" alt="弹幕阅片" width="30" height="30" />
+      <span class="brand-text">
+        <strong>弹幕阅片</strong>
+        <small>局域网协作审片</small>
+      </span>
+    </a>
+
+    <div class="topbar-right">
+      <div class="presence" id="presence">
+        <i class="live-dot"></i><span>3</span><span class="presence-label">人正在看</span>
+      </div>
+      <div class="project-search-field" id="project-search-field" hidden>
+        <button class="project-search-toggle" type="button" aria-label="搜索项目">
+          <svg class="project-search-icon" viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.4" />
+            <path d="M10.4 10.4 14 14" />
+          </svg>
+        </button>
+        <input class="project-search" type="search" placeholder="搜索项目" autocomplete="off" spellcheck="false" />
+      </div>
+      <label class="author-field" title="你的名字会显示在每条弹幕和标注上">
+        <span class="author-label">署名</span>
+        <input type="text" value="阿超" maxlength="16" autocomplete="off" spellcheck="false" />
+      </label>
+      <button class="btn ghost" id="top-back-btn" type="button">返回项目</button>
+      <button class="btn" type="button">新建项目</button>
+      <button class="btn primary" type="button">上传影片</button>
+    </div>
+  </header>
+
+  <main class="workspace" id="main-workspace">
+    <section class="stage" id="stage">
+      <!-- 首页片库 / 项目版本页（与真实 index.html 一致） -->
+      <div class="empty library-view" id="empty-state" hidden>
+        <div class="intro-banner-wrap" id="intro-card">
+          <div class="intro-banner">
+            <p><strong>审片，不用来回截图</strong> · 上传视频，把链接发给同事，在任意一帧发弹幕、圈重点。</p>
+            <button class="intro-close" type="button" aria-label="关闭介绍">✕</button>
+          </div>
+        </div>
+
+        <div class="library-page" id="library-page">
+          <header class="library-bar">
+            <div class="library-crumb" id="library-crumb" hidden>
+              <button type="button" data-jump-view="library">项目</button>
+              <span class="crumb-sep">/</span>
+              <span class="crumb-name">品牌片_15s</span>
+              <span class="lock-chip">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.2" y="7" width="9.6" height="6.8" rx="1.6"/><path d="M5.4 7V5.2a2.6 2.6 0 0 1 5.2 0V7"/></svg>
+                已设密
+              </span>
+            </div>
+            <div class="home-nav" id="home-nav">
+              <div class="home-tabs">
+                <button class="home-tab active" type="button">项目</button>
+                <button class="home-tab" type="button">个人</button>
+              </div>
+            </div>
+            <div class="library-actions">
+              <button class="btn" type="button">新建项目</button>
+              <button class="btn primary" type="button">上传影片</button>
+            </div>
+          </header>
+
+          <!-- 项目卡片网格 -->
+          <div class="project-grid" id="project-grid">
+            <div class="project-card" tabindex="0" role="button">
+              <div class="project-cover-frame">
+                <div class="project-cover mock-cover" style="background:
+                  radial-gradient(45% 65% at 72% 34%, rgba(235, 165, 76, 0.72), transparent 62%),
+                  radial-gradient(50% 60% at 24% 72%, rgba(44, 72, 86, 0.65), transparent 65%),
+                  linear-gradient(155deg, #271c12, #0d0b0a 68%);"></div>
+                <span class="project-lock-badge">
+                  <svg class="lock-gold" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.2" y="7" width="9.6" height="6.8" rx="1.6"/><path d="M5.4 7V5.2a2.6 2.6 0 0 1 5.2 0V7"/></svg>
+                  已加锁
+                </span>
+                <div class="project-actions" style="opacity: 1; pointer-events: auto;">
+                  <button class="project-icon project-icon-lock" type="button" title="密码设置">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3.2" y="7" width="9.6" height="6.8" rx="1.6"/><path d="M5.4 7V5.2a2.6 2.6 0 0 1 5.2 0V7"/></svg>
+                  </button>
+                  <button class="project-icon project-icon-edit" type="button" title="改名">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.2 2.6 13.4 4.8 5.6 12.6 2.8 13.2l.6-2.8z"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="project-body">
+                <div class="project-copy">
+                  <div class="project-name">品牌片_15s</div>
+                  <div class="project-meta"><span class="final-tag">已定稿 v3</span> · 4 支 · 2 小时前</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="project-card" tabindex="0" role="button">
+              <div class="project-cover-frame">
+                <div class="project-cover mock-cover" style="background:
+                  radial-gradient(52% 72% at 30% 34%, rgba(56, 134, 152, 0.78), transparent 64%),
+                  radial-gradient(40% 50% at 78% 72%, rgba(208, 128, 66, 0.45), transparent 62%),
+                  linear-gradient(145deg, #0f222a, #080b0e 72%);"></div>
+              </div>
+              <div class="project-body">
+                <div class="project-copy">
+                  <div class="project-name">短视频合集_竖版</div>
+                  <div class="project-meta">6 支 · 昨天</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="project-card" tabindex="0" role="button">
+              <div class="project-cover-frame">
+                <div class="project-cover mock-cover" style="background:
+                  radial-gradient(48% 66% at 62% 38%, rgba(124, 146, 114, 0.65), transparent 64%),
+                  radial-gradient(45% 55% at 24% 70%, rgba(196, 148, 86, 0.32), transparent 65%),
+                  linear-gradient(160deg, #1b221a, #090b09 74%);"></div>
+              </div>
+              <div class="project-body">
+                <div class="project-copy">
+                  <div class="project-name">产品棚拍_TVC</div>
+                  <div class="project-meta">2 支 · 3 天前</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="project-card" tabindex="0" role="button">
+              <div class="project-cover-frame">
+                <div class="project-cover mock-cover" style="background:
+                  radial-gradient(56% 74% at 48% 42%, rgba(162, 68, 62, 0.68), transparent 66%),
+                  radial-gradient(42% 48% at 75% 24%, rgba(235, 174, 88, 0.35), transparent 60%),
+                  linear-gradient(150deg, #241110, #0b0808 74%);"></div>
+              </div>
+              <div class="project-body">
+                <div class="project-copy">
+                  <div class="project-name">年会花絮_4K</div>
+                  <div class="project-meta">1 支 · 上周</div>
+                </div>
+              </div>
+            </div>
+
+            <button class="project-card project-add" type="button" aria-label="新建项目">
+              <svg class="project-add-mark" viewBox="0 0 80 80" aria-hidden="true">
+                <circle cx="40" cy="40" r="27" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".45" />
+                <path d="M40 28v24M28 40h24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+            </button>
+
+            <button class="project-card personal-card" type="button">
+              <div class="personal-cover layout-1">
+                <div class="personal-tile" style="background: linear-gradient(145deg, #252019, #100e0c);">
+                  <div class="personal-fallback">阿</div>
+                </div>
+              </div>
+              <div class="project-body">
+                <div class="project-copy">
+                  <div class="project-name">个人 · 阿超</div>
+                  <div class="project-meta">6 支 · 3 个项目</div>
+                </div>
+              </div>
+            </button>
+
+            <button class="project-card personal-card final-folder" type="button">
+              <div class="personal-cover layout-2">
+                <div class="personal-tile" style="background: linear-gradient(145deg, #4b391d, #120e08);"></div>
+                <div class="personal-tile" style="background: linear-gradient(145deg, #223537, #0b1011);"></div>
+              </div>
+              <div class="project-body">
+                <div class="project-copy">
+                  <div class="project-name">已定稿</div>
+                  <div class="project-meta">3 个项目 · 最近 2 天前</div>
+                </div>
+              </div>
+            </button>
+          </div>
+
+          <!-- 项目版本列表 -->
+          <div class="version-list" id="version-list" hidden>
+            <div class="version-row is-final">
+              <div class="version-cover" style="background:
+                radial-gradient(50% 70% at 68% 35%, rgba(235, 165, 76, 0.72), transparent 66%),
+                linear-gradient(155deg, #291d12, #0d0b09);"></div>
+              <div class="version-main">
+                <div class="version-title">
+                  <span class="ver-badge">v3</span>
+                  <button class="final-badge" type="button">已定稿</button>
+                  <span>品牌片_15s_调色终版_V3.mp4</span>
+                </div>
+                <div class="version-meta">阿超 · 00:30.000 · 1920×1080 · 15 条意见 · 2 小时前</div>
+              </div>
+              <div class="version-move">
+                <select aria-label="移动到项目"><option>移动到…</option></select>
+                <button class="btn tiny" type="button">改名</button>
+                <button class="btn tiny danger-text" type="button">删除</button>
+              </div>
+            </div>
+
+            <div class="version-row">
+              <div class="version-cover" style="background:
+                radial-gradient(50% 70% at 32% 40%, rgba(56, 134, 152, 0.65), transparent 66%),
+                linear-gradient(155deg, #122126, #090b0d);"></div>
+              <div class="version-main">
+                <div class="version-title">
+                  <span class="ver-badge">v2</span>
+                  <span>品牌片_15s_字幕修正_V2.mp4</span>
+                </div>
+                <div class="version-meta">小林 · 00:30.000 · 1920×1080 · 9 条意见 · 昨天</div>
+              </div>
+              <div class="version-move">
+                <button class="btn tiny final final-hover" style="opacity: 1; pointer-events: auto;" type="button">设为最终版</button>
+                <select aria-label="移动到项目"><option>移动到…</option></select>
+                <button class="btn tiny" type="button">改名</button>
+                <button class="btn tiny danger-text" type="button">删除</button>
+              </div>
+            </div>
+
+            <div class="version-row">
+              <div class="version-cover" style="background:
+                radial-gradient(50% 70% at 55% 45%, rgba(124, 146, 114, 0.55), transparent 66%),
+                linear-gradient(155deg, #1b201a, #0a0b09);"></div>
+              <div class="version-main">
+                <div class="version-title">
+                  <span class="ver-badge">v1</span>
+                  <span>品牌片_15s_粗剪初版_V1.mp4</span>
+                </div>
+                <div class="version-meta">Momo · 00:31.200 · 1920×1080 · 22 条意见 · 3 天前</div>
+              </div>
+              <div class="version-move">
+                <select aria-label="移动到项目"><option>移动到…</option></select>
+                <button class="btn tiny" type="button">改名</button>
+                <button class="btn tiny danger-text" type="button">删除</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 看片舞台（完全复用当前结构） -->
+      <div class="frame" id="frame">
+        <div class="video-wrap" id="video-wrap">
+          <!-- 模拟实拍画面（用于检验暗房压暗、边线克制感与弹幕清晰度） -->
+          <svg class="preview-mock-frame" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <defs>
+              <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#17191f"/>
+                <stop offset="52%" stop-color="#25211e"/>
+                <stop offset="100%" stop-color="#101216"/>
+              </linearGradient>
+              <radialGradient id="keylight" cx="68%" cy="38%" r="46%">
+                <stop offset="0%" stop-color="#e8aa59" stop-opacity="0.58"/>
+                <stop offset="48%" stop-color="#a66232" stop-opacity="0.22"/>
+                <stop offset="100%" stop-color="#0e0d0c" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="rimlight" cx="24%" cy="56%" r="38%">
+                <stop offset="0%" stop-color="#3c8296" stop-opacity="0.34"/>
+                <stop offset="100%" stop-color="#0e0d0c" stop-opacity="0"/>
+              </radialGradient>
+              <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#181513"/>
+                <stop offset="100%" stop-color="#090808"/>
+              </linearGradient>
+            </defs>
+            <rect width="1280" height="720" fill="url(#sky)"/>
+            <rect width="1280" height="720" fill="url(#keylight)"/>
+            <rect width="1280" height="720" fill="url(#rimlight)"/>
+            <!-- 建筑窗格与地平线景深 -->
+            <rect x="0" y="490" width="1280" height="230" fill="url(#floor)"/>
+            <line x1="0" y1="490" x2="1280" y2="490" stroke="rgba(255,220,170,0.16)" stroke-width="1.5"/>
+            <rect x="780" y="130" width="210" height="310" rx="2" fill="rgba(255,212,150,0.08)" stroke="rgba(255,212,150,0.16)"/>
+            <line x1="885" y1="130" x2="885" y2="440" stroke="rgba(20,16,12,0.55)" stroke-width="5"/>
+            <line x1="780" y1="285" x2="990" y2="285" stroke="rgba(20,16,12,0.55)" stroke-width="5"/>
+            <!-- 地面光影倒影 -->
+            <polygon points="780,490 990,490 1070,720 680,720" fill="rgba(232,170,89,0.08)"/>
+            <!-- 桌面静物剪影（模拟广告棚拍主体） -->
+            <ellipse cx="640" cy="494" rx="190" ry="22" fill="rgba(0,0,0,0.55)"/>
+            <rect x="572" y="290" width="136" height="200" rx="18" fill="#171618" stroke="rgba(255,228,186,0.28)" stroke-width="2"/>
+            <rect x="598" y="252" width="84" height="40" rx="6" fill="#231f1b" stroke="rgba(255,228,186,0.22)" stroke-width="1.5"/>
+            <rect x="596" y="348" width="88" height="84" rx="4" fill="rgba(244,232,210,0.9)"/>
+            <rect x="612" y="370" width="56" height="5" rx="2" fill="#241c14"/>
+            <rect x="620" y="384" width="40" height="3" rx="1.5" fill="#7d6e5a"/>
+            <rect x="616" y="406" width="48" height="3" rx="1.5" fill="#a8844c"/>
+            <!-- 模拟画笔标注红圈 -->
+            <ellipse cx="640" cy="390" rx="74" ry="52" fill="none" stroke="#ff6b5e" stroke-width="4" stroke-dasharray="1 0" opacity="0.92"/>
+            <path d="M712 346 L768 310" stroke="#ff6b5e" stroke-width="3.5" stroke-linecap="round"/>
+            <!-- 底部电影字幕 -->
+            <text x="640" y="668" text-anchor="middle" fill="#f7f1e6" font-size="24" font-weight="500" letter-spacing="2" opacity="0.92">在光影落定之前，留住这一帧</text>
+          </svg>
+          <div class="paused-badge">已暂停 · 可说弹幕</div>
+        </div>
+
+        <div class="danmaku-layer preview-dm">
+          <div class="dm is-mine author-c1" style="top: 13%; left: 5%;">
+            <span class="dm-line"><span class="dm-name">阿超</span><span class="dm-text">这里切镜有点硬，往前推 2 帧会更顺</span></span>
+          </div>
+          <div class="dm author-c2" style="top: 38%; left: 53%;">
+            <span class="dm-line"><span class="dm-name">小林</span><span class="dm-text">字幕和鼓点差了半拍</span></span>
+          </div>
+          <div class="dm author-c3" style="top: 66%; left: 10%;">
+            <span class="dm-line"><span class="dm-name">Momo</span><span class="dm-text">瓶身标签的高光稍微压一档</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 画笔工具条 -->
+      <div class="toolbar draw-toolbar" id="draw-toolbar">
+        <div class="range-field">
+          <span class="tag">入点</span>
+          <b class="mono">00:12.040</b>
+          <span class="nudge">
+            <button class="btn tiny" type="button" title="入点后退一帧">◀</button>
+            <button class="btn tiny" type="button" title="入点前进一帧">▶</button>
+          </span>
+        </div>
+        <div class="range-field">
+          <span class="tag">出点</span>
+          <b class="mono">00:12.280</b>
+          <span class="nudge">
+            <button class="btn tiny" type="button" title="出点后退一帧">◀</button>
+            <button class="btn tiny" type="button" title="出点前进一帧">▶</button>
+          </span>
+        </div>
+        <div class="range-summary mono">6 帧 · 0.24s</div>
+
+        <div class="spacer"></div>
+
+        <div class="swatches">
+          <button class="swatch on" style="--sw: #ff6b5e;" type="button" aria-label="红色画笔"></button>
+          <button class="swatch" style="--sw: #ffd166;" type="button" aria-label="黄色画笔"></button>
+          <button class="swatch" style="--sw: #eaf6f6;" type="button" aria-label="白色画笔"></button>
+          <button class="swatch" style="--sw: #7fd4d6;" type="button" aria-label="青色画笔"></button>
+        </div>
+        <button class="btn tiny" type="button">设入点</button>
+        <button class="btn tiny" type="button">设出点</button>
+        <button class="btn tiny" type="button">预览</button>
+        <button class="btn tiny" type="button">撤销</button>
+        <button class="btn tiny" type="button">清空</button>
+        <button class="btn ghost tiny" type="button">取消</button>
+        <button class="btn primary tiny" type="button">保存标注</button>
+      </div>
+
+      <!-- 多版本对比工具条（可点击顶部「对比条」开关预览） -->
+      <div class="toolbar compare-toolbar" id="compare-toolbar" hidden>
+        <span class="tag">版本对比</span>
+        <select class="compare-select" aria-label="选择对照版本">
+          <option>v2 · 品牌片_15s_字幕修正_V2.mp4</option>
+          <option>v1 · 品牌片_15s_粗剪初版_V1.mp4</option>
+        </select>
+        <div class="compare-modes">
+          <button class="btn tiny active" type="button">卷帘</button>
+          <button class="btn tiny" type="button">分屏</button>
+          <button class="btn tiny" type="button">差值</button>
+        </div>
+        <div class="compare-offset">
+          <span class="compare-offset-label">偏移</span>
+          <button class="btn tiny" type="button">◀</button>
+          <button class="btn tiny ghost mono" id="compare-offset-val" type="button">+2 帧</button>
+          <button class="btn tiny" type="button">▶</button>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn tiny" type="button">声音：当前版</button>
+        <button class="btn ghost tiny" type="button">退出对比</button>
+      </div>
+
+      <!-- 播放控制条（含热力山脉 + 音频波形 + 精简图标化按钮组） -->
+      <div class="transport" id="transport">
+        <button class="icon-btn" type="button" title="播放 / 暂停 (空格)">▶</button>
+        <button class="icon-btn" type="button" title="静音 (M)" aria-label="静音">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path class="solid" d="M8.4 3.1 5.4 5.5H3.1v5h2.3l3 2.4z" />
+            <g class="mute-waves">
+              <path d="M10.3 6.1a2.7 2.7 0 0 1 0 3.8" />
+              <path d="M12 4.3a5.3 5.3 0 0 1 0 7.4" />
+            </g>
+          </svg>
+        </button>
+        <span class="mono tc">00:12.040</span>
+        <div class="timeline" id="timeline" role="slider" aria-label="播放进度" tabindex="0">
+          <canvas class="timeline-heatmap" id="timeline-heatmap" aria-hidden="true"></canvas>
+          <canvas class="timeline-waveform" id="timeline-waveform" aria-hidden="true"></canvas>
+          <div class="timeline-rail">
+            <div class="timeline-fill" style="width: 40.1%;"></div>
+            <div class="timeline-loop" style="left: 26%; width: 19%;"></div>
+            <div class="timeline-marks">
+              <span class="mark comment" style="left: 11%;"></span>
+              <span class="mark comment" style="left: 28%;"></span>
+              <span class="mark annotation span" style="left: 39.8%; width: 2.2%;"></span>
+              <span class="mark comment" style="left: 62%;"></span>
+              <span class="mark annotation" style="left: 74%;"></span>
+              <span class="mark comment" style="left: 86%;"></span>
+            </div>
+            <div class="timeline-head" style="left: 40.1%;"></div>
+          </div>
+        </div>
+        <span class="mono tc dim">00:30.000</span>
+
+        <div class="transport-right">
+          <label class="fps-field" title="帧率">
+            <span class="fps-badge auto">自动</span>
+            <input type="number" value="25" min="1" max="240" step="0.001" />
+            <span class="fps-unit">fps</span>
+          </label>
+          <div class="step-buttons" role="group" aria-label="逐帧步进">
+            <button class="step-btn" type="button" title="后退一帧">◀</button>
+            <span class="step-label">帧</span>
+            <button class="step-btn" type="button" title="前进一帧">▶</button>
+          </div>
+          <button class="btn tiny mono" id="speed-btn" type="button">1x</button>
+          <button class="btn tiny mono active" id="loop-btn" type="button">I/O</button>
+          <button class="btn tiny tool-icon active" type="button" title="画笔标注 (D)" aria-label="画笔标注">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M11.3 2.5 13.5 4.7 5.6 12.6 2.8 13.2l.6-2.8z" />
+              <path d="m9.6 4.2 2.2 2.2" />
+            </svg>
+          </button>
+          <button class="btn tiny tool-icon" type="button" title="画面参考线与安全框 (G)" aria-label="参考线">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M5.8 2.4v11.2M10.2 2.4v11.2M2.4 5.8h11.2M2.4 10.2h11.2" />
+            </svg>
+          </button>
+          <button class="btn tiny" type="button">对比</button>
+          <button class="btn tiny active" type="button">波形</button>
+          <button class="btn tiny active" type="button">弹幕</button>
+          <button class="btn tiny tool-icon" type="button" title="截取当前帧 (S)" aria-label="截帧">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M2.3 5.2a1.2 1.2 0 0 1 1.2-1.2h1.6l.8-1.3h4.2l.8 1.3h1.6a1.2 1.2 0 0 1 1.2 1.2v6.6a1.2 1.2 0 0 1-1.2 1.2h-9a1.2 1.2 0 0 1-1.2-1.2z" />
+              <circle cx="8" cy="8.4" r="2.2" />
+            </svg>
+          </button>
+          <button class="btn tiny tool-icon" id="help-btn" type="button" title="快捷键速查 (?)">?</button>
+          <button class="btn tiny tool-icon" type="button" title="全屏 (F)" aria-label="全屏">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M2.6 5.8V2.8h3M10.4 2.8h3v3M13.4 10.2v3h-3M5.6 13.2h-3v-3" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- 单行智能弹幕输入栏 -->
+      <form class="composer" id="composer" onsubmit="return false;">
+        <button class="composer-time mono" id="composer-time-demo" type="button" title="点击演示切换当前帧 / 整体意见">
+          <span id="composer-time-demo-text">00:12.040</span>
+          <span class="composer-mode-arrow" aria-hidden="true">⇄</span>
+        </button>
+        <input type="text" maxlength="500" autocomplete="off" placeholder="在这一帧说点什么，回车发送（点左侧切整体意见）…" />
+        <button class="btn primary" type="submit">发弹幕</button>
+      </form>
+    </section>
+
+    <!-- 右侧审片侧栏（完全复用当前线性评论流） -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-resizer" aria-hidden="true"></div>
+      <div class="sidebar-head">
+        <h2>品牌片_15s_调色终版_V3.mp4</h2>
+        <p class="meta">v3 · 00:30.000 · 1920×1080 · 小林 / 阿超 / Momo 在看</p>
+        <button class="btn primary report-open" type="button">审片报告</button>
+      </div>
+      <div class="tabs">
+        <button class="tab active" type="button">全部 <span class="count">15</span></button>
+        <button class="tab" type="button">弹幕 <span class="count">12</span></button>
+        <button class="tab" type="button">画笔 <span class="count">3</span></button>
+      </div>
+      <div class="list">
+        <div class="item author-c2">
+          <div class="item-head">
+            <span class="item-author">小林</span>
+            <span class="item-flag">整体意见</span>
+            <span class="item-time mono">00:00.000</span>
+          </div>
+          <p class="item-text">这一版整体调色舒服很多，暗部层次保住了。</p>
+        </div>
+
+        <div class="item author-c1">
+          <div class="item-head">
+            <span class="item-author">阿超</span>
+            <span class="item-time mono">00:07.120</span>
+            <button class="item-reply-btn" type="button">回复</button>
+          </div>
+          <p class="item-text">字幕和鼓点差了半拍，建议往前挪 2 帧。</p>
+          <div class="item-replies">
+            <div class="reply author-c3">
+              <span class="reply-author">Momo</span>
+              <span class="reply-text">收到，我回剪辑里对一下波形卡点。</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="item current author-c3">
+          <div class="item-head">
+            <span class="item-author">Momo</span>
+            <span class="item-flag">画笔 · 6 帧</span>
+            <span class="item-time mono">00:12.040</span>
+          </div>
+          <div class="item-annotation">
+            <canvas class="mock-ann" width="92" height="52"></canvas>
+            <div class="item-body">
+              <p class="item-text">瓶身标签的高光稍微压一档</p>
+              <p class="item-sub mono">00:12.040 → 00:12.280</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="item author-c1">
+          <div class="item-head">
+            <span class="item-author">阿超</span>
+            <span class="item-time mono">00:18.600</span>
+          </div>
+          <p class="item-text">落版 Logo 右边留白再多 4px，现在有点贴安全框。</p>
+        </div>
+
+        <div class="item done author-c2">
+          <div class="item-head">
+            <span class="item-author">小林</span>
+            <span class="item-time mono">00:24.840</span>
+          </div>
+          <p class="item-text">尾声音乐淡出再拉长半秒。</p>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- 弹窗、浮层与优化细节对照视图 -->
+  <section class="showcase-view" id="showcase-view" hidden>
+    <div class="showcase-inner">
+      <div class="diff-panel">
+        <h3>优化版「胶片暗房剪辑台」相比原版 02 的 6 项核心升级</h3>
+        <div class="diff-table">
+          <div class="diff-card">
+            <b>1. 暗房中性石墨底，告别“金线框满屏”</b>
+            <p><span class="diff-tag-old">旧稿</span> 纯黑 + 每个按钮/卡片/输入框都套琥珀金边，层级平且干扰视频色彩判断。<br><span class="diff-tag-new">优化</span> 改用阳极氧化炭黑 + 极细暖银微边，仅主按钮/激活态/指针/时间码亮起柯达钨丝琥珀。</p>
+          </div>
+          <div class="diff-card">
+            <b>2. 封面 35mm 微齿条，彻底释放缩略图</b>
+            <p><span class="diff-tag-old">旧稿</span> 封面上下各盖 10px 实心齿孔，裁掉画面边缘且与加锁角标、操作按钮打架。<br><span class="diff-tag-new">优化</span> 顶部完全清透，只在封面底边接缝嵌入 6px 极细半透微齿条，保留胶片基因且零遮挡。</p>
+          </div>
+          <div class="diff-card">
+            <b>3. 舞台零像素遮挡，专业校色包围</b>
+            <p><span class="diff-tag-old">旧稿</span> 视频内侧 12px 压四角黄色取景线，挡住字幕与安全框。<br><span class="diff-tag-new">优化</span> 复用当前无边框 1:1 比例画框，仅保留 1px 极细光学镜框边，让视频成为暗房唯一光源。</p>
+          </div>
+          <div class="diff-card">
+            <b>4. Tally 红点克制收敛，恢复信号语义</b>
+            <p><span class="diff-tag-old">旧稿</span> 顶栏全宽红条 + 在线红点 + 暂停红点 + 侧栏标题红点，4 处同时抢戏。<br><span class="diff-tag-new">优化</span> 去掉装饰性红条和标题红点，仅在「在线人数 / 暂停态 / 画笔区间」使用 Tally 朱红。</p>
+          </div>
+          <div class="diff-card">
+            <b>5. 缎面机械键帽，去掉老旧金属反光</b>
+            <p><span class="diff-tag-old">旧稿</span> 主按钮带硬白色塑料高光条；新建卡片用施工警戒斜纹。<br><span class="diff-tag-new">优化</span> 主按钮改为低反光缎面琥珀键；新建卡片改为干净虚线暗房待冲印槽位。</p>
+          </div>
+          <div class="diff-card">
+            <b>6. 完整适配当前全部新组件与波形配色</b>
+            <p><span class="diff-tag-old">旧稿</span> 停留在旧版卡片式侧栏，缺波形轨、热力山脉、对比条、搜索框、单行整体意见栏。<br><span class="diff-tag-new">优化</span> 100% 复用当前浮动座舱 + 线性评论流，同步适配时间轴波形/热力琥珀色板与弹窗浮层。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="showcase-grid">
+        <div class="showcase-block">
+          <div class="showcase-label">上传弹窗（.modal-box）</div>
+          <div class="modal showcase-inline-modal">
+            <div class="modal-box">
+              <header class="modal-head">
+                <h2>上传视频</h2>
+                <button class="icon-btn" type="button">✕</button>
+              </header>
+              <label class="field required">
+                <span>你的名字 · 必填 <em>不署名不能上传</em></span>
+                <input type="text" value="阿超" readonly />
+              </label>
+              <div class="dropzone">
+                <p class="dz-main">把视频拖进来，或点击选择文件</p>
+                <p class="dz-sub">mp4 / webm / mov，建议 H.264 编码的 mp4</p>
+              </div>
+              <div class="upload-progress">
+                <div class="bar"><div class="bar-fill" style="width: 68%;"></div></div>
+                <p class="mono">正在上传 68% · 42.6 MB/s</p>
+              </div>
+              <button class="btn primary" id="upload-start" type="button">上传并审片</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="showcase-block">
+          <div class="showcase-label">时间轴悬停预览 / 安全框菜单 / Toast / 整体意见输入态</div>
+          <div class="showcase-popovers">
+            <div class="tl-preview">
+              <div class="tl-preview-media loaded" style="width: 192px; height: 108px; background: radial-gradient(50% 66% at 68% 36%, rgba(235,165,76,0.7), transparent 64%), linear-gradient(155deg, #271c12, #0d0b0a);">
+                <span class="tl-preview-tc mono">00:12.040</span>
+              </div>
+              <div class="tl-preview-note">Momo：瓶身标签的高光稍微压一档</div>
+            </div>
+
+            <div class="guide-menu">
+              <button class="guide-option on" type="button">
+                <span class="guide-option-head"><span>2.35:1 电影遮幅</span><span class="guide-option-check">✓</span></span>
+                <span class="guide-option-desc">宽银幕构图参考线与上下暗角遮幅</span>
+              </button>
+              <button class="guide-option" type="button">
+                <span class="guide-option-head"><span>抖音 / 视频号避让区</span><span class="guide-option-check">✓</span></span>
+                <span class="guide-option-desc">标出右侧点赞栏与底部文案安全区</span>
+              </button>
+              <button class="guide-option" type="button">
+                <span class="guide-option-head"><span>三分线 + 标题安全框</span><span class="guide-option-check">✓</span></span>
+                <span class="guide-option-desc">90% 广播安全框与中心十字准星</span>
+              </button>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 6px;">
+            <form class="composer is-overall" style="border-radius: 10px;" onsubmit="return false;">
+              <button class="composer-time mono is-overall" type="button">
+                <span>整体意见</span>
+                <span class="composer-mode-arrow">⇄</span>
+              </button>
+              <input type="text" value="整体节奏很紧凑，第二段 BGM 可以再早半秒进" readonly />
+              <button class="btn primary" type="submit">发意见</button>
+            </form>
+            <div>
+              <div class="toast" style="display: inline-block;">已保存画笔标注（00:12.040 – 00:12.280）</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    (function () {
+      const body = document.body;
+      const skinBtns = Array.from(document.querySelectorAll('[data-skin-pick]'));
+      const viewBtns = Array.from(document.querySelectorAll('[data-view-pick]'));
+      const statusBadge = document.getElementById('skin-status-badge');
+      const peekBtn = document.getElementById('peek-legacy-btn');
+      const toggleDrawBtn = document.getElementById('toggle-draw-btn');
+      const toggleCompareBtn = document.getElementById('toggle-compare-btn');
+
+      const workspace = document.getElementById('main-workspace');
+      const showcaseView = document.getElementById('showcase-view');
+      const emptyState = document.getElementById('empty-state');
+      const introCard = document.getElementById('intro-card');
+      const homeNav = document.getElementById('home-nav');
+      const crumb = document.getElementById('library-crumb');
+      const projectGrid = document.getElementById('project-grid');
+      const versionList = document.getElementById('version-list');
+      const frame = document.getElementById('frame');
+      const videoWrap = document.getElementById('video-wrap');
+      const drawToolbar = document.getElementById('draw-toolbar');
+      const compareToolbar = document.getElementById('compare-toolbar');
+      const transport = document.getElementById('transport');
+      const composer = document.getElementById('composer');
+      const sidebar = document.getElementById('sidebar');
+      const presence = document.getElementById('presence');
+      const searchField = document.getElementById('project-search-field');
+      const topBackBtn = document.getElementById('top-back-btn');
+
+      const skinNames = {
+        default: '当前默认',
+        'film-legacy': '原版 02 旧稿',
+        'film-refined': '优化方案（推荐）',
+      };
+
+      let currentSkin = 'film-refined';
+      let currentView = 'watch';
+      let showDraw = true;
+      let showCompare = false;
+      let peeking = false;
+
+      function applySkin(skin, remember = true) {
+        if (remember) currentSkin = skin;
+        body.setAttribute('data-skin', skin);
+        statusBadge.textContent = skinNames[skin] || skin;
+        skinBtns.forEach((btn) => {
+          btn.classList.toggle('is-on', btn.dataset.skinPick === skin);
+        });
+        drawTimelineCanvas();
+      }
+
+      function applyView(view) {
+        currentView = view;
+        viewBtns.forEach((btn) => {
+          btn.classList.toggle('is-on', btn.dataset.viewPick === view);
+        });
+
+        const isWatch = view === 'watch';
+        const isLib = view === 'library';
+        const isVer = view === 'versions';
+        const isDetails = view === 'details';
+
+        workspace.hidden = isDetails;
+        showcaseView.hidden = !isDetails;
+
+        emptyState.hidden = !(isLib || isVer);
+        frame.hidden = !isWatch;
+        transport.hidden = !isWatch;
+        composer.hidden = !isWatch;
+        sidebar.hidden = !isWatch;
+        drawToolbar.hidden = !(isWatch && showDraw);
+        compareToolbar.hidden = !(isWatch && showCompare);
+
+        introCard.hidden = !isLib;
+        homeNav.hidden = !isLib;
+        crumb.hidden = !isVer;
+        projectGrid.hidden = !isLib;
+        versionList.hidden = !isVer;
+
+        presence.hidden = !isWatch;
+        searchField.hidden = !isLib;
+        topBackBtn.hidden = !isWatch;
+
+        toggleDrawBtn.style.display = isWatch ? '' : 'none';
+        toggleCompareBtn.style.display = isWatch ? '' : 'none';
+
+        if (isWatch) {
+          requestAnimationFrame(() => {
+            fitVideoWrap();
+            drawTimelineCanvas();
+          });
+        }
+      }
+
+      function fitVideoWrap() {
+        if (frame.hidden) return;
+        const rect = frame.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return;
+        const padX = 12;
+        const padY = 8;
+        const availW = Math.max(240, rect.width - padX * 2);
+        const availH = Math.max(160, rect.height - padY * 2);
+        const ratio = 16 / 9;
+        let w = availW;
+        let h = w / ratio;
+        if (h > availH) {
+          h = availH;
+          w = h * ratio;
+        }
+        videoWrap.style.width = Math.round(w) + 'px';
+        videoWrap.style.height = Math.round(h) + 'px';
+      }
+
+      // 模拟真实时间轴波形与热力山脉（按当前皮肤配色绘制）
+      function drawTimelineCanvas() {
+        const wave = document.getElementById('timeline-waveform');
+        const heat = document.getElementById('timeline-heatmap');
+        if (!wave || !heat || frame.hidden) return;
+        const skin = body.getAttribute('data-skin');
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+        // 1. 音频波形
+        const wRect = wave.getBoundingClientRect();
+        if (wRect.width > 10 && wRect.height > 4) {
+          wave.width = Math.round(wRect.width * dpr);
+          wave.height = Math.round(wRect.height * dpr);
+          const ctx = wave.getContext('2d');
+          ctx.scale(dpr, dpr);
+          ctx.clearRect(0, 0, wRect.width, wRect.height);
+          const bars = Math.max(40, Math.floor(wRect.width / 3));
+          const progress = 0.401;
+          const mid = wRect.height / 2;
+
+          let playedColor = 'rgba(127, 240, 234, 0.56)';
+          let restColor = 'rgba(127, 240, 234, 0.2)';
+          if (skin === 'film-refined') {
+            playedColor = 'rgba(235, 185, 100, 0.56)';
+            restColor = 'rgba(242, 236, 225, 0.17)';
+          } else if (skin === 'film-legacy') {
+            playedColor = 'rgba(224, 169, 79, 0.6)';
+            restColor = 'rgba(224, 169, 79, 0.2)';
+          }
+
+          for (let i = 0; i < bars; i++) {
+            const t = i / bars;
+            const amp = 0.22 + 0.72 * Math.abs(Math.sin(i * 0.42) * Math.cos(i * 0.17 + 0.6) + Math.sin(i * 1.1) * 0.25);
+            const h = Math.max(2, Math.min(wRect.height - 2, amp * (wRect.height - 2)));
+            ctx.fillStyle = t <= progress ? playedColor : restColor;
+            ctx.fillRect(i * 3, mid - h / 2, 1.8, h);
+          }
+        }
+
+        // 2. 弹幕热力山脉
+        const hRect = heat.getBoundingClientRect();
+        if (hRect.width > 10 && hRect.height > 4) {
+          heat.width = Math.round(hRect.width * dpr);
+          heat.height = Math.round(hRect.height * dpr);
+          const ctx = heat.getContext('2d');
+          ctx.scale(dpr, dpr);
+          ctx.clearRect(0, 0, hRect.width, hRect.height);
+
+          const peaks = [
+            { x: 0.11, h: 0.52, w: 0.05 },
+            { x: 0.28, h: 0.68, w: 0.06 },
+            { x: 0.40, h: 0.92, w: 0.07 },
+            { x: 0.62, h: 0.58, w: 0.05 },
+            { x: 0.74, h: 0.74, w: 0.06 },
+            { x: 0.86, h: 0.45, w: 0.05 },
+          ];
+          const steps = 96;
+          ctx.beginPath();
+          ctx.moveTo(0, hRect.height);
+          for (let i = 0; i <= steps; i++) {
+            const xNorm = i / steps;
+            let val = 0.04;
+            for (const p of peaks) {
+              const d = (xNorm - p.x) / p.w;
+              val += p.h * Math.exp(-d * d * 1.6);
+            }
+            const y = hRect.height - Math.min(1, val) * (hRect.height - 2);
+            ctx.lineTo(xNorm * hRect.width, y);
+          }
+          ctx.lineTo(hRect.width, hRect.height);
+          ctx.closePath();
+
+          const fillGrad = ctx.createLinearGradient(0, 0, 0, hRect.height);
+          const strokeGrad = ctx.createLinearGradient(0, 0, 0, hRect.height);
+          if (skin === 'default') {
+            fillGrad.addColorStop(0, 'rgba(240, 215, 154, 0.54)');
+            fillGrad.addColorStop(0.45, 'rgba(34, 193, 195, 0.34)');
+            fillGrad.addColorStop(1, 'rgba(34, 193, 195, 0.02)');
+            strokeGrad.addColorStop(0, 'rgba(255, 232, 168, 0.92)');
+            strokeGrad.addColorStop(0.6, 'rgba(127, 240, 234, 0.78)');
+            strokeGrad.addColorStop(1, 'rgba(34, 193, 195, 0.2)');
+          } else {
+            fillGrad.addColorStop(0, 'rgba(226, 83, 71, 0.52)');
+            fillGrad.addColorStop(0.48, 'rgba(226, 168, 75, 0.34)');
+            fillGrad.addColorStop(1, 'rgba(226, 168, 75, 0.02)');
+            strokeGrad.addColorStop(0, 'rgba(248, 164, 154, 0.9)');
+            strokeGrad.addColorStop(0.55, 'rgba(240, 202, 125, 0.8)');
+            strokeGrad.addColorStop(1, 'rgba(226, 168, 75, 0.18)');
+          }
+          ctx.fillStyle = fillGrad;
+          ctx.fill();
+          ctx.strokeStyle = strokeGrad;
+          ctx.lineWidth = 1.25;
+          ctx.stroke();
+        }
+      }
+
+      skinBtns.forEach((btn) => {
+        btn.addEventListener('click', () => applySkin(btn.dataset.skinPick, true));
+      });
+      viewBtns.forEach((btn) => {
+        btn.addEventListener('click', () => applyView(btn.dataset.viewPick));
+      });
+      document.querySelectorAll('[data-jump-view]').forEach((el) => {
+        el.addEventListener('click', () => applyView(el.dataset.jumpView));
+      });
+
+      toggleDrawBtn.addEventListener('click', () => {
+        showDraw = !showDraw;
+        toggleDrawBtn.classList.toggle('is-on', showDraw);
+        drawToolbar.hidden = !(currentView === 'watch' && showDraw);
+        requestAnimationFrame(fitVideoWrap);
+      });
+      toggleCompareBtn.addEventListener('click', () => {
+        showCompare = !showCompare;
+        toggleCompareBtn.classList.toggle('is-on', showCompare);
+        compareToolbar.hidden = !(currentView === 'watch' && showCompare);
+        requestAnimationFrame(fitVideoWrap);
+      });
+
+      // 点击弹幕左侧时间码，体验「当前帧 / 整体意见」切换效果
+      const composerTimeDemo = document.getElementById('composer-time-demo');
+      const composerTimeDemoText = document.getElementById('composer-time-demo-text');
+      composerTimeDemo.addEventListener('click', () => {
+        const nextOverall = !composer.classList.contains('is-overall');
+        composer.classList.toggle('is-overall', nextOverall);
+        composerTimeDemo.classList.toggle('is-overall', nextOverall);
+        composerTimeDemoText.textContent = nextOverall ? '整体意见' : '00:12.040';
+      });
+
+      // 按住对比原版 02（类似调色台的 Bypass 键）
+      function startPeek() {
+        if (peeking) return;
+        peeking = true;
+        peekBtn.classList.add('is-peeking');
+        applySkin(currentSkin === 'film-legacy' ? 'film-refined' : 'film-legacy', false);
+      }
+      function endPeek() {
+        if (!peeking) return;
+        peeking = false;
+        peekBtn.classList.remove('is-peeking');
+        applySkin(currentSkin, false);
+      }
+      peekBtn.addEventListener('pointerdown', startPeek);
+      window.addEventListener('pointerup', endPeek);
+      window.addEventListener('pointercancel', endPeek);
+
+      window.addEventListener('keydown', (e) => {
+        if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+        if (e.key === '1') applySkin('default', true);
+        else if (e.key === '2') applySkin('film-legacy', true);
+        else if (e.key === '3') applySkin('film-refined', true);
+        else if (e.code === 'Space' && !e.repeat) {
+          e.preventDefault();
+          startPeek();
+        }
+      });
+      window.addEventListener('keyup', (e) => {
+        if (e.code === 'Space') endPeek();
+      });
+
+      new ResizeObserver(() => {
+        fitVideoWrap();
+        drawTimelineCanvas();
+      }).observe(frame);
+
+      applyView('watch');
+      applySkin('film-refined', true);
+    })();
+  </script>
+</body>
+</html>

@@ -177,11 +177,14 @@ export function createTimelineHeatmap(canvas) {
       ctx.lineTo(last[0], last[1]);
     };
 
-    // 填充渐变：高处暖金流光 → 中段青色 → 底部淡隐
+    // 填充渐变与山脊描边：颜色走 CSS 变量，切换皮肤自动联动
+    const styles = getComputedStyle(canvas);
+    const token = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
+
     const fillGrad = ctx.createLinearGradient(0, 0, 0, baseY);
-    fillGrad.addColorStop(0, 'rgba(240, 215, 154, 0.56)');
-    fillGrad.addColorStop(0.45, 'rgba(34, 193, 195, 0.36)');
-    fillGrad.addColorStop(1, 'rgba(34, 193, 195, 0.03)');
+    fillGrad.addColorStop(0, token('--heat-fill-0', 'rgba(240, 215, 154, 0.56)'));
+    fillGrad.addColorStop(0.45, token('--heat-fill-1', 'rgba(34, 193, 195, 0.36)'));
+    fillGrad.addColorStop(1, token('--heat-fill-2', 'rgba(34, 193, 195, 0.03)'));
 
     traceCurve();
     ctx.lineTo(w, baseY);
@@ -192,9 +195,9 @@ export function createTimelineHeatmap(canvas) {
 
     // 山脊流光描边
     const strokeGrad = ctx.createLinearGradient(0, 0, 0, baseY);
-    strokeGrad.addColorStop(0, 'rgba(255, 232, 168, 0.95)');
-    strokeGrad.addColorStop(0.55, 'rgba(127, 240, 234, 0.85)');
-    strokeGrad.addColorStop(1, 'rgba(34, 193, 195, 0.25)');
+    strokeGrad.addColorStop(0, token('--heat-stroke-0', 'rgba(255, 232, 168, 0.95)'));
+    strokeGrad.addColorStop(0.55, token('--heat-stroke-1', 'rgba(127, 240, 234, 0.85)'));
+    strokeGrad.addColorStop(1, token('--heat-stroke-2', 'rgba(34, 193, 195, 0.25)'));
 
     traceCurve();
     ctx.lineWidth = 1.4;
@@ -217,6 +220,9 @@ export function createTimelineHeatmap(canvas) {
   return {
     update(comments, annotations, total) {
       lastData = { comments, annotations, total };
+      draw();
+    },
+    redraw() {
       draw();
     },
     clear() {

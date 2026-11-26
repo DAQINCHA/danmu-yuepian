@@ -268,6 +268,20 @@ export function createDanmaku(layer, options = {}) {
     showFocus([]);
   }
 
+  /** 切换皮肤后，立刻把画面上仍在场的弹幕和底部聚焦卡片刷成新色板 */
+  function refreshColors() {
+    for (const [node, entry] of live.entries()) {
+      const comment = entry.comment;
+      node.style.setProperty('--dm-color', colorOf(comment));
+      const replies = Array.isArray(comment?.replies) ? comment.replies : [];
+      const replyNames = node.querySelectorAll('.dm-reply-name');
+      replyNames.forEach((el, idx) => {
+        if (replies[idx]) el.style.setProperty('--dm-color', colorOf(replies[idx]));
+      });
+    }
+    if (focusComments.length) showFocus(focusComments);
+  }
+
   /**
    * 把当前画面上看得见的弹幕读成绘制指令（坐标相对弹幕层，单位 CSS 像素），
    * 截图时按视频原始分辨率等比放大重画，所见即所得。
@@ -323,6 +337,7 @@ export function createDanmaku(layer, options = {}) {
     showFocus,
     clear,
     clearLive,
+    refreshColors,
     visibleComments,
     snapshot,
     get enabled() {

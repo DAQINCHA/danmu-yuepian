@@ -267,15 +267,17 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
     const midY = h / 2;
     const maxAmp = h * 0.46;
 
+    const styles = getComputedStyle(canvas);
+    const playedColor = styles.getPropertyValue('--wave-played').trim() || 'rgba(127, 240, 234, 0.56)';
+    const restColor = styles.getPropertyValue('--wave-rest').trim() || 'rgba(127, 240, 234, 0.2)';
+
     for (let i = 0; i < drawCount; i += 1) {
       const ratio = drawCount === 1 ? 0 : i / (drawCount - 1);
       const srcIdx = Math.min(peaks.length - 1, Math.floor(ratio * peaks.length));
       const amp = Math.max(1.2, (peaks[srcIdx] / 255) * maxAmp);
       const x = i * stepPx + (stepPx - barW) / 2;
       const played = ratio <= progress;
-      ctx.fillStyle = played
-        ? 'rgba(127, 240, 234, 0.56)'
-        : 'rgba(127, 240, 234, 0.2)';
+      ctx.fillStyle = played ? playedColor : restColor;
       ctx.fillRect(x, midY - amp, barW, amp * 2);
     }
     hasDrawn = true;
@@ -496,6 +498,9 @@ export function createTimelineWaveform(canvas, { onStatus } = {}) {
       const clamped = Math.min(1, Math.max(0, Number(nextRatio) || 0));
       progress = clamped;
       if (enabled && peaks) draw(false);
+    },
+    redraw() {
+      if (enabled && peaks) draw(true);
     },
     setEnabled(next) {
       const flag = Boolean(next);
