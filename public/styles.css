@@ -179,19 +179,26 @@ h1, h2, p { margin: 0; }
 }
 
 .presence {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   height: 30px;
-  min-width: 0;
-  max-width: 320px;
-  padding: 0 8px 0 10px;
+  padding: 0 10px;
   border: 1px solid rgba(var(--accent-hi-rgb), 0.28);
   border-radius: var(--r-pill);
   background: rgba(var(--accent-rgb), 0.16);
   color: var(--cyan-text);
   font-size: var(--fs-sm);
   white-space: nowrap;
+  cursor: default;
+  outline: none;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.presence:hover,
+.presence:focus-visible {
+  border-color: rgba(var(--accent-hi-rgb), 0.52);
+  background: rgba(var(--accent-rgb), 0.24);
 }
 
 .live-dot {
@@ -202,26 +209,96 @@ h1, h2, p { margin: 0; }
   box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18), 0 0 6px rgba(var(--accent-hi-rgb), 0.9);
 }
 
-.presence-label { display: none; }
-@media (min-width: 900px) { .presence-label { display: inline; } }
+.presence-label { display: inline; }
 
-/* 正在观看的角色：前五位只露首字圆头像，多的收进 +N */
 .presence-summary { display: inline-flex; align-items: center; gap: 3px; flex: none; }
-.presence-roster {
-  display: inline-flex;
+
+/* 悬停 / 聚焦弹出的完整名单 */
+.presence-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 35;
+  min-width: 176px;
+  max-width: 240px;
+  padding: 8px;
+  /* 父级 .topbar 已用 backdrop-filter，子层再叠会失效，所以这里用高不透明度深色底 */
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--r-md);
+  background: rgba(10, 20, 24, 0.96);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 16px 40px rgba(0, 0, 0, 0.62);
+  color: var(--text);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out), visibility 0s linear var(--dur-fast);
+}
+.presence-popover[hidden] { display: none; }
+/* 胶囊和浮层之间留 8px 缝隙，用一条透明感应带接住鼠标，别让悬停掉链子 */
+.presence-popover::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -10px;
+  height: 10px;
+}
+.presence:hover .presence-popover:not([hidden]),
+.presence:focus-visible .presence-popover:not([hidden]) {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+/* 触屏没有 hover，点按胶囊时用 focus-within 展开 */
+@media (hover: none) {
+  .presence:focus-within .presence-popover:not([hidden]) {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    pointer-events: auto;
+    transition-delay: 0s;
+  }
+}
+/* 未署名聚光引导时整条顶栏压暗，浮层不能窜到暗层上面 */
+body.author-spotlight .presence-popover { display: none !important; }
+
+.presence-popover-head {
+  display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 0 1px 7px;
-  border-left: 1px solid rgba(255, 255, 255, 0.14);
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 4px 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+.presence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 232px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.presence-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: var(--r-sm);
   min-width: 0;
 }
-.presence-roster[hidden] { display: none; }
+.presence-item.is-me { background: rgba(255, 255, 255, 0.05); }
 .presence-avatar {
   flex: none;
   display: inline-grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: var(--role-color, var(--accent));
   color: #0b0b0b;
@@ -229,18 +306,38 @@ h1, h2, p { margin: 0; }
   font-weight: 700;
   line-height: 1;
 }
-.presence-avatar.is-me {
-  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.85);
+.presence-avatar.is-me { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.88); }
+.presence-avatar.is-anon {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text-dim);
+  font-weight: 600;
 }
-.presence-more {
+.presence-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+.presence-item.is-anon .presence-name { color: var(--text-dim); }
+.presence-me-tag,
+.presence-anon-count {
   flex: none;
   padding: 0 5px;
-  height: 18px;
-  line-height: 18px;
+  height: 17px;
+  line-height: 17px;
   border-radius: var(--r-pill);
+  font-size: 10px;
+}
+.presence-me-tag {
+  background: rgba(var(--accent-rgb), 0.2);
+  color: var(--cyan-text);
+}
+.presence-anon-count {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-dim);
-  font-size: var(--fs-xs);
 }
 
 .author-field {

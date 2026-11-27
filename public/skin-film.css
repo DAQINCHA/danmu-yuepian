@@ -117,12 +117,41 @@ html[data-skin="film"] .presence {
   background: rgba(12, 11, 10, 0.65);
   color: #c8beae;
 }
-/* 正在观看的角色：只留圆头像，自己的那圈用暖金描边 */
-html[data-skin="film"] .presence-roster {
-  border-left-color: rgba(255, 244, 224, 0.12);
+html[data-skin="film"] .presence:hover,
+html[data-skin="film"] .presence:focus-visible {
+  border-color: rgba(226, 168, 75, 0.42);
+  background: rgba(18, 16, 14, 0.82);
+  color: #f2ece1;
 }
+/* 悬停展开的完整名单：同色系炭黑浮层 */
+html[data-skin="film"] .presence-popover {
+  border-radius: 8px;
+  border-color: rgba(255, 244, 224, 0.12);
+  background: rgba(22, 20, 18, 0.96);
+  box-shadow: inset 0 1px 0 rgba(255, 246, 232, 0.08), 0 20px 48px rgba(0, 0, 0, 0.72);
+}
+html[data-skin="film"] .presence-popover-head {
+  border-bottom-color: rgba(255, 244, 224, 0.09);
+  color: #9c9283;
+}
+html[data-skin="film"] .presence-item { border-radius: 5px; }
+html[data-skin="film"] .presence-item.is-me { background: rgba(226, 168, 75, 0.09); }
 html[data-skin="film"] .presence-avatar.is-me {
   box-shadow: 0 0 0 1.5px #f0ca7d;
+}
+html[data-skin="film"] .presence-avatar.is-anon {
+  background: rgba(255, 246, 232, 0.12);
+  color: #a89f91;
+}
+html[data-skin="film"] .presence-me-tag {
+  border-radius: 4px;
+  background: rgba(226, 168, 75, 0.18);
+  color: #f2c97d;
+}
+html[data-skin="film"] .presence-anon-count {
+  border-radius: 4px;
+  background: rgba(255, 246, 232, 0.08);
+  color: #a89f91;
 }
 html[data-skin="film"] .live-dot {
   background: #e25347;

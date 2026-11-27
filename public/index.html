@@ -42,10 +42,10 @@
     </a>
 
     <div class="topbar-right">
-      <div class="presence" id="presence" hidden>
-        <i class="live-dot"></i>
-        <span class="presence-summary"><span id="presence-count">0</span><span class="presence-label">人正在看</span></span>
-        <div class="presence-roster" id="presence-roster" hidden></div>
+      <div class="presence" id="presence" tabindex="0" hidden>
+        <i class="live-dot" aria-hidden="true"></i>
+        <span class="presence-summary"><span id="presence-count">0</span><span class="presence-label">人观看</span></span>
+        <div class="presence-popover" id="presence-roster" role="tooltip" hidden></div>
       </div>
       <div class="project-search-field" id="project-search-field" hidden>
         <button class="project-search-toggle" id="project-search-toggle" type="button"

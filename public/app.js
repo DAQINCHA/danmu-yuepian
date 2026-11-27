@@ -414,10 +414,19 @@ function initAuthor() {
   dom.authorField.classList.toggle('need', !state.author);
   updateUploadButton();
 
-  dom.authorInput.addEventListener('input', () => setAuthor(dom.authorInput.value, 'topbar'));
+  // 署名边打边同步：停顿 450ms 再重连一次，把新名字推进顶栏的「正在观看」
+  let presenceTimer = 0;
+  dom.authorInput.addEventListener('input', () => {
+    setAuthor(dom.authorInput.value, 'topbar');
+    clearTimeout(presenceTimer);
+    presenceTimer = setTimeout(() => {
+      if (state.video?.id) connectEvents(state.video.id);
+    }, 450);
+  });
   dom.uploadAuthor.addEventListener('input', () => setAuthor(dom.uploadAuthor.value, 'upload'));
   for (const input of [dom.authorInput, dom.uploadAuthor]) {
     input.addEventListener('change', () => {
+      clearTimeout(presenceTimer);
       setAuthor(input.value, input === dom.authorInput ? 'topbar' : 'upload');
       renderSidebar();
       maybeBeginUpload();
@@ -3021,11 +3030,12 @@ function setPresence(data) {
   renderPresence();
 }
 
-/** 顶栏「N 人正在看」+ 前 3 位署名角色的首字头像胶囊 */
+/** 顶栏只显示「N 人观看」；悬停 / 聚焦时浮层里列出全部正在看的人 */
 function renderPresence() {
   dom.presence.hidden = !state.video;
   const { count = 0, viewers = [], anon = 0 } = state.presence || {};
   dom.presenceCount.textContent = String(count);
+  dom.presence.removeAttribute('title');
 
   const roster = dom.presenceRoster;
   if (!roster) return;
@@ -3036,35 +3046,75 @@ function renderPresence() {
     ? [me, ...viewers.filter((name) => name !== me)]
     : [...viewers];
 
-  const shown = ordered.slice(0, 5);
-  const rest = ordered.length - shown.length + anon;
+  if (ordered.length === 0 && anon <= 0) {
+    roster.replaceChildren();
+    roster.hidden = true;
+    return;
+  }
 
+  roster.hidden = false;
   roster.replaceChildren();
-  roster.hidden = shown.length === 0;
 
-  for (const name of shown) {
+  const head = document.createElement('div');
+  head.className = 'presence-popover-head';
+  const headLabel = document.createElement('span');
+  headLabel.textContent = '正在观看';
+  const headTotal = document.createElement('span');
+  headTotal.className = 'presence-popover-total';
+  headTotal.textContent = `${count} 人`;
+  head.append(headLabel, headTotal);
+
+  const list = document.createElement('div');
+  list.className = 'presence-list';
+
+  for (const name of ordered) {
+    const item = document.createElement('div');
+    item.className = 'presence-item' + (name === me ? ' is-me' : '');
+
     const avatar = document.createElement('span');
     avatar.className = 'presence-avatar' + (name === me ? ' is-me' : '');
     avatar.style.setProperty('--role-color', authorColor(name));
-    avatar.title = name === me ? `${name}（我）` : name;
+    avatar.setAttribute('aria-hidden', 'true');
     avatar.textContent = (Array.from(String(name).trim())[0] || '匿').toUpperCase();
-    roster.append(avatar);
+
+    const label = document.createElement('span');
+    label.className = 'presence-name';
+    label.textContent = name;
+
+    item.append(avatar, label);
+    if (name === me) {
+      const tag = document.createElement('span');
+      tag.className = 'presence-me-tag';
+      tag.textContent = '我';
+      item.append(tag);
+    }
+    list.append(item);
   }
 
-  if (shown.length && rest > 0) {
-    const more = document.createElement('span');
-    more.className = 'presence-more';
-    more.textContent = `+${rest}`;
-    roster.append(more);
+  if (anon > 0) {
+    const item = document.createElement('div');
+    item.className = 'presence-item is-anon';
+
+    const avatar = document.createElement('span');
+    avatar.className = 'presence-avatar is-anon';
+    avatar.setAttribute('aria-hidden', 'true');
+    avatar.textContent = '匿';
+
+    const label = document.createElement('span');
+    label.className = 'presence-name';
+    label.textContent = '未署名观众';
+
+    item.append(avatar, label);
+    if (anon > 1) {
+      const badge = document.createElement('span');
+      badge.className = 'presence-anon-count';
+      badge.textContent = `×${anon}`;
+      item.append(badge);
+    }
+    list.append(item);
   }
 
-  // 悬浮看完整名单
-  if (ordered.length) {
-    const who = `正在观看：${ordered.join('、')}`;
-    dom.presence.title = anon > 0 ? `${who}（另有 ${anon} 人未署名）` : who;
-  } else {
-    dom.presence.title = `${count} 人正在观看（尚未署名）`;
-  }
+  roster.append(head, list);
 }
 
 function connectEvents(videoId) {
