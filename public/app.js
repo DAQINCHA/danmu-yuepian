@@ -4703,14 +4703,15 @@ function versionRow(video, version, finalId) {
 
   // 定稿按钮只出现在真项目里；未分类没有归属，定稿没有意义。
   // 已经是最终版时同一个位置变成「取消最终版」，不用再去找徽章
+  let finalButton = null;
   if (state.libraryProjectId) {
-    const finalButton = document.createElement('button');
+    finalButton = document.createElement('button');
     finalButton.className = 'btn tiny ghost final';
     finalButton.type = 'button';
     finalButton.textContent = isFinal ? '取消最终版' : '设为最终版';
     // 「设为最终版」只在鼠标悬浮到这一行时出现（窄屏 / 触屏一直显示）；
     // 「取消最终版」是撤销入口，一直摆在明面上
-    if (!isFinal) finalButton.classList.add('final-hover');
+    if (!isFinal) finalButton.classList.add('version-hover-btn');
     finalButton.title = isFinal
       ? '取消后这一版就只是普通版本'
       : '把这一版定为成片，首页卡片会跟着更新';
@@ -4724,11 +4725,10 @@ function versionRow(video, version, finalId) {
         toast(err.message, true);
       }
     });
-    move.append(finalButton);
   }
 
   const rename = document.createElement('button');
-  rename.className = 'btn tiny ghost';
+  rename.className = 'btn tiny ghost version-hover-btn';
   rename.type = 'button';
   rename.textContent = '改名';
   rename.title = '只改显示名称，链接和文件不变';
@@ -4740,7 +4740,7 @@ function versionRow(video, version, finalId) {
   });
 
   const del = document.createElement('button');
-  del.className = 'btn tiny ghost danger-text';
+  del.className = 'btn tiny ghost danger-text version-hover-btn';
   del.type = 'button';
   del.textContent = '删除';
   del.addEventListener('click', async (event) => {
@@ -4759,10 +4759,13 @@ function versionRow(video, version, finalId) {
     }
   });
 
+  // 悬停才出现的三个按钮排在左边，常驻的「移动到… / 下载」排在右边，
+  // 最终版行在未悬停时也不会在「取消最终版」和「移动到…」之间留出空白断层
   move.addEventListener('click', (event) => event.stopPropagation());
-  move.append(select, download);
   if (state.renameId !== video.id) move.append(rename);
   move.append(del);
+  if (finalButton) move.append(finalButton);
+  move.append(select, download);
   row.append(cover, main, move);
   if (state.renameId === video.id) row.classList.add('renaming');
   return row;

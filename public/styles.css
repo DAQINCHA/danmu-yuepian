@@ -1262,20 +1262,20 @@ body.author-spotlight .toast { z-index: 100; }
 .personal-folder-title.is-final { color: var(--gold-text); }
 .version-meta { margin-top: 3px; color: var(--text-dim); font-size: var(--fs-sm); }
 .version-move { flex: none; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; cursor: default; }
-/* 版本行上的「设为最终版」：悬浮到这一行才出现（和项目卡片的动作按钮同一套做法）。
-   用 opacity 不用 display，按钮位置一直占着，悬浮时不会挤动旁边那几个按钮。 */
-.version-row .final-hover {
+/* 版本行上的「改名 / 删除 / 设为最终版」：悬浮到这一行才出现（和项目卡片的动作按钮同一套做法）。
+   用 opacity 不用 display，按钮位置一直占着，悬浮时不会挤动旁边常驻的「移动到... / 下载」。 */
+.version-row .version-hover-btn {
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--dur-fast) var(--ease-out);
+  transition: opacity var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
-.version-row:hover .final-hover,
-.version-row:focus-within .final-hover {
+.version-row:hover .version-hover-btn,
+.version-row:focus-within .version-hover-btn {
   opacity: 1;
   pointer-events: auto;
 }
 @media (hover: none) {
-  .version-row .final-hover { opacity: 1; pointer-events: auto; }
+  .version-row .version-hover-btn { opacity: 1; pointer-events: auto; }
 }
 .version-row .rename-input { cursor: text; }
 .version-row.renaming { border-color: rgba(var(--accent-hi-rgb), 0.55); box-shadow: none; }
