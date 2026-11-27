@@ -4692,6 +4692,15 @@ function versionRow(video, version, finalId) {
     }
   });
 
+  // 原生下载：交给浏览器自己流式接收，大文件不进内存，也不冒泡去跳看片页
+  const download = document.createElement('a');
+  download.className = 'btn tiny ghost';
+  download.href = `/api/videos/${encodeURIComponent(video.id)}/file?download=1`;
+  download.download = '';
+  download.textContent = '下载';
+  download.title = '下载原片';
+  download.addEventListener('click', (event) => event.stopPropagation());
+
   // 定稿按钮只出现在真项目里；未分类没有归属，定稿没有意义。
   // 已经是最终版时同一个位置变成「取消最终版」，不用再去找徽章
   if (state.libraryProjectId) {
@@ -4751,7 +4760,7 @@ function versionRow(video, version, finalId) {
   });
 
   move.addEventListener('click', (event) => event.stopPropagation());
-  move.append(select);
+  move.append(select, download);
   if (state.renameId !== video.id) move.append(rename);
   move.append(del);
   row.append(cover, main, move);
